@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da1e512538fe4b8498677385de9e2dc6, type: 3}
+  m_Name: Goal_CollectBlue15
+  m_EditorClassIdentifier: 
+  goalType: 0
+  targetTile: {fileID: 11400000, guid: 7cdfc3822445bec46b26a0474efff096, type: 2}
+  requiredAmount: 15
+  goalIcon: {fileID: -2615874204119335, guid: 9d55f03a879b8e24dbc1b33dc682ae0f, type: 3}
+  goalLabel: Collect Blue

@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6985955943598a439ee0570bcb56c9f, type: 3}
+  m_Name: TileData_ColorBomb
+  m_EditorClassIdentifier: 
+  id: 0
+  sprite: {fileID: 4398037373220439731, guid: 76714005af2360f45b5477fcdff9b165, type: 3}
+  color: 0
+  isSpecial: 1
+  specialType: 4
+  highlightSprite: {fileID: 4398037373220439731, guid: 76714005af2360f45b5477fcdff9b165, type: 3}
+  clearParticlePrefab: {fileID: 0}

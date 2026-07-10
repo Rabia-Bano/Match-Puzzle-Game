@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "66214723696",
+    "project_id": "match-puzzle-game-2c3c1",
+    "storage_bucket": "match-puzzle-game-2c3c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:66214723696:android:daf81037e9e0f24735f4b5",
+        "android_client_info": {
+          "package_name": "com.rb_sn.matchpuzzlegame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDz4xt_IAU7bjzO1FQgxTClSFBaCvzxzjQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@string/gcm_defaultSenderId,@string/google_storage_bucket,@string/project_id,@string/google_api_key,@string/google_crash_reporting_api_key,@string/google_app_id">
+  <string name="gcm_defaultSenderId" translatable="false">66214723696</string>
+  <string name="google_storage_bucket" translatable="false">match-puzzle-game-2c3c1.firebasestorage.app</string>
+  <string name="project_id" translatable="false">match-puzzle-game-2c3c1</string>
+  <string name="google_api_key" translatable="false">AIzaSyDz4xt_IAU7bjzO1FQgxTClSFBaCvzxzjQ</string>
+  <string name="google_crash_reporting_api_key" translatable="false">AIzaSyDz4xt_IAU7bjzO1FQgxTClSFBaCvzxzjQ</string>
+  <string name="google_app_id" translatable="false">1:66214723696:android:daf81037e9e0f24735f4b5</string>
+</resources>
