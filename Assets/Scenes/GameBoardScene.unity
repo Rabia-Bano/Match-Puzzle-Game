@@ -776,6 +776,9 @@ MonoBehaviour:
   levelManager: {fileID: 472770729}
   specialActivator: {fileID: 1274777451}
   specialCombinations: {fileID: 1359998018}
+  jellyManager: {fileID: 1507804464}
+  hardTileManager: {fileID: 1618798698}
+  stoneManager: {fileID: 386117578}
   clearPopDuration: 0.13
   clearStagger: 0.02
   scorePerTile: 50
@@ -1224,7 +1227,8 @@ GameObject:
   - component: {fileID: 359569178}
   - component: {fileID: 359569181}
   - component: {fileID: 359569180}
-  - component: {fileID: 359569179}
+  - component: {fileID: 359569183}
+  - component: {fileID: 359569182}
   m_Layer: 0
   m_Name: Slot_Pet
   m_TagString: Untagged
@@ -1246,6 +1250,7 @@ RectTransform:
   m_Children:
   - {fileID: 1202790148}
   - {fileID: 1797808340}
+  - {fileID: 1159310962}
   m_Father: {fileID: 1705830447}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -1253,7 +1258,63 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &359569179
+--- !u!114 &359569180
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 359569177}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.98490566, g: 0.98490566, b: 0.98490566, a: 0}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &359569181
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 359569177}
+  m_CullTransparentMesh: 1
+--- !u!114 &359569182
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 359569177}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3340fbc5e142c74883d6448def9d9a5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  petPortrait: {fileID: 1202790149}
+  chargeBarFill: {fileID: 169863384}
+  chargeText: {fileID: 1159310963}
+  skillButton: {fileID: 359569183}
+  skillButtonGlow: {fileID: 0}
+  barTweenDuration: 0.25
+--- !u!114 &359569183
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1296,57 +1357,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 359569180}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 1475593526}
-        m_TargetAssemblyTypeName: Match3.PetSystem, Assembly-CSharp
-        m_MethodName: OnPetButtonTapped
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
---- !u!114 &359569180
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 359569177}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_Material: {fileID: 0}
-  m_Color: {r: 0.98490566, g: 0.98490566, b: 0.98490566, a: 0}
-  m_RaycastTarget: 1
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
---- !u!222 &359569181
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 359569177}
-  m_CullTransparentMesh: 1
 --- !u!1 &381813321
 GameObject:
   m_ObjectHideFlags: 0
@@ -1528,6 +1539,51 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &386117577
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 386117579}
+  - component: {fileID: 386117578}
+  m_Layer: 0
+  m_Name: StoneManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &386117578
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 386117577}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 09e53f22959974a439de9df091b98318, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  boardGrid: {fileID: 1680278335}
+--- !u!4 &386117579
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 386117577}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 235.75, y: 659.9352, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2007,11 +2063,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boardGrid: {fileID: 1680278335}
+  boardController: {fileID: 212349650}
   tileSpawner: {fileID: 1026646355}
   inputHandler: {fileID: 1960299825}
   levelData: {fileID: 11400000, guid: bb2d182e362e9444493ff06ca49bb051, type: 2}
   goalTracker: {fileID: 95029845}
   moveCounter: {fileID: 1063353499}
+  jellyManager: {fileID: 1507804464}
+  hardTileManager: {fileID: 1618798698}
+  stoneManager: {fileID: 386117578}
   OnScoreChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -2519,16 +2579,11 @@ MonoBehaviour:
   moveLabelText: {fileID: 952198757}
   goalIconContainer: {fileID: 1007652992}
   goalIconPrefab: {fileID: 1654894261996063059, guid: e52724ab1c9162d4cb0ec2893f51b682, type: 3}
-  petHPBarFill: {fileID: 169863384}
-  petHPText: {fileID: 1159310963}
-  petAvatarImage: {fileID: 1202790149}
-  petHPBarPanel: {fileID: 0}
   boosterSlots: []
   settingsButton: {fileID: 1311228674}
   goalTracker: {fileID: 95029845}
   moveCounter: {fileID: 1063353499}
   levelManager: {fileID: 472770729}
-  petSystem: {fileID: 1475593526}
   scoreBarMaxValue: 2000
 --- !u!114 &670352646
 MonoBehaviour:
@@ -3108,6 +3163,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   boardGrid: {fileID: 1680278335}
+  jellyManager: {fileID: 1507804464}
   movesPerRotation: 5
   rotationDuration: 0.4
   rotationEase: 7
@@ -4068,16 +4124,16 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1159310961}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 3.8638, y: 3.8638, z: 3.8638}
+  m_LocalScale: {x: 1.3036702, y: 1.3036702, z: 1.3036702}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1797808340}
+  m_Father: {fileID: 359569178}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 22.899998, y: 99.40001}
   m_SizeDelta: {x: 460, y: 16}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1159310963
@@ -4266,7 +4322,7 @@ GameObject:
   - component: {fileID: 1202790150}
   - component: {fileID: 1202790149}
   m_Layer: 0
-  m_Name: Icon
+  m_Name: PetPortrait
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4939,6 +4995,9 @@ MonoBehaviour:
   boardGrid: {fileID: 1680278335}
   levelManager: {fileID: 472770729}
   boardController: {fileID: 212349650}
+  specialActivator: {fileID: 1274777451}
+  hardTileManager: {fileID: 1618798698}
+  jellyManager: {fileID: 1507804464}
   hStripedData: {fileID: 11400000, guid: 724d41f2095c3564897d52a3602fd427, type: 2}
   vStripedData: {fileID: 11400000, guid: 1d0b741803822ab4787ea98ed5ea94c0, type: 2}
   wrappedData: {fileID: 11400000, guid: 9e0cac533e98e9f4ca08d3e50925bf20, type: 2}
@@ -4963,6 +5022,9 @@ MonoBehaviour:
   effectDuration: 0.15
   boardGrid: {fileID: 0}
   levelManager: {fileID: 0}
+  specialActivator: {fileID: 0}
+  hardTileManager: {fileID: 0}
+  jellyManager: {fileID: 0}
   arcParticlePrefab: {fileID: 0}
   rainbowFlashPrefab: {fileID: 0}
   flashDuration: 0.3
@@ -4985,6 +5047,9 @@ MonoBehaviour:
   effectDuration: 0.15
   boardGrid: {fileID: 0}
   levelManager: {fileID: 0}
+  specialActivator: {fileID: 0}
+  hardTileManager: {fileID: 0}
+  jellyManager: {fileID: 0}
   pulsePause: 0.3
   expandRingPrefab: {fileID: 411733699387787422, guid: eeeaef61329c5af4d89c34e0222aa4ab, type: 3}
   ringExpandDuration: 0.25
@@ -5006,6 +5071,9 @@ MonoBehaviour:
   effectDuration: 0.15
   boardGrid: {fileID: 0}
   levelManager: {fileID: 0}
+  specialActivator: {fileID: 0}
+  hardTileManager: {fileID: 0}
+  jellyManager: {fileID: 0}
   hLaserTrailPrefab: {fileID: 0}
   vLaserTrailPrefab: {fileID: 0}
   laserDuration: 0.4
@@ -5231,7 +5299,7 @@ GameObject:
   - component: {fileID: 1475593527}
   - component: {fileID: 1475593526}
   m_Layer: 0
-  m_Name: PetSystem
+  m_Name: PetManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5246,14 +5314,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1475593525}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7aa83a3fc6fc5c643b6046752356d750, type: 3}
+  m_Script: {fileID: 11500000, guid: 092e2ad98c3539d44890365977d44681, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  activePet: {fileID: 11400000, guid: 2082f9293d071ff45936de9162779f76, type: 2}
-  boardGrid: {fileID: 1680278335}
-  moveCounter: {fileID: 1063353499}
-  hpLossPerBadMove: 0
-  hpGainPerCombo: 5
 --- !u!4 &1475593527
 Transform:
   m_ObjectHideFlags: 0
@@ -5264,6 +5327,54 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 350, y: 550, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1507804463
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1507804465}
+  - component: {fileID: 1507804464}
+  m_Layer: 0
+  m_Name: JellyManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1507804464
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1507804463}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4e946b2aa6ea334eafa8def8c784441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  boardGrid: {fileID: 1680278335}
+  jellyOverlayPrefab: {fileID: 6095924353339355464, guid: 4f1a2e01bae055946bddbbc71eea6b6d, type: 3}
+  jellyLayerSprites:
+  - {fileID: 6745137483145456397, guid: c917fb69c34b4a94789836fa3e561211, type: 3}
+--- !u!4 &1507804465
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1507804463}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 235.75, y: 659.9352, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5903,6 +6014,51 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1603918440}
   m_CullTransparentMesh: 1
+--- !u!1 &1618798697
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1618798699}
+  - component: {fileID: 1618798698}
+  m_Layer: 0
+  m_Name: HardTileManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1618798698
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1618798697}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f28255d31b0b8c14db7f4fe63d7f336b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  boardGrid: {fileID: 1680278335}
+--- !u!4 &1618798699
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1618798697}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 235.75, y: 659.9352, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1641171583
 GameObject:
   m_ObjectHideFlags: 0
@@ -6398,7 +6554,6 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 169863383}
-  - {fileID: 1159310962}
   m_Father: {fileID: 359569178}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -8354,3 +8509,6 @@ SceneRoots:
   - {fileID: 1475593527}
   - {fileID: 1359998022}
   - {fileID: 1823374672}
+  - {fileID: 1507804465}
+  - {fileID: 1618798699}
+  - {fileID: 386117579}

@@ -5,8 +5,17 @@
 //    • Horizontal (RowBlast)  → poori row clear
 //    • Vertical   (ColBlast)  → poora column clear
 //
-//  Attach to: StripedTileEffect GameObject (child of SpecialEffectsManager)
-//  Assign in: SpecialCombinations Inspector
+//  REDESIGN (bug report ke baad — hard tile damage):
+//    Ab jab hard tile khud is row/column ke path mein aata hai, wahi
+//    ek DIRECT HIT hai — turant 1 damage lagta hai (DamageHardTileDirect).
+//    Poori row/column ki adjacency-based damage (jo door wali hardtiles
+//    ko bhi galat tareeqe se destroy kar deti thi) bilkul hata di gayi
+//    hai — ab hardtile SIRF apni khud ki cell blast hone par damage
+//    leta hai, kabhi bhi paas wali cell clear hone se nahi.
+//
+//    (Pehle wale fix mein jelly-decrement + hardtile-skip add kiya
+//    gaya tha — wo dono still yahan hain, sirf hardtile handling
+//    "skip + adjacency" se "direct damage" mein badal gayi hai.)
 // ============================================================
 
 using System.Collections;
@@ -21,34 +30,22 @@ namespace Match3
         // ── Inspector ─────────────────────────────────────────
 
         [Header("Stripe Settings")]
-        [Tooltip("Row blast: horizontal laser trail prefab (optional)")]
         [SerializeField] private GameObject hLaserTrailPrefab;
-
-        [Tooltip("Column blast: vertical laser trail prefab (optional)")]
         [SerializeField] private GameObject vLaserTrailPrefab;
-
-        [Tooltip("Laser trail kitna waqt dikhega")]
         [SerializeField] private float laserDuration = 0.4f;
 
         // ─────────────────────────────────────────────────────
         //  PUBLIC OVERRIDE
         // ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// TileData.specialType se orientation decide hoti hai:
-        ///   RowBlast → row clear
-        ///   ColBlast → column clear
-        /// </summary>
         public override IEnumerator Activate(Vector2Int position, List<Tile> clearedTiles)
         {
-            // Tile ka data lo taake orientation pata chale
             Tile sourceTile = boardGrid.GetTile(position.x, position.y);
-            bool isRow = true;   // default horizontal
+            bool isRow = true;
 
             if (sourceTile != null && sourceTile.Data != null)
                 isRow = sourceTile.Data.specialType == SpecialType.RowBlast;
 
-            // Laser trail animation (optional visual)
             Vector3 worldOrigin = boardGrid.GridToWorld(position.x, position.y);
             PlayLaserTrail(worldOrigin, isRow);
 
@@ -61,15 +58,11 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  BLAST HELPERS
+        //  BLAST HELPERS  (public — SpecialCombinations calls these directly)
         // ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Public — SpecialCombinations bhi call karta hai directly.
-        /// </summary>
         public IEnumerator BlastRow(int row, List<Tile> clearedTiles)
         {
-            // Left to right wave effect ke liye sorted tiles
             var rowTiles = new List<Tile>();
             for (int x = 0; x < boardGrid.Width; x++)
             {
@@ -77,13 +70,9 @@ namespace Match3
                 if (t != null) rowTiles.Add(t);
             }
 
-            // Scale wave — tiles ek ek karke pop honge
             yield return StartCoroutine(WaveClearHorizontal(rowTiles, clearedTiles));
         }
 
-        /// <summary>
-        /// Public — SpecialCombinations bhi call karta hai directly.
-        /// </summary>
         public IEnumerator BlastColumn(int col, List<Tile> clearedTiles)
         {
             var colTiles = new List<Tile>();
@@ -102,7 +91,6 @@ namespace Match3
 
         private IEnumerator WaveClearHorizontal(List<Tile> tiles, List<Tile> cleared)
         {
-            // Pehle sab tiles ko X ke hisaab se sort karo (left → right)
             tiles.Sort((a, b) => a.GridX.CompareTo(b.GridX));
 
             foreach (Tile t in tiles)
@@ -110,15 +98,32 @@ namespace Match3
                 if (t == null || t.State == TileState.Inactive) continue;
                 if (boardGrid.GetTile(t.GridX, t.GridY) != t)  continue;
 
-                // Stretch animation — tile horizontally squeeze hogi
+                // Special tile caught inside this row blast — chain-fire it.
+                if (t.Data != null && t.Data.isSpecial && specialActivator != null)
+                {
+                    cleared.Add(t);
+                    yield return StartCoroutine(specialActivator.ChainActivate(t));
+                    continue;
+                }
+
+                // FIX: hard tile whose OWN cell is inside this row is a DIRECT
+                // hit — damage it right here (1 point), don't skip it and
+                // don't treat it as a normal colour tile.
+                if (t.Data != null && t.Data.isHardTile)
+                {
+                    DamageHardTileDirect(t, cleared);
+                    continue;
+                }
+
+                // Dropdown stone — IMMUNE to this clear source.
+                if (t.Data != null && t.Data.isDropStone) continue;
+
                 Sequence stretchSeq = DOTween.Sequence();
                 stretchSeq.Append(t.transform.DOScaleX(1.4f, 0.06f).SetEase(Ease.OutQuad));
                 stretchSeq.Append(t.transform.DOScaleX(0f,   0.08f).SetEase(Ease.InQuad));
 
-                if (t.Data != null && !t.Data.isSpecial)
-                    levelManager?.OnTileCleared(t.Data);
+                ClearNormalTileTracked(t, cleared);
 
-                cleared.Add(t);
                 PlayParticleAt(t.transform.position);
                 boardGrid.RemoveTile(t.GridX, t.GridY);
                 t.SetState(TileState.Matched);
@@ -126,14 +131,12 @@ namespace Match3
                 yield return new WaitForSeconds(tileBlastDelay);
             }
 
-            // Scale reset
             foreach (Tile t in tiles)
                 if (t != null) t.transform.localScale = Vector3.one;
         }
 
         private IEnumerator WaveClearVertical(List<Tile> tiles, List<Tile> cleared)
         {
-            // Bottom to top
             tiles.Sort((a, b) => a.GridY.CompareTo(b.GridY));
 
             foreach (Tile t in tiles)
@@ -141,14 +144,28 @@ namespace Match3
                 if (t == null || t.State == TileState.Inactive) continue;
                 if (boardGrid.GetTile(t.GridX, t.GridY) != t)  continue;
 
+                if (t.Data != null && t.Data.isSpecial && specialActivator != null)
+                {
+                    cleared.Add(t);
+                    yield return StartCoroutine(specialActivator.ChainActivate(t));
+                    continue;
+                }
+
+                // FIX: same direct-hit hard-tile damage as WaveClearHorizontal.
+                if (t.Data != null && t.Data.isHardTile)
+                {
+                    DamageHardTileDirect(t, cleared);
+                    continue;
+                }
+
+                if (t.Data != null && t.Data.isDropStone) continue;
+
                 Sequence stretchSeq = DOTween.Sequence();
                 stretchSeq.Append(t.transform.DOScaleY(1.4f, 0.06f).SetEase(Ease.OutQuad));
                 stretchSeq.Append(t.transform.DOScaleY(0f,   0.08f).SetEase(Ease.InQuad));
 
-                if (t.Data != null && !t.Data.isSpecial)
-                    levelManager?.OnTileCleared(t.Data);
+                ClearNormalTileTracked(t, cleared);
 
-                cleared.Add(t);
                 PlayParticleAt(t.transform.position);
                 boardGrid.RemoveTile(t.GridX, t.GridY);
                 t.SetState(TileState.Matched);
@@ -160,8 +177,6 @@ namespace Match3
                 if (t != null) t.transform.localScale = Vector3.one;
         }
 
-        // ─────────────────────────────────────────────────────
-        //  LASER TRAIL VISUAL
         // ─────────────────────────────────────────────────────
 
         private void PlayLaserTrail(Vector3 origin, bool horizontal)

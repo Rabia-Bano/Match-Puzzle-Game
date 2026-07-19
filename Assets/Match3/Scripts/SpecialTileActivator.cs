@@ -1,23 +1,21 @@
 // ============================================================
 //  SpecialTileActivator.cs  —  Set to use BoardController's shared pipeline
 //
-//  Before: this file had its OWN gravity implementation and its OWN
-//  match-cascade loop (Settle()/ApplyGravity()), separate from — and
-//  subtly different from — the one in BoardController/GravitySystem.
-//  It also duplicated the "clear tile + notify LevelManager + add score"
-//  code that already lives in BoardController.ClearTiles().
+//  ClearList()  -> decides WHICH tiles a blast pattern hits, hands the
+//                  actual clearing to BoardController.ClearTiles().
+//  Settle()     -> just calls BoardController.SettleAfterExternalClear().
 //
-//  Now:
-//    • ClearList()  -> still decides WHICH tiles a blast pattern hits,
-//                      but hands the actual clearing to BoardController.ClearTiles().
-//    • Settle()     -> just calls BoardController.SettleAfterExternalClear(),
-//                      so gravity, refill AND any resulting cascades (including
-//                      new special tiles) go through the exact same code path
-//                      as a normal swap-match.
-//
-//  Unity wiring: this component now needs a BoardController reference
-//  assigned in the Inspector (tileSpawner / matchFinder are no longer
-//  needed here — BoardController already has them).
+//  REDESIGN NOTE (bug report ke baad — hard tile damage):
+//    ClearList() ka code khud bilkul same hai — yeh already row/column/
+//    3x3/5x5/colour-sweep ki har cell (hard tiles included) ko
+//    "normals" list mein daal kar boardController.ClearTiles() ko de
+//    deta tha. Sirf param ka naam change hua hai: damageAdjacentHardTiles
+//    → canDamageHardTiles — kyunki ab ClearTiles() ke andar hard tile
+//    ko "adjacency" se nahi, seedha DIRECT hit (is list mein khud
+//    shamil hone) se damage milta hai. Yeh single special activation
+//    (row/col/3x3/5x5/color-bomb — jab player ek special tile tap
+//    kare ya match kare) ab bhi hard tile ko sahi tareeqe se hit
+//    karta hai agar hard tile khud us blast path mein ho.
 // ============================================================
 
 using System.Collections;
@@ -41,11 +39,19 @@ namespace Match3
         [SerializeField] private TileData colorBombData;
 
         [Header("Timings")]
-        [SerializeField] private float blastDelay   = 0.04f;
-        [SerializeField] private float wrappedPause = 0.25f;
-        [SerializeField] private float postSettleWait = 0.08f;
+        [SerializeField] private float blastDelay   = 0.02f;
+        [SerializeField] private float wrappedPause = 0.12f;
+        [SerializeField] private float postSettleWait = 0.05f;
 
         public bool IsRunning { get; private set; }
+
+        /// <summary>
+        /// Called by BoardController.ClearTiles() when it finds a special tile
+        /// inside a list it was asked to clear (pet skill, booster, or a special
+        /// caught inside a normal match) — activates that tile's own blast
+        /// pattern instead of letting BoardController silently erase it.
+        /// </summary>
+        public IEnumerator ChainActivate(Tile tile) => FireSingle(tile);
 
         public void ActivateSingle(Tile tile)
         {
@@ -121,8 +127,10 @@ namespace Match3
 
                 if (st == SpecialType.Rainbow)
                 {
-                    TileColor target = normalTile?.Data != null
-                        ? normalTile.Data.color : TileColor.None;
+                    TileColor target = (normalTile?.Data != null && normalTile.Data.color != TileColor.None)
+                        ? normalTile.Data.color
+                        : GetMostCommonColorOnBoard();
+
                     boardGrid.RemoveTile(special.GridX, special.GridY);
                     if (target != TileColor.None)
                         yield return StartCoroutine(ClearAllOfColor(target));
@@ -135,24 +143,52 @@ namespace Match3
             IsRunning = false;
         }
 
+        /// <summary>Fallback target colour for a Rainbow (Color Bomb) swap when the swap partner has no colour of its own (e.g. a dropdown stone).</summary>
+        private TileColor GetMostCommonColorOnBoard()
+        {
+            var counts = new System.Collections.Generic.Dictionary<TileColor, int>();
+            for (int x = 0; x < boardGrid.Width; x++)
+            for (int y = 0; y < boardGrid.Height; y++)
+            {
+                Tile t = boardGrid.GetTile(x, y);
+                if (t == null || t.Data == null || t.Data.isSpecial || t.Data.color == TileColor.None) continue;
+                counts.TryGetValue(t.Data.color, out int c);
+                counts[t.Data.color] = c + 1;
+            }
+
+            TileColor best = TileColor.None;
+            int bestCount = 0;
+            foreach (var kv in counts)
+                if (kv.Value > bestCount) { best = kv.Key; bestCount = kv.Value; }
+
+            return best;
+        }
+
         // ─────────────────────────────────────────────────────
         //  WHICH SPECIAL FIRES WHAT  (pattern selection — kept as-is)
         // ─────────────────────────────────────────────────────
 
         private IEnumerator FireSingle(Tile tile)
         {
-            if (tile == null || tile.Data == null)                 yield break;
-            if (tile.State == TileState.Inactive)                  yield break;
-            if (boardGrid.GetTile(tile.GridX, tile.GridY) != tile)  yield break;
+            if (tile == null || tile.Data == null)
+            {
+                Debug.LogWarning("[SpecialTileActivator] FireSingle() got a null tile or null Data — aborting.");
+                yield break;
+            }
 
-            SpecialType st = tile.Data.specialType;
             int x = tile.GridX, y = tile.GridY;
+            SpecialType type = tile.Data.specialType;
+
             boardGrid.RemoveTile(x, y);
 
-            switch (st)
+            switch (type)
             {
-                case SpecialType.RowBlast: yield return StartCoroutine(BlastRow(y));    break;
-                case SpecialType.ColBlast: yield return StartCoroutine(BlastColumn(x)); break;
+                case SpecialType.RowBlast:
+                    yield return StartCoroutine(BlastRow(y));
+                    break;
+                case SpecialType.ColBlast:
+                    yield return StartCoroutine(BlastColumn(x));
+                    break;
                 case SpecialType.Bomb:
                     yield return StartCoroutine(Blast3x3(x, y));
                     yield return new WaitForSeconds(wrappedPause);
@@ -250,7 +286,7 @@ namespace Match3
                 if (s != null) { s.RefreshVisuals(); s.transform.DOPunchScale(Vector3.one * 0.4f, 0.2f, 4, 0.5f); }
                 yield return new WaitForSeconds(blastDelay * 2f);
             }
-            yield return new WaitForSeconds(0.15f);
+            yield return new WaitForSeconds(0.08f);
 
             var toFire = new List<Tile>();
             for (int x = 0; x < boardGrid.Width;  x++)
@@ -265,10 +301,16 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  CLEAR — now delegates the actual clear+score+goal work
-        //  to BoardController.ClearTiles(). This method's only job
-        //  is separating "tiles hit by the blast" into normals
-        //  (clear them) vs specials (chain-fire them).
+        //  CLEAR — delegates the actual clear+score+goal work to
+        //  BoardController.ClearTiles(). This method's only job is
+        //  separating "tiles hit by the blast" into normals (which
+        //  ClearTiles() further splits into colour/hard/stone) vs
+        //  specials (chain-fire them).
+        //
+        //  canDamageHardTiles: true because every list built above
+        //  (row/column/3x3/5x5/colour-sweep) is this special's own
+        //  direct target area — any hard tile caught inside it is a
+        //  genuine direct hit, never just a neighbour.
         // ─────────────────────────────────────────────────────
 
         private IEnumerator ClearList(List<Tile> tiles)
@@ -285,7 +327,7 @@ namespace Match3
                 else normals.Add(tile);
             }
 
-            yield return StartCoroutine(boardController.ClearTiles(normals));
+            yield return StartCoroutine(boardController.ClearTiles(normals, canDamageHardTiles: true));
 
             foreach (Tile special in specials)
                 yield return StartCoroutine(FireSingle(special));
@@ -294,8 +336,7 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  SETTLE — now delegates gravity + refill + cascade to
-        //  BoardController instead of keeping a second copy of it.
+        //  SETTLE
         // ─────────────────────────────────────────────────────
 
         private IEnumerator Settle()

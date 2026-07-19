@@ -72,16 +72,23 @@ namespace Match3
 
         /// <summary>
         /// Called after win — checks if level triggers pet or boss unlock.
-        /// Pet every 3 levels (3,6,9...), Boss every 5 levels (5,10,15...).
+        ///
+        /// UPDATED cadence: the starter pet (index 0) is unlocked from Level 1,
+        /// before the player has completed anything, so it is NOT granted here.
+        /// Every pet after that unlocks after every 5th level completed
+        /// (after Level 5, 10, 15 ...) — same cadence as Boss Arena, so both
+        /// checks below share the same "id % 5 == 0" condition.
+        /// PetData.unlockAfterLevel should be set to match: starter pet = 0,
+        /// second pet = 5, third pet = 10, etc.
         /// </summary>
         public static void CheckUnlocks()
         {
             int id = CurrentLevelId;
 
-            if (id > 0 && id % 3 == 0)
+            if (id > 0 && id % 5 == 0)
             {
                 NewPetUnlocked   = true;
-                UnlockedPetIndex = (id / 3) - 1;
+                UnlockedPetIndex = id / 5;   // 1 = pet unlocked after Level 5, 2 = after Level 10, ...
                 Debug.Log($"[LevelSession] Pet unlock! Index={UnlockedPetIndex}");
             }
 

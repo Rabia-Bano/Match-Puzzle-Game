@@ -1,17 +1,14 @@
 // ============================================================
 //  ColorBombEffect.cs  —  SpecialTileEffect Subclass
 //
-//  Board par jis color ki tiles sabse zyada hon, ya
-//  jis tile ke saath swap hua ho — us color ki SARI tiles
-//  board se hatata hai.
+//  Board par jis color ki tiles sabse zyada hon, ya jis tile ke
+//  saath swap hua ho — us color ki SARI tiles hataata hai.
 //
-//  Swapped tile color → SpecialCombinations set karta hai
-//  SetTargetColor() ke zariye Activate se pehle.
-//
-//  Standalone activate → sabse common color auto-detect.
-//
-//  Attach to: ColorBombEffect GameObject
-//  Assign in: SpecialCombinations Inspector
+//  REDESIGN (bug report ke baad — hard tile damage):
+//    Agar kabhi hard tile ka apna color us target color se match
+//    kare (rare — hard tiles usually TileColor.None hote hain), to
+//    yeh ab uska cell DIRECT hit ginta hai aur damage lagata hai,
+//    adjacency ke through nahi.
 // ============================================================
 
 using System.Collections;
@@ -27,32 +24,18 @@ namespace Match3
         // ── Inspector ─────────────────────────────────────────
 
         [Header("Color Bomb Settings")]
-        [Tooltip("Tiles ke target color ki taraf jaane wala arc particle (optional)")]
         [SerializeField] private GameObject arcParticlePrefab;
-
-        [Tooltip("Center par rainbow flash prefab (optional)")]
         [SerializeField] private GameObject rainbowFlashPrefab;
-
-        [Tooltip("Flash duration")]
-        [SerializeField] private float flashDuration = 0.3f;
-
-        [Tooltip("Tile clear karne ke beech minimum gap")]
-        [SerializeField] private float minClearDelay = 0.03f;
+        [SerializeField] private float flashDuration = 0.18f;
+        [SerializeField] private float minClearDelay = 0.02f;
 
         // ── Runtime state ─────────────────────────────────────
 
-        // SpecialCombinations set karta hai swap se pehle
         private TileColor _targetColor = TileColor.None;
         private bool _targetColorSet = false;
 
         // ─────────────────────────────────────────────────────
-        //  PUBLIC — SpecialCombinations call karta hai swap ke waqt
-        // ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Swap ke waqt Color Bomb ne jo tile touch ki,
-        /// us ka color yahan set karo.
-        /// </summary>
         public void SetTargetColor(TileColor color)
         {
             _targetColor     = color;
@@ -67,12 +50,10 @@ namespace Match3
         {
             Vector3 bombWorldPos = boardGrid.GridToWorld(position.x, position.y);
 
-            // Color determine karo
             TileColor colorToClear = _targetColorSet
                 ? _targetColor
                 : GetMostCommonColor();
 
-            // Reset flag for next use
             _targetColor    = TileColor.None;
             _targetColorSet = false;
 
@@ -82,16 +63,13 @@ namespace Match3
                 yield break;
             }
 
-            // Rainbow flash at bomb position
             PlayRainbowFlash(bombWorldPos);
             yield return new WaitForSeconds(flashDuration * 0.5f);
 
-            // Sari target-color tiles collect karo
             var targets = GetAllTilesOfColor(colorToClear);
 
             Debug.Log($"[ColorBombEffect] Clearing {targets.Count} tiles of color {colorToClear}");
 
-            // Arc animation + clear — har tile ki taraf ek arc jaata hai
             yield return StartCoroutine(ArcAndClear(bombWorldPos, targets, clearedTiles));
 
             AddScoreForCleared(clearedTiles.Count);
@@ -103,7 +81,6 @@ namespace Match3
 
         private IEnumerator ArcAndClear(Vector3 origin, List<Tile> targets, List<Tile> cleared)
         {
-            // Distance ke hisaab se sort — nearest first
             targets.Sort((a, b) =>
             {
                 float da = Vector3.Distance(origin, a.transform.position);
@@ -117,37 +94,46 @@ namespace Match3
                 if (boardGrid.GetTile(t.GridX, t.GridY) != t)  continue;
 
                 Vector3 tilePos = t.transform.position;
-
-                // Optional arc particle origin → tile
                 PlayArcParticle(origin, tilePos);
 
-                // Tile glow animation
                 Sequence glow = DOTween.Sequence();
                 glow.Append(t.transform.DOScale(1.25f, 0.07f).SetEase(Ease.OutFlash, 2));
 
-                // Clear after short delay (arc travel time feel)
                 yield return new WaitForSeconds(minClearDelay);
 
                 if (t == null || t.State == TileState.Inactive) continue;
                 if (boardGrid.GetTile(t.GridX, t.GridY) != t)  continue;
 
-                if (t.Data != null && !t.Data.isSpecial)
-                    levelManager?.OnTileCleared(t.Data);
+                // Special tile caught by the color bomb's sweep — chain-fire it.
+                if (t.Data != null && t.Data.isSpecial && specialActivator != null)
+                {
+                    cleared.Add(t);
+                    yield return StartCoroutine(specialActivator.ChainActivate(t));
+                    continue;
+                }
 
-                cleared.Add(t);
+                // FIX: hard tile whose colour happened to match is a DIRECT
+                // hit — damage it right here (1 point).
+                if (t.Data != null && t.Data.isHardTile)
+                {
+                    DamageHardTileDirect(t, cleared);
+                    continue;
+                }
+
+                ClearNormalTileTracked(t, cleared);
+
                 PlayParticleAt(tilePos);
                 PlaySparkleAt(tilePos);
 
                 boardGrid.RemoveTile(t.GridX, t.GridY);
                 t.SetState(TileState.Matched);
 
-                // Pop zero animation
                 t.transform.DOScale(Vector3.zero, 0.12f)
                     .SetEase(Ease.InBack)
                     .OnComplete(() => t.transform.localScale = Vector3.one);
             }
 
-            yield return new WaitForSeconds(0.1f);
+            yield return new WaitForSeconds(0.05f);
         }
 
         // ─────────────────────────────────────────────────────
@@ -192,7 +178,6 @@ namespace Match3
             if (rainbowFlashPrefab == null) return;
             GameObject flash = Instantiate(rainbowFlashPrefab, pos, Quaternion.identity);
 
-            // Scale up flash
             flash.transform.localScale = Vector3.one * 0.1f;
             flash.transform.DOScale(4f, flashDuration).SetEase(Ease.OutQuart);
 
@@ -209,7 +194,6 @@ namespace Match3
 
             GameObject arc = Instantiate(arcParticlePrefab, from, Quaternion.identity);
 
-            // Arc ko target ki taraf move karo
             arc.transform.DOMove(to, 0.12f)
                 .SetEase(Ease.InQuad)
                 .OnComplete(() => Destroy(arc));

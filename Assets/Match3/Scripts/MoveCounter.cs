@@ -89,13 +89,32 @@ namespace Match3
         }
 
         /// <summary>
-        /// Adds bonus moves (e.g. from store purchase or level bonus).
+        /// Adds bonus moves (e.g. from store purchase), capped at TotalMoves.
+        /// Correct for a booster bought mid-level after moves were already spent,
+        /// but it means the bonus silently does nothing if the player still has
+        /// full moves left. Use AddBonusMoves() below for anything (like a pet
+        /// skill) that should always add moves regardless of current count.
         /// </summary>
         public void AddMoves(int bonus)
         {
             MovesRemaining = Mathf.Min(MovesRemaining + bonus, TotalMoves);
             OnMovesChanged?.Invoke(MovesRemaining);
             Debug.Log($"[MoveCounter] +{bonus} bonus moves. Now: {MovesRemaining}");
+        }
+
+        /// <summary>
+        /// Adds bonus moves that always take effect, raising TotalMoves along with
+        /// MovesRemaining instead of clamping to the old TotalMoves. Use this for
+        /// pet skills / rewards that should never fizzle just because the player
+        /// hasn't used any moves yet. Also affects star rating (moves-left based),
+        /// same as any other move-count change.
+        /// </summary>
+        public void AddBonusMoves(int bonus)
+        {
+            TotalMoves     += bonus;
+            MovesRemaining += bonus;
+            OnMovesChanged?.Invoke(MovesRemaining);
+            Debug.Log($"[MoveCounter] +{bonus} guaranteed bonus moves. Now: {MovesRemaining}/{TotalMoves}");
         }
 
         /// <summary>

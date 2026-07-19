@@ -2,10 +2,18 @@
 //  SpecialTileEffect.cs  —  Abstract Base Class
 //
 //  Har special tile effect is class se inherit karta hai.
-//  Activate() override karo apna effect implement karne ke liye.
-//
-//  DO NOT attach this directly — yeh abstract hai.
 //  Subclasses: StripedTileEffect, WrappedTileEffect, ColorBombEffect
+//
+//  REDESIGN (bug report ke baad — hard tile damage):
+//    Pehle hard tile is blast ke path mein aane par bilkul SKIP ho
+//    jaata tha (immune), aur uske baad poori "cleared positions" list
+//    se ADJACENT hard tiles ko separately damage kiya jata tha.
+//    Ab wo adjacency mechanic bilkul hata di gayi hai. Ab jab bhi
+//    hard tile is blast ke apne target path (row/column/3x3/5x5/
+//    colour-sweep) mein khud aata hai, wahi ek DIRECT HIT gina jata
+//    hai — DamageHardTileDirect() turant 1 damage laga deta hai.
+//    Hard tile kabhi bhi sirf "paas wali cell clear hui" isliye
+//    damage nahi leta.
 // ============================================================
 
 using System.Collections;
@@ -15,80 +23,76 @@ using DG.Tweening;
 
 namespace Match3
 {
-    /// <summary>
-    /// Base class for all special tile effects.
-    /// Subclasses implement Activate() to define blast pattern.
-    /// </summary>
     public abstract class SpecialTileEffect : MonoBehaviour
     {
         // ── Inspector ─────────────────────────────────────────
 
         [Header("Particle FX Prefabs")]
-        [Tooltip("Board pe ek jagah play hone wala particle effect")]
         [SerializeField] protected GameObject blastParticlePrefab;
-
-        [Tooltip("Sirf Color Bomb ke liye — chhota spark effect")]
         [SerializeField] protected GameObject sparkleParticlePrefab;
 
         [Header("Timings")]
-        [SerializeField] protected float tileBlastDelay = 0.04f;
+        [SerializeField] protected float tileBlastDelay = 0.02f;
         [SerializeField] protected float effectDuration = 0.15f;
 
         // ── References (set by SpecialCombinations in Awake) ──
-        [HideInInspector] public BoardGrid    boardGrid;
-        [HideInInspector] public LevelManager levelManager;
-
-        // ─────────────────────────────────────────────────────
-        //  ABSTRACT — subclass must implement this
-        // ─────────────────────────────────────────────────────
+        [HideInInspector] public BoardGrid              boardGrid;
+        [HideInInspector] public LevelManager           levelManager;
+        [HideInInspector] public SpecialTileActivator   specialActivator;
+        [HideInInspector] public JellyManager           jellyManager;
 
         public abstract IEnumerator Activate(Vector2Int position, List<Tile> clearedTiles);
 
         // ─────────────────────────────────────────────────────
-        //  SHARED HELPERS
+        //  SHARED HELPER — clear a single NORMAL tile correctly
         // ─────────────────────────────────────────────────────
 
-        protected IEnumerator ClearSingleTile(Tile tile, List<Tile> cleared)
+        /// <summary>
+        /// Reports goal progress + peels jelly for a NORMAL tile that a combo
+        /// blast is clearing. Callers must have already ruled out special /
+        /// hard / drop-stone tiles before calling this.
+        /// </summary>
+        protected void ClearNormalTileTracked(Tile t, List<Tile> cleared)
         {
-            if (tile == null)                                          yield break;
-            if (tile.State == TileState.Inactive)                      yield break;
-            if (boardGrid.GetTile(tile.GridX, tile.GridY) != tile)     yield break;
+            levelManager?.OnTileCleared(t.Data);
 
-            // GoalTracker ko inform karo
-            if (tile.Data != null && !tile.Data.isSpecial)
-                levelManager?.OnTileCleared(tile.Data);
+            if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
+                levelManager?.OnJellyCleared();
 
-            cleared.Add(tile);
-
-            Vector3 worldPos = tile.transform.position;
-            boardGrid.RemoveTile(tile.GridX, tile.GridY);
-            tile.SetState(TileState.Matched);
-
-            PlayParticleAt(worldPos);
-
-            // FIX: ?? operator DOTween ke saath nahi chalta
-            // SpriteRenderer alag se lo, null check manually karo
-            SpriteRenderer sr = tile.GetComponent<SpriteRenderer>();
-
-            Sequence seq = DOTween.Sequence();
-            seq.Join(tile.transform.DOScale(Vector3.zero, effectDuration).SetEase(Ease.InBack));
-            if (sr != null)
-                seq.Join(sr.DOFade(0f, effectDuration));
-
-            seq.OnComplete(() =>
-            {
-                tile.transform.localScale = Vector3.one;
-                if (sr != null) sr.color = Color.white;
-            });
-
-            yield return new WaitForSeconds(tileBlastDelay);
+            cleared.Add(t);
         }
 
-        protected IEnumerator ClearTileList(List<Tile> tiles, List<Tile> cleared)
+        // ─────────────────────────────────────────────────────
+        //  SHARED HELPER — a hard tile caught DIRECTLY in this
+        //  blast's own path (its cell IS one of the target cells)
+        // ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Call this when a hard tile's OWN cell is one of the cells this
+        /// blast is actually targeting (a row/column cell, a 3x3/5x5 cell,
+        /// a colour-sweep hit) — i.e. a genuine DIRECT hit, never just
+        /// "next to something that cleared". Applies exactly 1 point of
+        /// damage. If that breaks it (HP reaches 0) it's cleared through
+        /// the normal goal/score/animation path and added to `cleared`.
+        /// If it survives, it's left exactly where it is — Tile.DamageObstacle()
+        /// already played its own crack-sprite + punch-scale feedback.
+        /// </summary>
+        protected void DamageHardTileDirect(Tile t, List<Tile> cleared)
         {
-            foreach (Tile t in tiles)
-                yield return StartCoroutine(ClearSingleTile(t, cleared));
+            bool broke = t.DamageObstacle();
+            if (!broke) return;   // took damage, still standing
+
+            levelManager?.OnHardTileCleared();
+            cleared.Add(t);
+            boardGrid.RemoveTile(t.GridX, t.GridY);
+            t.SetState(TileState.Matched);
+            t.transform.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack)
+                .OnComplete(() => t.transform.localScale = Vector3.one);
         }
+
+        // ─────────────────────────────────────────────────────
+        //  SHARED HELPERS
+        // ─────────────────────────────────────────────────────
 
         protected void PlayParticleAt(Vector3 worldPos)
         {

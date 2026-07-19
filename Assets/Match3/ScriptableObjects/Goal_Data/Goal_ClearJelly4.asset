@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da1e512538fe4b8498677385de9e2dc6, type: 3}
+  m_Name: Goal_ClearJelly4
+  m_EditorClassIdentifier: 
+  goalType: 1
+  targetTile: {fileID: 0}
+  requiredAmount: 4
+  goalIcon: {fileID: 6745137483145456397, guid: c917fb69c34b4a94789836fa3e561211, type: 3}
+  goalLabel: Claer Jelly

@@ -26,8 +26,29 @@ namespace Match3
         public GoalData[] goals;
 
         [Header("Tile Availability")]
-        [Tooltip("Leave empty to use TileSpawner's default tiles.")]
+        [Tooltip("Leave empty to use TileSpawner's default tiles. Do NOT put hard-tile / " +
+                 "drop-stone TileData assets here — they're configured separately below " +
+                 "and placed only at the fixed positions you specify.")]
         public TileData[] allowedTiles;
+
+        [Header("Obstacles — Jelly")]
+        [Tooltip("Grid cells (x,y — 0-indexed, y=0 is the bottom row) that start with a " +
+                  "jelly layer underneath the tile there.")]
+        public Vector2Int[] jellyPositions;
+        [Tooltip("How many jelly layers at every position above (same for all of them for now).")]
+        [Range(1, 3)] public int jellyLayers = 1;
+
+        [Header("Obstacles — Hard Tile (Blocker)")]
+        [Tooltip("The TileData asset used for hard-tile cells (must have isHardTile = true).")]
+        public TileData hardTileData;
+        [Tooltip("Grid cells that start with a hard tile instead of a normal colour tile.")]
+        public Vector2Int[] hardTilePositions;
+
+        [Header("Obstacles — Dropdown Stone (Ingredient)")]
+        [Tooltip("The TileData asset used for dropdown-stone cells (must have isDropStone = true).")]
+        public TileData dropStoneData;
+        [Tooltip("Grid cells that start with a dropdown stone instead of a normal colour tile.")]
+        public Vector2Int[] stonePositions;
 
         [Header("Star Score Thresholds (optional fallback)")]
         public int scoreTar1 = 500;

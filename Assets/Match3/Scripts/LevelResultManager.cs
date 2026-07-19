@@ -16,6 +16,19 @@
 //  Race condition fix:
 //    LevelManager.OnLevelInitialized static event fire karta hai
 //    jab InitializeLevel() complete ho jaye — tab Start panel show hota hai
+//
+//  FIX (bug report ke baad — "goals complete ho gaye phir bhi Loss dikha"):
+//    CheckLoseDeferred() pehle sirf 0.5s ki FIXED wait karta tha, phir
+//    goalTracker.AllGoalsComplete check karta tha. Agar aakhri move par
+//    koi combo/cascade chal raha ho (chained specials, multiple sweep
+//    passes, gravity+refill) jo 0.5s se zyada le, to yeh check goals
+//    complete hone SE PEHLE hi chal jata tha aur Lose dikha deta tha —
+//    console mein "ALL GOALS COMPLETE!" thodi dair BAAD print hota tha,
+//    lekin tab tak _resultShown already true ho chuka hota tha to
+//    OnWin() kuch nahi karta tha. Ab yeh OnWin()'s ShowWinRoutine() ki
+//    tarah pehle board ke MUKAMMAL settle (boardController.IsBusy ==
+//    false — combos/cascades included) hone ka wait karta hai, phir
+//    goals check karta hai.
 // ============================================================
 
 using System.Collections;
@@ -428,7 +441,15 @@ namespace Match3
 
         private IEnumerator CheckLoseDeferred()
         {
-            yield return new WaitForSeconds(0.5f);
+            // FIX: purani 0.5s ki FIXED wait kaafi nahi thi. Ab yeh pehle
+            // board ke MUKAMMAL settle hone ka wait karta hai (gravity +
+            // refill + cascade + koi bhi chal raha combo/special-blast —
+            // sab BoardController.IsBusy ke andar aata hai), phir goals
+            // check karta hai. Isse "last move par goals complete ho gaye
+            // lekin Loss dikh gaya" wala race condition fix ho jata hai.
+            yield return StartCoroutine(WaitForBoardToSettle());
+            yield return new WaitForSeconds(0.2f);   // chhota safety buffer
+
             if (_resultShown) yield break;
 
             if (goalTracker != null && goalTracker.AllGoalsComplete)

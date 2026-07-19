@@ -31,6 +31,8 @@ namespace Match3
 
         [Header("References")]
         [SerializeField] private BoardGrid boardGrid;
+        [Tooltip("Optional — if a level uses jelly, wire this so the jelly layer rotates WITH the board (otherwise it stays pinned to its old cell while tiles rotate away from it).")]
+        [SerializeField] private JellyManager jellyManager;
 
         [Header("Rotation Settings")]
         [Tooltip("How many player moves between each board rotation.")]
@@ -142,6 +144,8 @@ namespace Match3
             for (int x = 0; x < W; x++)
             for (int y = 0; y < H; y++)
                 boardGrid.SetTile(x, y, rotated[x, y]);         // also syncs each Tile's GridX/GridY
+
+            jellyManager?.RotateClockwise(W, H);
         }
 
         // ─────────────────────────────────────────────────────
@@ -181,7 +185,19 @@ namespace Match3
                 Tile tile = boardGrid.GetTile(x, y);
                 if (tile == null) continue;
                 tile.transform.position = boardGrid.GridToWorld(x, y);
-                tile.SetState(TileState.Normal);
+
+                // Don't clobber a hard tile's Locked state — that's the ONLY
+                // thing keeping it un-swappable and un-matchable. This used
+                // to unconditionally force every tile (hard tiles included)
+                // back to Normal after every rotation, which silently
+                // un-locked hard tiles: they became swappable, and once
+                // swapped, a normal tile ended up sitting where the hard
+                // tile used to be (looking like the hard tile "changed
+                // colour"). Only reset the "was mid fall/swap animation"
+                // state back to Normal for everything else.
+                bool isHardTile = tile.Data != null && tile.Data.isHardTile;
+                if (!isHardTile)
+                    tile.SetState(TileState.Normal);
             }
         }
 

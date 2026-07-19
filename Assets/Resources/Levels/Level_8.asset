@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
+  m_Name: Level_8
+  m_EditorClassIdentifier: 
+  width: 8
+  height: 8
+  moveLimit: 20
+  goals:
+  - {fileID: 11400000, guid: 304ee0c2866017f44a1a1f557d95f566, type: 2}
+  - {fileID: 11400000, guid: bf1ceec3816afb04a8700cf0da21585c, type: 2}
+  allowedTiles: []
+  jellyPositions: []
+  jellyLayers: 1
+  hardTileData: {fileID: 11400000, guid: f906a60d82a019f48aaee3254a6842b4, type: 2}
+  hardTilePositions:
+  - {x: 2, y: 2}
+  - {x: 2, y: 3}
+  - {x: 3, y: 2}
+  - {x: 3, y: 3}
+  dropStoneData: {fileID: 11400000, guid: 5a301398d763f534eb494afc32c11a80, type: 2}
+  stonePositions:
+  - {x: 4, y: 5}
+  - {x: 3, y: 2}
+  - {x: 1, y: 4}
+  scoreTar1: 500
+  scoreTar2: 1000
+  scoreTar3: 2000

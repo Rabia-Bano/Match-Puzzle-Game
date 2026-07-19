@@ -42,10 +42,20 @@ namespace Match3
 
             for (int col = 0; col < boardGrid.Width; col++)
             {
+                // Only the CONTIGUOUS run of empty cells starting from the very
+                // top of the column is refillable. The moment we hit an occupied
+                // cell scanning downward, we STOP — anything empty further down
+                // is "trapped" below that tile (most commonly a hard tile, which
+                // GravitySystem deliberately never moves) and must stay empty
+                // until whatever's blocking it is cleared. Filling those cells
+                // anyway is what caused a tile to seemingly "appear out of
+                // nowhere" underneath a hard tile.
                 var emptyRows = new List<int>();
                 for (int y = boardGrid.Height - 1; y >= 0; y--)
-                    if (boardGrid.GetTile(col, y) == null)
-                        emptyRows.Add(y);
+                {
+                    if (boardGrid.GetTile(col, y) != null) break;
+                    emptyRows.Add(y);
+                }
 
                 if (emptyRows.Count == 0) continue;
                 anySpawned = true;

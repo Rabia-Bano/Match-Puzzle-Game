@@ -70,12 +70,71 @@ namespace Match3
                             relevant = true;
                         break;
                     case GoalType.ClearJelly:
+                        // Jelly isn't a TileData colour — it's a separate layer
+                        // tracked by JellyManager. See OnJellyCleared() below,
+                        // called directly by BoardController.ClearTiles().
                         break;
                     case GoalType.ReachScore:
                         break;
                 }
                 if (relevant) UpdateGoal(i, 1);
             }
+        }
+
+        /// <summary>
+        /// Called by BoardController.ClearTiles() whenever clearing a normal
+        /// tile peels off a jelly layer underneath it (JellyManager.DecrementAt
+        /// returned true). Increments any incomplete ClearJelly goal.
+        /// </summary>
+        public void OnJellyCleared()
+        {
+            if (goals == null) return;
+            for (int i = 0; i < goals.Length; i++)
+            {
+                GoalData goal = goals[i];
+                if (goal == null || goal.IsComplete) continue;
+                if (goal.goalType == GoalType.ClearJelly) UpdateGoal(i, 1);
+            }
+        }
+
+        /// <summary>
+        /// Called by BoardController.ClearTiles() whenever a hard-tile obstacle
+        /// finishes clearing (its HP reached 0 and it was removed). Increments
+        /// any incomplete ClearHardTile goal.
+        /// </summary>
+        public void OnHardTileCleared()
+        {
+            if (goals == null) return;
+            for (int i = 0; i < goals.Length; i++)
+            {
+                GoalData goal = goals[i];
+                if (goal == null || goal.IsComplete) continue;
+                if (goal.goalType == GoalType.ClearHardTile) UpdateGoal(i, 1);
+            }
+        }
+
+        /// <summary>
+        /// Called by BoardController.ClearTiles() whenever a dropdown-stone
+        /// tile reaches the bottom row and is collected. Increments any
+        /// incomplete CollectStone goal.
+        /// </summary>
+        public void OnStoneCollected()
+        {
+            if (goals == null) return;
+            bool matchedAnyGoal = false;
+            for (int i = 0; i < goals.Length; i++)
+            {
+                GoalData goal = goals[i];
+                if (goal == null || goal.IsComplete) continue;
+                if (goal.goalType == GoalType.CollectStone)
+                {
+                    matchedAnyGoal = true;
+                    UpdateGoal(i, 1);
+                }
+            }
+            if (!matchedAnyGoal)
+                Debug.Log("[GoalTracker] OnStoneCollected() called but no incomplete CollectStone goal exists " +
+                          "on this level (either there's no such goal, or it's already complete).");
         }
 
         public void OnScoreUpdated(int totalScore)

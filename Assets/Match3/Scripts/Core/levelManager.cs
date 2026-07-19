@@ -16,9 +16,10 @@ public class LevelManager : MonoBehaviour
     public static LevelManager Instance { get; private set; }
 
     [Header("Board References")]
-    public Match3.BoardGrid    boardGrid;
-    public Match3.TileSpawner  tileSpawner;
-    public Match3.InputHandler inputHandler;
+    public Match3.BoardGrid       boardGrid;
+    public Match3.BoardController boardController;   // NEW — needed so PetManager can bind to this level
+    public Match3.TileSpawner     tileSpawner;
+    public Match3.InputHandler    inputHandler;
 
     [Header("Level Data")]
     [Tooltip("Fallback for Editor testing — LevelSession overrides at runtime")]
@@ -27,6 +28,11 @@ public class LevelManager : MonoBehaviour
     [Header("Phase 5 References")]
     public Match3.GoalTracker goalTracker;
     public Match3.MoveCounter moveCounter;
+
+    [Header("Obstacle Systems (optional — leave blank if unused)")]
+    public Match3.JellyManager    jellyManager;
+    public Match3.HardTileManager hardTileManager;
+    public Match3.StoneManager    stoneManager;
 
     [Header("Events")]
     public UnityEvent<int> OnScoreChanged;
@@ -66,9 +72,59 @@ public class LevelManager : MonoBehaviour
 
         InitializeLevel();
 
+        // ── NEW: re-bind PetManager to THIS level's board objects ────
+        Debug.Log($"[LevelManager] About to bind PetManager. PetManager.Instance is " +
+                  $"{(Match3.PetManager.Instance == null ? "NULL — PetManager not found!" : "found, OK")}. " +
+                  $"boardController field is {(boardController == null ? "NULL — not wired in Inspector!" : "assigned, OK")}.");
+        Match3.PetManager.Instance?.BindToLevel(boardGrid, boardController, goalTracker, moveCounter);
+        // ───────────────────────────────────────────────────────────
+
         // ── Notify LevelResultManager that we are ready ──────
         OnLevelInitialized?.Invoke();
         // ─────────────────────────────────────────────────────
+    }
+
+    /// <summary>
+    /// Sanity check run once per level load: if a goal asks for more
+    /// jelly/hard-tile/stone progress than the level actually placed, that
+    /// goal can PHYSICALLY NEVER complete — the obstacle finishes clearing
+    /// but the goal panel stays stuck below 100%. This looks exactly like a
+    /// bug ("it cleared but the goal never finished") but is really a level
+    /// data mismatch, so we catch it loudly here instead of silently.
+    /// </summary>
+    private void ValidateObstacleGoalCounts()
+    {
+        if (goalTracker == null || levelData?.goals == null) return;
+
+        int jellyCells    = levelData.jellyPositions?.Length ?? 0;
+        int hardTileCells = levelData.hardTilePositions?.Length ?? 0;
+        int stoneCells    = levelData.stonePositions?.Length ?? 0;
+
+        foreach (var goal in goalTracker.Goals)
+        {
+            if (goal == null) continue;
+
+            switch (goal.goalType)
+            {
+                case Match3.GoalType.ClearJelly when goal.requiredAmount > jellyCells:
+                    Debug.LogWarning($"[LevelManager] Goal asks for {goal.requiredAmount} jelly cleared, " +
+                                      $"but this level only has {jellyCells} jelly cell(s) — goal can NEVER complete. " +
+                                      $"Fix LevelData.jellyPositions or the goal's Required Amount.", this);
+                    break;
+
+                case Match3.GoalType.ClearHardTile when goal.requiredAmount > hardTileCells:
+                    Debug.LogWarning($"[LevelManager] Goal asks for {goal.requiredAmount} hard tile(s) broken, " +
+                                      $"but this level only has {hardTileCells} hard tile(s) — goal can NEVER complete. " +
+                                      $"Fix LevelData.hardTilePositions or the goal's Required Amount.", this);
+                    break;
+
+                case Match3.GoalType.CollectStone when goal.requiredAmount > stoneCells:
+                    Debug.LogWarning($"[LevelManager] Goal asks for {goal.requiredAmount} stone(s) collected, " +
+                                      $"but this level only has {stoneCells} stone(s) — goal can NEVER complete. " +
+                                      $"Fix LevelData.stonePositions or the goal's Required Amount.", this);
+                    break;
+            }
+        }
     }
 
     private void InitializeLevel()
@@ -98,6 +154,16 @@ public class LevelManager : MonoBehaviour
             tileSpawner.FillBoard();
         }
 
+        // Obstacles — placed AFTER FillBoard so they overwrite whatever
+        // normal tile landed at their configured positions. Order matters:
+        // jelly first (it's just an overlay, doesn't touch the Grid array),
+        // then hard tiles / stones (which DO replace the grid's tile there).
+        jellyManager?.Setup(levelData, boardGrid);
+        hardTileManager?.Setup(levelData, boardGrid);
+        stoneManager?.Setup(levelData, boardGrid);
+
+        ValidateObstacleGoalCounts();
+
         inputHandler?.SetInputEnabled(false);
 
         Score = 0;
@@ -112,6 +178,10 @@ public class LevelManager : MonoBehaviour
     public void OnMoveCompleted() => moveCounter?.UseMove();
 
     public void OnTileCleared(Match3.TileData tile) => goalTracker?.OnTileCleared(tile);
+
+    public void OnJellyCleared()    => goalTracker?.OnJellyCleared();
+    public void OnHardTileCleared() => goalTracker?.OnHardTileCleared();
+    public void OnStoneCollected()  => goalTracker?.OnStoneCollected();
 
     public void AddScore(int points)
     {

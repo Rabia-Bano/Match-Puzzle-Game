@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da1e512538fe4b8498677385de9e2dc6, type: 3}
+  m_Name: Goal_CollectStone3
+  m_EditorClassIdentifier: 
+  goalType: 4
+  targetTile: {fileID: 11400000, guid: 5a301398d763f534eb494afc32c11a80, type: 2}
+  requiredAmount: 3
+  goalIcon: {fileID: -6471164996032937220, guid: 446ae90fc19ca67458124a655e811efe, type: 3}
+  goalLabel: Collect Stone

@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d483190f09b1b2144b181142d7a40be7, type: 3}
+  m_Name: pet_luna
+  m_EditorClassIdentifier: 
+  id: pet_luna
+  petName: Luna
+  rarity: 2
+  sprite: {fileID: 0}
+  description: 
+  skillType: 1
+  skillName: Double Shuffle
+  skillDescription: 
+  chargeRequired: 100
+  unlockAfterLevel: 15

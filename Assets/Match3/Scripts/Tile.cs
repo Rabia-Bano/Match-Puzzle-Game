@@ -64,6 +64,14 @@ namespace Match3
         /// <summary>Current logical state of this tile.</summary>
         public TileState State { get; private set; } = TileState.Inactive;
 
+        /// <summary>
+        /// Remaining hit points for a hard-tile obstacle (0 for every other
+        /// tile). Set from Data.hardTileMaxHP in Initialize(), reduced by
+        /// DamageObstacle() — called by HardTileManager whenever a normal
+        /// tile clears in an adjacent cell.
+        /// </summary>
+        public int ObstacleHP { get; private set; }
+
         // ── Serialised visual refs ────────────────────────────
 
         [Header("Visual References")]
@@ -107,9 +115,62 @@ namespace Match3
             }
 
             RefreshVisuals();
-            SetState(TileState.Normal);
+
+            // Hard tiles spawn Locked — this is what makes MatchFinder skip
+            // them (can't be part of a colour match) and SwapController
+            // reject swapping them (both checks already existed in the
+            // project). Dropdown stones spawn Normal instead — they CAN be
+            // swapped with a normal tile (helping maneuver them), and are
+            // still excluded from colour matches, but via an explicit
+            // isDropStone check in MatchFinder rather than the Locked state
+            // (see MatchFinder.cs). Since only hard tiles stay Locked, the
+            // existing SwapController check ("neither swapped tile may be
+            // Locked") now naturally still blocks swapping WITH a hard tile,
+            // while allowing stone <-> normal-tile swaps.
+            if (data != null && data.isHardTile)
+            {
+                ObstacleHP = Mathf.Max(1, data.hardTileMaxHP);
+                SetState(TileState.Locked);
+            }
+            else
+            {
+                ObstacleHP = 0;
+                SetState(TileState.Normal);
+            }
         }
 
+        // ── Hard tile damage ──────────────────────────────────
+
+        /// <summary>
+        /// Applies 1 point of damage to a hard-tile obstacle and updates its
+        /// crack-stage sprite. Returns true if this damage broke it (HP hit 0).
+        /// Does nothing (returns false) if this tile isn't a hard tile or is
+        /// already broken. Called by HardTileManager.
+        /// </summary>
+        public bool DamageObstacle()
+        {
+            if (Data == null || !Data.isHardTile || ObstacleHP <= 0) return false;
+
+            ObstacleHP--;
+            RefreshObstacleDamageSprite();
+
+            transform.DOKill();
+            transform.DOPunchScale(Vector3.one * 0.12f, 0.15f, 4, 0.6f);
+
+            return ObstacleHP <= 0;
+        }
+
+        private void RefreshObstacleDamageSprite()
+        {
+            if (Data == null || !Data.isHardTile || tileRenderer == null) return;
+            if (Data.hardTileDamageSprites == null || Data.hardTileDamageSprites.Length == 0) return;
+
+            int hitsTaken   = Data.hardTileMaxHP - ObstacleHP;
+            int spriteIndex = Mathf.Clamp(hitsTaken - 1, 0, Data.hardTileDamageSprites.Length - 1);
+
+            if (hitsTaken > 0)
+                tileRenderer.sprite = Data.hardTileDamageSprites[spriteIndex];
+        }
         // ── Grid position ─────────────────────────────────────
 
         /// <summary>Updates the grid indices (does NOT move the transform).</summary>
@@ -180,6 +241,7 @@ namespace Match3
             Data  = null;
             GridX = -1;
             GridY = -1;
+            ObstacleHP = 0;
 
             if (tileRenderer != null)
             {

@@ -1,20 +1,19 @@
 // ============================================================
 //  SpecialCombinations.cs  —  Set to use BoardController's shared pipeline
 //
-//  Before: Settle() here had its OWN gravity implementation AND its own
-//  match-cascade loop — a third copy of logic that BoardController /
-//  GravitySystem / BoardRefiller already own, and a second copy of what
-//  SpecialTileActivator used to do too.
-//
-//  Now: Settle() just calls BoardController.SettleAfterExternalClear(),
-//  so every "board settles after tiles are removed" path (normal match,
-//  single special, special+special combo) runs through the exact same
-//  gravity -> refill -> cascade code.
-//
 //  Jab do special tiles swap hon to yeh class decide karti hai
-//  kaun sa combo effect fire hoga — that pattern-selection logic
-//  (which combo, which cells it hits, its score multiplier) is
-//  UNIQUE per combo and is kept exactly as before.
+//  kaun sa combo effect fire hoga.
+//
+//  REDESIGN (bug report ke baad — hard tile damage):
+//    ClearOneObstacleAwareTile() (Bomb+Bomb aur Rainbow+Rainbow combos
+//    ke liye) mein ab hard tile ka apna cell agar combo ke target area
+//    mein ho to wahi DIRECT HIT gina jata hai — turant damage. Poori
+//    adjacency-based DamageAndClearAdjacentHardTiles() method hata
+//    di gayi hai — ab kahin bhi "paas wali cell clear hui isliye
+//    hardtile bhi clear ho gayi" wala behavior nahi hai.
+//
+//    hardTileManager field bhi hata diya gaya hai — damage ab seedha
+//    Tile.DamageObstacle() se lagta hai, manager ki zaroorat nahi.
 //
 //  Combo Table:
 //  ┌──────────────────┬──────────────────────────────────────────┐
@@ -29,9 +28,6 @@
 //
 //  Attach to: SpecialEffectsManager (same GameObject as effects)
 //  Wire all effect references + boardController in Inspector.
-//
-//  SwapController is klass ko call karta hai:
-//    bool handled = specialCombinations.TryHandleCombo(tileA, tileB);
 // ============================================================
 
 using System.Collections;
@@ -54,9 +50,11 @@ namespace Match3
         [SerializeField] private ColorBombEffect   colorBombEffect;
 
         [Header("Board References")]
-        [SerializeField] private BoardGrid       boardGrid;
-        [SerializeField] private LevelManager    levelManager;
-        [SerializeField] private BoardController boardController;  // owns gravity/refill/cascade now
+        [SerializeField] private BoardGrid            boardGrid;
+        [SerializeField] private LevelManager         levelManager;
+        [SerializeField] private BoardController      boardController;  // owns gravity/refill/cascade now
+        [SerializeField] private SpecialTileActivator specialActivator;  // lets combo blasts chain-fire specials they catch
+        [SerializeField] private JellyManager         jellyManager;      // lets combo blasts decrement jelly under tiles they clear
 
         [Header("Special TileData Assets (for BombCombo replacement)")]
         [SerializeField] private TileData hStripedData;
@@ -65,31 +63,21 @@ namespace Match3
         [SerializeField] private TileData colorBombData;
 
         [Header("5-Row Sweep Settings")]
-        [Tooltip("Wrapped+Striped combo mein kitni rows/cols sweep hongi (3 = center ± 1)")]
         [SerializeField] private int wrappedStripedSweepCount = 3;
 
         [Header("Timings")]
-        [SerializeField] private float settleDelay = 0.2f;
+        [SerializeField] private float settleDelay = 0.08f;
 
         // ── State ─────────────────────────────────────────────
 
         public bool IsRunning { get; private set; }
 
-        // Final cleared tiles list for THIS combo — used only for the
-        // combo's bonus-score multiplier (60/70/80/90/100). The actual
-        // tile-clear + goal-notify work happens inside each effect's
-        // ClearSingleTile() (unique wave/pulse animation per special type).
         private readonly List<Tile> _clearedThisCombo = new();
 
         // ─────────────────────────────────────────────────────
         //  PUBLIC ENTRY POINT
         // ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// SwapController yahan call karta hai jab do tiles swap hon.
-        /// Returns true agar ek combo handle hua (SwapController ko
-        /// normal match check skip karna chahiye).
-        /// </summary>
         public bool TryHandleCombo(Tile tileA, Tile tileB)
         {
             if (!IsSpecial(tileA) || !IsSpecial(tileB)) return false;
@@ -136,31 +124,25 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  COMBO COROUTINES  (pattern selection + bonus multiplier —
-        //  unchanged, this is unique per-combo logic, not duplication)
+        //  COMBO COROUTINES
         // ─────────────────────────────────────────────────────
 
-        // ── 1. Striped + Striped → Full Row AND Column ────────
         private IEnumerator ComboStripedStriped(Tile tA, Tile tB)
         {
             IsRunning = true;
             _clearedThisCombo.Clear();
 
             int ax = tA.GridX, ay = tA.GridY;
-            int bx = tB.GridX, by = tB.GridY;
 
             RemoveBothFromBoard(tA, tB);
 
             PlayComboFlash(boardGrid.GridToWorld(ax, ay));
-            PlayComboFlash(boardGrid.GridToWorld(bx, by));
 
+            // One full row + one full column, centered on the swap (a plus/
+            // cross shape) — tA's position is enough since tA and tB are
+            // always exactly one cell apart after a swap.
             yield return StartCoroutine(stripedEffect.BlastRow(ay, _clearedThisCombo));
             yield return StartCoroutine(stripedEffect.BlastColumn(ax, _clearedThisCombo));
-
-            if (bx != ax)
-                yield return StartCoroutine(stripedEffect.BlastColumn(bx, _clearedThisCombo));
-            if (by != ay)
-                yield return StartCoroutine(stripedEffect.BlastRow(by, _clearedThisCombo));
 
             levelManager?.AddScore(_clearedThisCombo.Count * 60);
 
@@ -168,7 +150,6 @@ namespace Match3
             IsRunning = false;
         }
 
-        // ── 2. Wrapped + Striped → 5-Row/Column Sweep ─────────
         private IEnumerator ComboWrappedStriped(Tile wrapped, Tile striped)
         {
             IsRunning = true;
@@ -180,7 +161,7 @@ namespace Match3
             RemoveBothFromBoard(wrapped, striped);
             PlayComboFlash(boardGrid.GridToWorld(cx, cy));
 
-            int halfSweep = wrappedStripedSweepCount / 2;  // default = 1
+            int halfSweep = wrappedStripedSweepCount / 2;
 
             if (isHorizontal)
             {
@@ -207,7 +188,6 @@ namespace Match3
             IsRunning = false;
         }
 
-        // ── 3. Wrapped + Wrapped → 5x5 blast then board clear ─
         private IEnumerator ComboWrappedWrapped(Tile tA, Tile tB)
         {
             IsRunning = true;
@@ -217,7 +197,7 @@ namespace Match3
             RemoveBothFromBoard(tA, tB);
 
             yield return StartCoroutine(wrappedEffect.Pulse3x3(cx, cy, _clearedThisCombo));
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(0.08f);
             yield return StartCoroutine(wrappedEffect.Pulse3x3(cx, cy, _clearedThisCombo));
 
             yield return StartCoroutine(Blast5x5AtPosition(cx, cy));
@@ -228,7 +208,6 @@ namespace Match3
             IsRunning = false;
         }
 
-        // ── 4. Color Bomb + Color Bomb → Entire Board ─────────
         private IEnumerator ComboEntireBoard(Tile tA, Tile tB)
         {
             IsRunning = true;
@@ -243,7 +222,6 @@ namespace Match3
             IsRunning = false;
         }
 
-        // ── 5. Color Bomb + Striped/Wrapped → Replace color with special ─
         private IEnumerator ComboRainbowWithOther(Tile rainbow, Tile other)
         {
             IsRunning = true;
@@ -271,6 +249,15 @@ namespace Match3
 
                 foreach (var pos in positions)
                 {
+                    // FIX: yeh tile ab replace ho raha hai (striped ban raha hai),
+                    // is se pehle agar iske neeche jelly hai to wo yahin peel karo —
+                    // warna yeh cell na to abhi jelly-decrement paata hai, na baad
+                    // mein FireSingleSpecial() ke blast scan mein aata hai (kyunki
+                    // wahan tak pahunchte pahunchte yeh position pehle hi khali
+                    // ho chuki hoti hai), aur jelly permanently reh jati hai.
+                    if (jellyManager != null && jellyManager.DecrementAt(pos.x, pos.y))
+                        levelManager?.OnJellyCleared();
+
                     boardGrid.RemoveTile(pos.x, pos.y);
                     Tile newSpecial = boardGrid.SpawnTile(pos.x, pos.y, replacementData);
                     if (newSpecial != null)
@@ -278,10 +265,10 @@ namespace Match3
                         newSpecial.RefreshVisuals();
                         newSpecial.transform.DOPunchScale(Vector3.one * 0.4f, 0.2f, 4, 0.5f);
                     }
-                    yield return new WaitForSeconds(0.03f);
+                    yield return new WaitForSeconds(0.015f);
                 }
 
-                yield return new WaitForSeconds(0.2f);
+                yield return new WaitForSeconds(0.1f);
 
                 var specials = new List<Tile>();
                 for (int x = 0; x < boardGrid.Width;  x++)
@@ -305,8 +292,75 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  HELPER COROUTINES
+        //  OBSTACLE-AWARE SINGLE TILE CLEAR — shared by the raw
+        //  combo methods below (Blast5x5AtPosition, RainbowSweepClearAll)
+        //  that don't go through StripedTileEffect/WrappedTileEffect/
+        //  ColorBombEffect directly.
+        //    • Special tile   → chain-fire instead of erasing
+        //    • Hard tile      → its OWN cell is inside this combo's target
+        //                       area, so this is a DIRECT hit — damage it
+        //                       right here (1 point), never adjacency-based
+        //    • Dropdown stone → SKIPPED — immune to everything except
+        //                       actually reaching the bottom row
+        //    • Normal tile    → OnTileCleared + jelly decrement
         // ─────────────────────────────────────────────────────
+
+        private IEnumerator ClearOneObstacleAwareTile(Tile t, List<Tile> cleared)
+        {
+            if (t == null || t.State == TileState.Inactive) yield break;
+            if (boardGrid.GetTile(t.GridX, t.GridY) != t) yield break;
+
+            if (t.Data != null && t.Data.isSpecial)
+            {
+                if (specialActivator != null)
+                {
+                    cleared.Add(t);
+                    yield return StartCoroutine(specialActivator.ChainActivate(t));
+                }
+                yield break;
+            }
+
+            // FIX: this cell is inside the combo's own target area — a
+            // DIRECT hit. Damage it right here instead of skipping it.
+            if (t.Data != null && t.Data.isHardTile)
+            {
+                DamageHardTileDirect(t, cleared);
+                yield break;
+            }
+
+            if (t.Data != null && t.Data.isDropStone) yield break;   // immune to everything except reaching bottom
+
+            if (t.Data != null)
+                levelManager?.OnTileCleared(t.Data);
+
+            if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
+                levelManager?.OnJellyCleared();
+
+            cleared.Add(t);
+
+            boardGrid.RemoveTile(t.GridX, t.GridY);
+            t.SetState(TileState.Matched);
+            t.transform.DOScale(0f, 0.12f).SetEase(Ease.InBack)
+                .OnComplete(() => t.transform.localScale = Vector3.one);
+        }
+
+        /// <summary>
+        /// Same direct-hit hard tile logic as SpecialTileEffect.DamageHardTileDirect() —
+        /// duplicated here in a small local form because SpecialCombinations is a
+        /// plain MonoBehaviour, not a SpecialTileEffect subclass.
+        /// </summary>
+        private void DamageHardTileDirect(Tile t, List<Tile> cleared)
+        {
+            bool broke = t.DamageObstacle();
+            if (!broke) return;   // took damage, still standing
+
+            levelManager?.OnHardTileCleared();
+            cleared.Add(t);
+            boardGrid.RemoveTile(t.GridX, t.GridY);
+            t.SetState(TileState.Matched);
+            t.transform.DOScale(Vector3.zero, 0.15f).SetEase(Ease.InBack)
+                .OnComplete(() => t.transform.localScale = Vector3.one);
+        }
 
         private IEnumerator RainbowSweepClearAll()
         {
@@ -317,27 +371,22 @@ namespace Match3
                     Tile t = boardGrid.GetTile(x, y);
                     if (t == null || t.State == TileState.Inactive) continue;
 
-                    if (t.Data != null && !t.Data.isSpecial)
-                        levelManager?.OnTileCleared(t.Data);
-
-                    _clearedThisCombo.Add(t);
-
-                    SpriteRenderer sr = t.GetComponent<SpriteRenderer>();
-                    if (sr != null)
+                    bool willActuallyClear = t.Data != null && !t.Data.isSpecial && !t.Data.isHardTile && !t.Data.isDropStone;
+                    if (willActuallyClear)
                     {
-                        Color rainbowColor = Color.HSVToRGB(
-                            (x * boardGrid.Height + y) / (float)(boardGrid.Width * boardGrid.Height),
-                            1f, 1f);
-                        sr.DOColor(rainbowColor, 0.05f);
+                        SpriteRenderer sr = t.GetComponent<SpriteRenderer>();
+                        if (sr != null)
+                        {
+                            Color rainbowColor = Color.HSVToRGB(
+                                (x * boardGrid.Height + y) / (float)(boardGrid.Width * boardGrid.Height),
+                                1f, 1f);
+                            sr.DOColor(rainbowColor, 0.05f);
+                        }
                     }
 
-                    boardGrid.RemoveTile(x, y);
-                    t.SetState(TileState.Matched);
-                    t.transform.DOScale(0f, 0.1f)
-                        .SetEase(Ease.InBack)
-                        .OnComplete(() => t.transform.localScale = Vector3.one);
+                    yield return StartCoroutine(ClearOneObstacleAwareTile(t, _clearedThisCombo));
                 }
-                yield return new WaitForSeconds(0.05f);
+                yield return new WaitForSeconds(0.025f);
             }
         }
 
@@ -349,19 +398,8 @@ namespace Match3
                 if (Mathf.Abs(dx) <= 1 && Mathf.Abs(dy) <= 1) continue; // already cleared by 3x3
 
                 Tile t = boardGrid.GetTile(cx + dx, cy + dy);
-                if (t == null || t.State == TileState.Inactive) continue;
-
-                if (t.Data != null && !t.Data.isSpecial)
-                    levelManager?.OnTileCleared(t.Data);
-
-                _clearedThisCombo.Add(t);
-
-                boardGrid.RemoveTile(t.GridX, t.GridY);
-                t.SetState(TileState.Matched);
-                t.transform.DOScale(0f, 0.12f).SetEase(Ease.InBack)
-                    .OnComplete(() => t.transform.localScale = Vector3.one);
-
-                yield return new WaitForSeconds(0.03f);
+                yield return StartCoroutine(ClearOneObstacleAwareTile(t, _clearedThisCombo));
+                yield return new WaitForSeconds(0.015f);
             }
         }
 
@@ -392,8 +430,7 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  SETTLE — now delegates gravity + refill + cascade to
-        //  BoardController instead of keeping a third copy of it.
+        //  SETTLE
         // ─────────────────────────────────────────────────────
 
         private IEnumerator Settle()
@@ -410,8 +447,10 @@ namespace Match3
         {
             foreach (var eff in new SpecialTileEffect[] { stripedEffect, wrappedEffect, colorBombEffect })
             {
-                eff.boardGrid    = boardGrid;
-                eff.levelManager = levelManager;
+                eff.boardGrid        = boardGrid;
+                eff.levelManager     = levelManager;
+                eff.specialActivator = specialActivator;
+                eff.jellyManager     = jellyManager;
             }
         }
 
@@ -476,8 +515,6 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  AWAKE — validation
-        // ─────────────────────────────────────────────────────
 
         private void Awake()
         {
@@ -490,6 +527,8 @@ namespace Match3
             if (!boardGrid)       Debug.LogError("[SpecialCombinations] boardGrid missing!",       this);
             if (!levelManager)    Debug.LogError("[SpecialCombinations] levelManager missing!",    this);
             if (!boardController) Debug.LogError("[SpecialCombinations] boardController missing! Gravity/refill/cascade will NOT run.", this);
+            if (!specialActivator) Debug.LogWarning("[SpecialCombinations] specialActivator not assigned — specials caught inside a combo blast will be silently erased instead of chain-firing.", this);
+            if (!jellyManager) Debug.Log("[SpecialCombinations] jellyManager not assigned — fine if this level has no jelly obstacles.", this);
         }
     }
 }

@@ -68,6 +68,17 @@ namespace Match3
                     Tile tile = boardGrid.GetTile(x, y);
                     if (tile == null) continue;
 
+                    // Hard tiles never move — they're a fixed obstacle. Jump the
+                    // write cursor past them so tiles ABOVE stack directly on top
+                    // instead of falling straight through. (Dropdown stones are
+                    // NOT skipped here — they still fall like normal tiles; only
+                    // isHardTile is treated as immovable.)
+                    if (tile.Data != null && tile.Data.isHardTile)
+                    {
+                        writeY = y + 1;
+                        continue;
+                    }
+
                     if (y != writeY)
                     {
                         // Update logical grid

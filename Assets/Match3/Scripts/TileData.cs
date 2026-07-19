@@ -66,6 +66,28 @@ namespace Match3
         [Tooltip("Only relevant when isSpecial == true.")]
         public SpecialType specialType;
 
+        // ── Hard tile (blocker obstacle) ───────────────────────
+        [Header("Hard Tile (Blocker)")]
+        [Tooltip("Is this a hard/blocker obstacle? Cannot be matched or swapped " +
+                 "(spawns with TileState.Locked). Takes 1 damage whenever a " +
+                 "NORMAL tile clears in an adjacent cell, and breaks at 0 HP.")]
+        public bool isHardTile;
+
+        [Tooltip("Hit points before this hard tile breaks. Only used when isHardTile == true.")]
+        public int hardTileMaxHP = 2;
+
+        [Tooltip("One sprite per damage stage, ordered from LEAST to MOST damaged " +
+                 "(e.g. [cracked, verycracked]). Length should be hardTileMaxHP - 1 " +
+                 "— the 'sprite' field above is the undamaged (stage 0) look.")]
+        public Sprite[] hardTileDamageSprites;
+
+        // ── Dropdown stone (ingredient obstacle) ───────────────
+        [Header("Dropdown Stone (Ingredient)")]
+        [Tooltip("Is this a dropdown-stone / ingredient obstacle? Falls with gravity " +
+                 "like a normal tile, but cannot be matched or swapped (spawns with " +
+                 "TileState.Locked), and is collected once it reaches the BOTTOM row.")]
+        public bool isDropStone;
+
         // ── Visual polish ─────────────────────────────────────
         [Header("Visuals")]
         [Tooltip("Optional highlight / glow sprite shown when selected.")]
@@ -85,4 +107,3 @@ namespace Match3
         }
     }
 }
- 

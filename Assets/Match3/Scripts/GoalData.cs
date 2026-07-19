@@ -19,9 +19,11 @@ namespace Match3
 
     public enum GoalType
     {
-        CollectTile  = 0,   // clear N tiles matching targetTile
-        ClearJelly   = 1,   // clear N jelly cells (blocker layer)
-        ReachScore   = 2    // reach requiredAmount score
+        CollectTile   = 0,   // clear N tiles matching targetTile
+        ClearJelly    = 1,   // clear N jelly cells (blocker layer)
+        ReachScore    = 2,   // reach requiredAmount score
+        ClearHardTile = 3,   // break N hard tile (blocker) obstacles
+        CollectStone  = 4    // drop N dropdown stones to the bottom row
     }
 
     // ── ScriptableObject ──────────────────────────────────────

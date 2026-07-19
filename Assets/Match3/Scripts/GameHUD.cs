@@ -3,6 +3,14 @@
 //
 //  gameManager.OnScoreChanged → levelManager.OnScoreChanged
 //  gameManager.Score          → levelManager.Score
+//
+//  UPDATE (Pet system swap): the old PetSystem-based "PET PANEL"
+//  block (petHPBarFill / petHPText / petAvatarImage / petHPBarPanel /
+//  petSystem field + OnPetHPChanged/RefreshPetHP) has been removed.
+//  That whole panel is now its own component — PetHUD.cs — driven by
+//  PetManager's charge events instead of PetSystem's HP events. Put
+//  PetHUD.cs on its own panel GameObject in the same Canvas and wire
+//  it up separately; GameHUD no longer needs to know pets exist.
 // ============================================================
 
 using System.Collections;
@@ -26,12 +34,6 @@ namespace Match3
         [SerializeField] private Transform       goalIconContainer;
         [SerializeField] private GameObject      goalIconPrefab;
 
-        [Header("━━ PET PANEL ━━")]
-        [SerializeField] private Image           petHPBarFill;
-        [SerializeField] private TextMeshProUGUI petHPText;
-        [SerializeField] private Image           petAvatarImage;
-        [SerializeField] private GameObject      petHPBarPanel;
-
         [Header("━━ BOOSTER BOTTOM PANEL ━━")]
         [SerializeField] private BoosterSlotUI[] boosterSlots;
 
@@ -42,7 +44,6 @@ namespace Match3
         [SerializeField] private GoalTracker  goalTracker;
         [SerializeField] private MoveCounter  moveCounter;
         [SerializeField] private LevelManager levelManager;  // ← was GameManager
-        [SerializeField] private PetSystem    petSystem;
 
         [Header("━━ SCORE BAR ━━")]
         [SerializeField] private int scoreBarMaxValue = 2000;
@@ -72,17 +73,7 @@ namespace Match3
                 StartCoroutine(BuildGoalIconsDeferred());
             }
 
-            if (petSystem != null)
-            { petSystem.OnHPChanged += OnPetHPChanged; RefreshPetHP(); }
-            else if (petHPBarPanel != null)
-                petHPBarPanel.SetActive(false);
-
             settingsButton?.onClick.AddListener(OnSettingsClicked);
-        }
-
-        private void OnDestroy()
-        {
-            if (petSystem != null) petSystem.OnHPChanged -= OnPetHPChanged;
         }
 
         private void OnMovesChanged(int remaining)
@@ -141,28 +132,6 @@ namespace Match3
 
         private void OnGoalCompleted(int goalIndex)
         { if (goalIndex >= 0 && goalIndex < _goalIcons.Count) _goalIcons[goalIndex].PlayCompleteAnim(); }
-
-        private void OnPetHPChanged(int current, int max)
-        {
-            if (petHPBarPanel != null) petHPBarPanel.SetActive(true);
-            if (petHPBarFill != null)
-            {
-                float fill = max > 0 ? (float)current / max : 0f;
-                petHPBarFill.DOFillAmount(fill, 0.3f).SetEase(Ease.OutQuad);
-                petHPBarFill.color = fill > 0.5f ? new Color(0.2f, 0.85f, 0.2f)
-                                   : fill > 0.25f ? new Color(1f, 0.8f, 0f)
-                                                  : new Color(0.9f, 0.15f, 0.15f);
-            }
-            if (petHPText != null) petHPText.text = $"{current}/{max}";
-        }
-
-        private void RefreshPetHP()
-        {
-            if (petSystem == null) return;
-            OnPetHPChanged(petSystem.CurrentHP, petSystem.MaxHP);
-            if (petAvatarImage != null && petSystem.PetSprite != null)
-                petAvatarImage.sprite = petSystem.PetSprite;
-        }
 
         public void RefreshBoosterSlot(int index)
         {

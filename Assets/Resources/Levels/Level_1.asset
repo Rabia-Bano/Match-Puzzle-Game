@@ -12,18 +12,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
   m_Name: Level_1
   m_EditorClassIdentifier: 
-  width: 8
-  height: 8
-  moveLimit: 30
+  width: 7
+  height: 7
+  moveLimit: 18
   goals:
-  - {fileID: 11400000, guid: 486b0984115e9d849b0778842116ef43, type: 2}
-  - {fileID: 11400000, guid: 3a88e3359d3681f4daf034f6a4641881, type: 2}
-  - {fileID: 11400000, guid: 82a6455563d790341b67eb1dc94e2ebe, type: 2}
+  - {fileID: 11400000, guid: bf1ceec3816afb04a8700cf0da21585c, type: 2}
   allowedTiles:
   - {fileID: 11400000, guid: 7cdfc3822445bec46b26a0474efff096, type: 2}
   - {fileID: 11400000, guid: 1d85cc8cc49e6eb49b67180e12c0998b, type: 2}
   - {fileID: 11400000, guid: 2b0a9d40d0d96624fae8ea6961fab3fc, type: 2}
   - {fileID: 11400000, guid: 54e1c496a67178f4899e494245c47d96, type: 2}
+  jellyPositions: []
+  jellyLayers: 1
+  hardTileData: {fileID: 0}
+  hardTilePositions: []
+  dropStoneData: {fileID: 0}
+  stonePositions: []
   scoreTar1: 500
   scoreTar2: 1500
   scoreTar3: 2500

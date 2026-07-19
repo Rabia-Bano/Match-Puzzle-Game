@@ -3,13 +3,13 @@
 //
 //  Double Pulse Mechanic (Candy Crush Wrapped style):
 //    Pulse 1: Match hone par → 3×3 area clear
-//    Pulse 2: Jab cleared tile dobara match hoti → 3×3 phir clear
+//    Pulse 2: Dobara → 3×3 phir clear
 //
-//  Agar directly activate (single click) ho to dono pulses
-//  ek ke baad ek fire hote hain.
-//
-//  Attach to: WrappedTileEffect GameObject
-//  Assign in: SpecialCombinations Inspector
+//  REDESIGN (bug report ke baad — hard tile damage):
+//    Ab jab hard tile khud is 3x3 area ke andar aata hai, wahi ek
+//    DIRECT HIT hai — turant 1 damage lagta hai. Adjacency-based
+//    damage (jo 3x3 se BAHAR wali hardtiles ko bhi destroy kar deti
+//    thi) bilkul hata di gayi hai.
 // ============================================================
 
 using System.Collections;
@@ -24,19 +24,10 @@ namespace Match3
         // ── Inspector ─────────────────────────────────────────
 
         [Header("Wrapped Settings")]
-        [Tooltip("Dono pulses ke beech ruk jaane ka waqt")]
-        [SerializeField] private float pulsePause = 0.3f;
-
-        [Tooltip("Expand ring prefab — pulse ke waqt play hogi (optional)")]
+        [SerializeField] private float pulsePause = 0.12f;
         [SerializeField] private GameObject expandRingPrefab;
-
-        [Tooltip("Ring kitni dair mein expand ho")]
         [SerializeField] private float ringExpandDuration = 0.25f;
 
-        // ── Internal state — pulse tracking ──────────────────
-
-        // Wrapped tile ka world position store karte hain taake
-        // dono pulses same jagah se fire hon
         private Vector3 _epicenter;
 
         // ─────────────────────────────────────────────────────
@@ -47,33 +38,24 @@ namespace Match3
         {
             _epicenter = boardGrid.GridToWorld(position.x, position.y);
 
-            // ── PULSE 1 ───────────────────────────────────────
             yield return StartCoroutine(Pulse3x3(position.x, position.y, clearedTiles));
-
             yield return new WaitForSeconds(pulsePause);
-
-            // ── PULSE 2 — same center ─────────────────────────
             yield return StartCoroutine(Pulse3x3(position.x, position.y, clearedTiles));
 
             AddScoreForCleared(clearedTiles.Count);
         }
 
         // ─────────────────────────────────────────────────────
-        //  PUBLIC — SpecialCombinations call karta hai directly
-        //  when doing Wrapped + Striped combo (5-row sweep)
+        //  PUBLIC — SpecialCombinations calls this directly for
+        //  Wrapped+Wrapped and Wrapped+Striped combos
         // ─────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Single 3×3 pulse. SpecialCombinations bhi use karta hai.
-        /// </summary>
         public IEnumerator Pulse3x3(int cx, int cy, List<Tile> clearedTiles)
         {
-            // Expanding ring visual
             PlayExpandRing(_epicenter == Vector3.zero
                 ? boardGrid.GridToWorld(cx, cy)
                 : _epicenter);
 
-            // Sab 3x3 tiles collect karo
             var area = new List<Tile>();
             for (int dx = -1; dx <= 1; dx++)
             for (int dy = -1; dy <= 1; dy++)
@@ -82,7 +64,6 @@ namespace Match3
                 if (t != null) area.Add(t);
             }
 
-            // Circular clear: center se bahar ki taraf
             yield return StartCoroutine(CircularClear(cx, cy, area, clearedTiles));
         }
 
@@ -92,14 +73,10 @@ namespace Match3
 
         private IEnumerator CircularClear(int cx, int cy, List<Tile> area, List<Tile> cleared)
         {
-            // Center pehle, phir ring mein
             Tile centerTile = boardGrid.GetTile(cx, cy);
             if (centerTile != null && centerTile.State != TileState.Inactive)
-            {
                 yield return StartCoroutine(BurstClear(centerTile, cleared));
-            }
 
-            // 8 surrounding tiles
             var ring = new List<Tile>();
             for (int dx = -1; dx <= 1; dx++)
             for (int dy = -1; dy <= 1; dy++)
@@ -120,17 +97,33 @@ namespace Match3
             if (tile.State == TileState.Inactive)                   yield break;
             if (boardGrid.GetTile(tile.GridX, tile.GridY) != tile)  yield break;
 
-            if (tile.Data != null && !tile.Data.isSpecial)
-                levelManager?.OnTileCleared(tile.Data);
+            // Special tile caught inside this 3x3 pulse — chain-fire it.
+            if (tile.Data != null && tile.Data.isSpecial && specialActivator != null)
+            {
+                cleared.Add(tile);
+                yield return StartCoroutine(specialActivator.ChainActivate(tile));
+                yield break;
+            }
 
-            cleared.Add(tile);
+            // FIX: hard tile whose OWN cell is inside this 3x3 pulse is a
+            // DIRECT hit — damage it right here (1 point).
+            if (tile.Data != null && tile.Data.isHardTile)
+            {
+                DamageHardTileDirect(tile, cleared);
+                yield break;
+            }
+
+            // Dropdown stone — IMMUNE to this clear source.
+            if (tile.Data != null && tile.Data.isDropStone) yield break;
+
+            ClearNormalTileTracked(tile, cleared);
+
             Vector3 pos = tile.transform.position;
             boardGrid.RemoveTile(tile.GridX, tile.GridY);
             tile.SetState(TileState.Matched);
 
             PlayParticleAt(pos);
 
-            // Burst animation — scale up phir zero
             Sequence burst = DOTween.Sequence();
             burst.Append(tile.transform.DOScale(1.3f, 0.07f).SetEase(Ease.OutQuad));
             burst.Append(tile.transform.DOScale(0f,   0.1f).SetEase(Ease.InBack));
@@ -140,26 +133,18 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  EXPAND RING VISUAL
-        // ─────────────────────────────────────────────────────
 
         private void PlayExpandRing(Vector3 pos)
         {
             if (expandRingPrefab == null) return;
 
             GameObject ring = Instantiate(expandRingPrefab, pos, Quaternion.identity);
-
-            // DOTween se ring expand karein
             ring.transform.localScale = Vector3.zero;
-            ring.transform.DOScale(3.5f, ringExpandDuration)
-                .SetEase(Ease.OutCubic);
+            ring.transform.DOScale(3.5f, ringExpandDuration).SetEase(Ease.OutCubic);
 
             SpriteRenderer sr = ring.GetComponent<SpriteRenderer>();
             if (sr != null)
-            {
-                sr.DOFade(0f, ringExpandDuration)
-                  .SetDelay(ringExpandDuration * 0.5f);
-            }
+                sr.DOFade(0f, ringExpandDuration).SetDelay(ringExpandDuration * 0.5f);
 
             Destroy(ring, ringExpandDuration + 0.1f);
         }

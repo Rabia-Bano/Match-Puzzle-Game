@@ -7,19 +7,17 @@
 //    • loops the match -> special -> clear -> gravity -> refill
 //      cascade until the board is stable
 //
-//  Previously this logic was written TWICE (once here, once in
-//  BoardRefiller) and had drifted apart:
-//    - only the first-level match created a Special tile;
-//      cascade matches inside BoardRefiller never did.
-//    - board rotation was never re-checked for the new matches
-//      it can create, so a rotation could silently leave a valid
-//      match sitting on the board.
-//  Both are fixed below: ResolveBoard() is the single loop used
-//  both for the initial swap-match AND for anything a rotation
-//  produces afterwards, and it creates specials on every pass.
-//
-//  BoardRefiller and GravitySystem are now "dumb" mechanics
-//  components — they don't know about scoring or goals at all.
+//  REDESIGN (bug report ke baad — hard tile damage):
+//    Pehle ClearTiles() ke andar NORMAL tile clear hone par
+//    hardTileManager.DamageAdjacent() call hoti thi — jo us cleared
+//    tile ke UP/DOWN/LEFT/RIGHT wali hard tile ko damage deti thi,
+//    chahe blast/combo ka target khud hard tile ki cell na ho.
+//    Ab yeh "adjacency damage" mechanic bilkul hata di gayi hai.
+//    Hard tile ab sirf tab damage leta hai jab caller (SpecialTileActivator,
+//    SpecialCombinations, ya ek pet skill) ne apni target list mein
+//    hard tile ka apna cell seedha shamil kiya ho — DIRECT hit — aur
+//    canDamageHardTiles:true pass kiya ho. Isliye hardTileManager
+//    field aur brokenHardTiles queue ab yahan zaroorat nahi rahi.
 // ============================================================
 
 using System.Collections;
@@ -49,6 +47,12 @@ namespace Match3
         [Tooltip("Optional, but assign it — same reason as specialActivator above, for special+special combos.")]
         [SerializeField] private SpecialCombinations  specialCombinations;
 
+        [Header("Obstacle Systems (optional — leave blank if a level uses none of these)")]
+        [Tooltip("Hard tiles no longer need a manager reference here — damage is applied " +
+                 "directly on the Tile instance passed into ClearTiles().")]
+        [SerializeField] private JellyManager    jellyManager;
+        [SerializeField] private StoneManager    stoneManager;
+
         [Header("Clear Animation")]
         [SerializeField] private float clearPopDuration = 0.13f;
         [SerializeField] private float clearStagger     = 0.02f;
@@ -60,26 +64,13 @@ namespace Match3
 
         private bool _turnBusy;
 
-        /// <summary>
-        /// True while ANYTHING is still happening on the board — a normal
-        /// turn's cascade (swap -> match -> gravity -> refill -> rotation),
-        /// a single special-tile activation, or a special+special combo.
-        ///
-        /// This used to be just the normal-turn flag, which meant it went
-        /// false the instant a plain match settled — even while a special
-        /// blast or combo triggered from the SAME move was still clearing
-        /// tiles and adding score on its own separate coroutine. Anything
-        /// that needs to know "is the board 100% done reacting to this move"
-        /// (e.g. LevelResultManager deciding when it's safe to read the
-        /// final score) should check THIS, not just a normal-turn flag.
-        /// </summary>
         public bool IsBusy =>
             _turnBusy
             || (specialActivator    != null && specialActivator.IsRunning)
             || (specialCombinations != null && specialCombinations.IsRunning);
 
-        /// <summary>Fires once per cleared batch (initial match or a cascade step) with the tile count.</summary>
         public System.Action<int> OnTilesCleared;
+        public System.Action<int> OnMatchGroupResolved;
 
         // ─────────────────────────────────────────────────────
         //  PUBLIC API  (unchanged — SwapController depends on this)
@@ -108,15 +99,17 @@ namespace Match3
             _turnBusy = true;
             inputHandler.SetInputEnabled(false);
 
-            // Resolve whatever match the swap just created (+ any cascades).
+            jellyManager?.BeginTurn();
+
             yield return StartCoroutine(ResolveBoard());
 
-            // Every-5-moves board rotation, then resolve anything IT created.
             if (boardRotation != null && boardRotation.ShouldRotateThisTurn())
             {
                 yield return StartCoroutine(boardRotation.RotateBoard90());
                 yield return StartCoroutine(ResolveBoard());
             }
+
+            jellyManager?.WanderUnclearedJelly();
 
             _turnBusy = false;
             inputHandler.SetInputEnabled(true);
@@ -127,12 +120,8 @@ namespace Match3
         /// <summary>
         /// Call this after tiles were removed by something OTHER than a normal
         /// match — a special-tile blast (SpecialTileActivator) or a special+special
-        /// combo (SpecialCombinations). Those systems decide WHICH tiles to clear
-        /// (row/column/3x3/color/etc.) and call ClearTiles() themselves; once done,
-        /// they call this to apply gravity, refill the empty cells, and resolve
-        /// any matches the new tiles create — using the exact same gravity /
-        /// refill / cascade code as a normal swap, instead of each keeping its
-        /// own copy.
+        /// combo (SpecialCombinations). Applies gravity, refills, and resolves
+        /// any matches the new tiles create.
         /// </summary>
         public IEnumerator SettleAfterExternalClear()
         {
@@ -144,21 +133,32 @@ namespace Match3
         /// <summary>
         /// The single cascade loop: find matches -> turn qualifying groups into
         /// special tiles -> clear -> gravity -> refill -> repeat until stable.
-        /// Public so other systems that alter the board directly (a pet power,
-        /// a booster, a boss-arena obstacle) can settle the board afterwards
-        /// through this exact same path instead of re-implementing it.
         /// </summary>
         public IEnumerator ResolveBoard()
         {
             for (int i = 0; i < maxCascadeIterations; i++)
             {
                 List<MatchGroup> matches = matchFinder.FindAllMatches();
-                if (matches.Count == 0) yield break;
+                List<Tile> stonesAtBottom = stoneManager != null
+                    ? stoneManager.GetStonesAtBottomRow()
+                    : EmptyTileList;
+                bool hasEmptyCells = BoardHasEmptyCells();
 
-                foreach (var group in matches)
-                    specialFactory.TryCreateSpecial(group, boardGrid);
+                if (matches.Count == 0 && stonesAtBottom.Count == 0 && !hasEmptyCells) yield break;
 
-                yield return StartCoroutine(ClearMatchGroups(matches));
+                if (matches.Count > 0)
+                {
+                    foreach (var group in matches)
+                    {
+                        specialFactory.TryCreateSpecial(group, boardGrid);
+                        OnMatchGroupResolved?.Invoke(group.Tiles.Count);
+                    }
+                    yield return StartCoroutine(ClearMatchGroups(matches));
+                }
+
+                if (stonesAtBottom.Count > 0)
+                    yield return StartCoroutine(ClearTiles(stonesAtBottom, allowStoneCollection: true));
+
                 yield return StartCoroutine(gravitySystem.ApplyGravity());
                 yield return StartCoroutine(boardRefiller.RefillEmptyCells());
             }
@@ -167,8 +167,16 @@ namespace Match3
                               "check the level for a tile configuration that can never settle.");
         }
 
-        // ─────────────────────────────────────────────────────
-        //  SHARED CLEAR LOGIC  (was duplicated in BoardRefiller)
+        private bool BoardHasEmptyCells()
+        {
+            for (int x = 0; x < boardGrid.Width; x++)
+            for (int y = 0; y < boardGrid.Height; y++)
+                if (boardGrid.GetTile(x, y) == null) return true;
+            return false;
+        }
+
+        private static readonly List<Tile> EmptyTileList = new();
+
         // ─────────────────────────────────────────────────────
 
         private IEnumerator ClearMatchGroups(List<MatchGroup> matches)
@@ -179,6 +187,9 @@ namespace Match3
                     if (tile != null && tile.State != TileState.Inactive)
                         toClear.Add(tile);
 
+            // Plain colour matches NEVER damage hard tiles — MatchFinder already
+            // excludes Locked hard tiles from match groups, so canDamageHardTiles
+            // stays false (the default) here.
             yield return StartCoroutine(ClearTiles(toClear));
         }
 
@@ -189,10 +200,40 @@ namespace Match3
         /// project that should ever do this — anything that needs to clear
         /// tiles (specials, boosters, pet powers) should call this instead
         /// of writing its own clear + score logic.
+        ///
+        /// Handles FOUR kinds of tile it might find in the list:
+        ///   • Special tile      → chain-fires its blast
+        ///   • Hard tile         → this cell was DIRECTLY inside the caller's
+        ///                         own target area (a special blast's row/
+        ///                         column/3x3/5x5/colour-sweep, or a pet skill's
+        ///                         tile list) — takes exactly 1 point of damage
+        ///                         right here via Tile.DamageObstacle(). If that
+        ///                         breaks it, reports GoalTracker.OnHardTileCleared()
+        ///                         and clears it. If it survives, it's simply
+        ///                         left in place (already showed its own crack-
+        ///                         sprite + punch-scale feedback). It is NEVER
+        ///                         damaged just for being next to something else
+        ///                         that cleared.
+        ///   • Dropdown stone    → only ever arrives here from ResolveBoard()'s
+        ///                         "reached the bottom row" check
+        ///   • Normal colour tile → reports OnTileCleared() + jelly decrement
         /// </summary>
-        public IEnumerator ClearTiles(IEnumerable<Tile> tiles)
+        /// <param name="canDamageHardTiles">
+        /// Pass true ONLY when this list comes from a special-tile blast, a
+        /// special+special combo, or a pet skill's own target area — i.e.
+        /// whenever a hard tile appearing IN this list means its cell was
+        /// deliberately, directly targeted. Plain colour matches (the
+        /// default, false) never include a hard tile in their list at all
+        /// (MatchFinder excludes Locked tiles) — this is just a safety guard.
+        /// </param>
+        /// <param name="allowStoneCollection">
+        /// Pass true ONLY from ResolveBoard()'s "stone reached the bottom
+        /// row" check. Dropdown stones are IMMUNE to every other clear source.
+        /// </param>
+        public IEnumerator ClearTiles(IEnumerable<Tile> tiles, bool canDamageHardTiles = false, bool allowStoneCollection = false)
         {
             int cleared = 0;
+            var chainedSpecials = new List<Tile>();
 
             foreach (Tile tile in tiles)
             {
@@ -200,8 +241,79 @@ namespace Match3
                 if (boardGrid.GetTile(tile.GridX, tile.GridY) != tile) continue;
 
                 TileData tileData = tile.Data;
-                if (tileData != null && !tileData.isSpecial)
-                    levelManager?.OnTileCleared(tileData);
+
+                // ── Special tile → chain-fire its own blast ──
+                if (tileData != null && tileData.isSpecial)
+                {
+                    if (specialActivator != null)
+                    {
+                        chainedSpecials.Add(tile);
+                    }
+                    else
+                    {
+                        tile.SetState(TileState.Matched);
+                        boardGrid.RemoveTile(tile.GridX, tile.GridY);
+                        cleared++;
+                        tile.transform.DOScale(Vector3.zero, clearPopDuration)
+                            .SetEase(Ease.InBack)
+                            .OnComplete(() => tile.transform.localScale = Vector3.one);
+                        yield return new WaitForSeconds(clearStagger);
+                    }
+                    continue;
+                }
+
+                // ── Hard tile → this cell was a DIRECT hit ──
+                if (tileData != null && tileData.isHardTile)
+                {
+                    if (!canDamageHardTiles)
+                    {
+                        // Shouldn't normally happen (MatchFinder excludes Locked
+                        // tiles from plain matches) — stay safe, leave it untouched.
+                        continue;
+                    }
+
+                    bool broke = tile.DamageObstacle();
+                    if (!broke)
+                    {
+                        // Took 1 damage, still standing — DamageObstacle() already
+                        // updated its crack sprite + punch-scale feedback. Leave it.
+                        continue;
+                    }
+
+                    levelManager?.OnHardTileCleared();
+                    tile.SetState(TileState.Matched);
+                    boardGrid.RemoveTile(tile.GridX, tile.GridY);
+                    cleared++;
+                    tile.transform.DOScale(Vector3.zero, clearPopDuration)
+                        .SetEase(Ease.InBack)
+                        .OnComplete(() => tile.transform.localScale = Vector3.one);
+                    yield return new WaitForSeconds(clearStagger);
+                    continue;
+                }
+
+                // ── Dropdown stone ──
+                if (tileData != null && tileData.isDropStone)
+                {
+                    if (!allowStoneCollection)
+                        continue; // immune to this clear source, only gravity collects it
+
+                    Debug.Log($"[BoardController] Stone collected at ({tile.GridX},{tile.GridY}).");
+                    levelManager?.OnStoneCollected();
+                    tile.SetState(TileState.Matched);
+                    boardGrid.RemoveTile(tile.GridX, tile.GridY);
+                    cleared++;
+                    tile.transform.DOScale(Vector3.zero, clearPopDuration)
+                        .SetEase(Ease.InBack)
+                        .OnComplete(() => tile.transform.localScale = Vector3.one);
+                    yield return new WaitForSeconds(clearStagger);
+                    continue;
+                }
+
+                // ── Normal colour tile ──
+                levelManager?.OnTileCleared(tileData);
+
+                if (jellyManager != null && jellyManager.DecrementAt(tile.GridX, tile.GridY))
+                    levelManager?.OnJellyCleared();
 
                 tile.SetState(TileState.Matched);
                 boardGrid.RemoveTile(tile.GridX, tile.GridY);
@@ -221,6 +333,12 @@ namespace Match3
                 OnTilesCleared?.Invoke(cleared);
                 levelManager?.AddScore(cleared * scorePerTile);
             }
+
+            foreach (Tile special in chainedSpecials)
+            {
+                if (boardGrid.GetTile(special.GridX, special.GridY) != special) continue;
+                yield return StartCoroutine(specialActivator.ChainActivate(special));
+            }
         }
 
         // ─────────────────────────────────────────────────────
@@ -235,8 +353,10 @@ namespace Match3
             if (!specialFactory) Debug.LogError("[BoardController] specialFactory missing!", this);
             if (!levelManager)   Debug.LogError("[BoardController] levelManager missing!",   this);
             if (!boardRotation)  Debug.LogWarning("[BoardController] boardRotation not assigned — rotation feature disabled.", this);
-            if (!specialActivator)    Debug.LogWarning("[BoardController] specialActivator not assigned — IsBusy won't account for single special-tile blasts. Results panel may show a score snapshot taken too early.", this);
-            if (!specialCombinations) Debug.LogWarning("[BoardController] specialCombinations not assigned — IsBusy won't account for special+special combos. Results panel may show a score snapshot taken too early.", this);
+            if (!specialActivator)    Debug.LogWarning("[BoardController] specialActivator not assigned — IsBusy won't account for single special-tile blasts.", this);
+            if (!specialCombinations) Debug.LogWarning("[BoardController] specialCombinations not assigned — IsBusy won't account for special+special combos.", this);
+            if (!jellyManager)    Debug.Log("[BoardController] jellyManager not assigned — jelly obstacles disabled (fine if this level doesn't use them).", this);
+            if (!stoneManager)    Debug.Log("[BoardController] stoneManager not assigned — dropdown stone obstacles disabled (fine if this level doesn't use them).", this);
         }
     }
 }
