@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Game.Firebase;
-
+using Match3;
 public class ProfilePanel : MonoBehaviour
 {
     [Header("Panel Root")]
@@ -193,8 +193,19 @@ public class ProfilePanel : MonoBehaviour
         if (petsContainer == null) return;
         foreach (Transform child in petsContainer) Destroy(child.gameObject);
 
-        for (int i = 0; i < 5; i++)
+        // Real pet definitions (sprite + name) instead of unicode glyphs —
+        // the old ★ character wasn't in the TMP font asset AND its color
+        // was never set (defaulted to white-on-white = invisible).
+        PetData[] allPets = Resources.LoadAll<PetData>("Pets");
+        System.Array.Sort(allPets, (a, b) => a.unlockAfterLevel.CompareTo(b.unlockAfterLevel));
+
+        int slotCount = Mathf.Max(5, allPets.Length);
+
+        for (int i = 0; i < slotCount; i++)
         {
+            PetData pet = i < allPets.Length ? allPets[i] : null;
+            bool isUnlocked = pet != null && p.pets.Contains(pet.id);
+
             GameObject slot = new GameObject($"Pet_{i}");
             slot.AddComponent<RectTransform>();
             slot.transform.SetParent(petsContainer, false);
@@ -202,27 +213,53 @@ public class ProfilePanel : MonoBehaviour
             LayoutElement le = slot.AddComponent<LayoutElement>();
             le.preferredWidth = 40; le.preferredHeight = 40;
 
-            TMP_Text icon = new GameObject("Icon").AddComponent<TextMeshProUGUI>();
-            icon.transform.SetParent(slot.transform, false);
-            RectTransform iconRT = icon.GetComponent<RectTransform>();
-            iconRT.anchorMin = Vector2.zero; iconRT.anchorMax = Vector2.one;
-            iconRT.offsetMin = iconRT.offsetMax = Vector2.zero;
-            icon.alignment = TextAlignmentOptions.Center;
-
-            if (i < p.pets.Count)
+            if (isUnlocked)
             {
-                slotImg.color = new Color(0.85f, 0.93f, 1f);
-                icon.fontSize = 20; icon.text = "★";
+                slotImg.color = new Color(0.85f, 0.93f, 1f, 1f);
+
+                if (pet.sprite != null)
+                {
+                    GameObject iconGO = new GameObject("Icon");
+                    iconGO.transform.SetParent(slot.transform, false);
+                    Image iconImg = iconGO.AddComponent<Image>();
+                    iconImg.sprite = pet.sprite;
+                    iconImg.color  = Color.white;
+                    RectTransform iconRT = iconGO.GetComponent<RectTransform>();
+                    iconRT.anchorMin = new Vector2(0.1f, 0.1f);
+                    iconRT.anchorMax = new Vector2(0.9f, 0.9f);
+                    iconRT.offsetMin = iconRT.offsetMax = Vector2.zero;
+                }
+                else
+                {
+                    // Fallback if sprite isn't assigned yet — ASCII letter,
+                    // color EXPLICITLY set so it's actually visible.
+                    TMP_Text icon = new GameObject("Icon").AddComponent<TextMeshProUGUI>();
+                    icon.transform.SetParent(slot.transform, false);
+                    RectTransform iconRT = icon.GetComponent<RectTransform>();
+                    iconRT.anchorMin = Vector2.zero; iconRT.anchorMax = Vector2.one;
+                    iconRT.offsetMin = iconRT.offsetMax = Vector2.zero;
+                    icon.alignment = TextAlignmentOptions.Center;
+                    icon.fontSize  = 22;
+                    icon.color     = new Color(0.15f, 0.35f, 0.65f, 1f);
+                    icon.text      = string.IsNullOrEmpty(pet.petName) ? "P" : pet.petName.Substring(0, 1).ToUpper();
+                }
             }
             else
             {
                 slotImg.color = new Color(0.88f, 0.88f, 0.90f);
-                icon.fontSize = 16; icon.text = "○";
-                icon.color = new Color(0.6f, 0.6f, 0.65f);
+
+                TMP_Text icon = new GameObject("Icon").AddComponent<TextMeshProUGUI>();
+                icon.transform.SetParent(slot.transform, false);
+                RectTransform iconRT = icon.GetComponent<RectTransform>();
+                iconRT.anchorMin = Vector2.zero; iconRT.anchorMax = Vector2.one;
+                iconRT.offsetMin = iconRT.offsetMax = Vector2.zero;
+                icon.alignment = TextAlignmentOptions.Center;
+                icon.fontSize  = 14;
+                icon.color     = new Color(0.55f, 0.55f, 0.6f, 1f);
+                icon.text      = pet != null ? $"Lv{pet.unlockAfterLevel}" : "-";
             }
         }
     }
-
     // ── Avatar ────────────────────────────────────────────────
 
     public void SetAvatarSprite(Sprite sprite)
@@ -301,9 +338,13 @@ public class ProfilePanel : MonoBehaviour
 
     private void OnLogoutClicked()
     {
-        // Logout directly — no save, no delay, no loading screen
-        // Profile auto-saves in background when levels complete anyway
+        // Logout turant hota hai — koi loading screen/blocking wait nahi.
+        // NEW: ek fire-and-forget cloud push chhod dete hain taake agar
+        // internet available ho to latest progress cloud par bhi chala jaye
+        // (Profile already levels complete hone par auto-save/push hoti rehti hai,
+        // ye sirf ek extra "safety push" hai logout ke waqt).
         Debug.Log("[ProfilePanel] Logging out...");
+        _ = CloudSyncManager.Instance?.SyncAfterLevelAsync();
         Hide();
         AuthManager.Instance?.Logout();
     }
@@ -341,8 +382,19 @@ public class ProfilePanel : MonoBehaviour
         // AuthManager handles token refresh + link internally
         AuthManager.Instance?.UpgradeGuestAccount(username, email, password);
 
+        // FIX: this used to AddListener(OnUpgradeError) on every single submit
+        // tap with no de-dupe. If the first attempt failed (e.g. "email already
+        // in use") and the player edited and resubmitted, each retry stacked
+        // ANOTHER subscription on top — so a later error fired OnUpgradeError
+        // multiple times, and since RemoveListener only clears one matching
+        // entry per call, the extras were never fully cleaned up for the rest
+        // of the session. Remove any existing subscription first so there's
+        // always exactly one.
         if (AuthManager.Instance != null)
+        {
+            AuthManager.Instance.OnAuthError.RemoveListener(OnUpgradeError);
             AuthManager.Instance.OnAuthError.AddListener(OnUpgradeError);
+        }
     }
 
     private void OnGuestUpgradeSuccess()

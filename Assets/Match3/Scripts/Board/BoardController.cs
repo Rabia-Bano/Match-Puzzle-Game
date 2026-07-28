@@ -150,8 +150,17 @@ namespace Match3
                 {
                     foreach (var group in matches)
                     {
+                        // FIX: SpecialTileFactory.TryCreateSpecial() removes the
+                        // pivot tile from group.Tiles when it turns this match
+                        // into a special (4-line/5-line/T/L). Reading
+                        // group.Tiles.Count AFTER that call under-reports the
+                        // real match size by 1 for every match that spawns a
+                        // special — which silently under-charged PetManager's
+                        // battery (e.g. a 4-match reported as 3 → only +5%
+                        // instead of +10%). Capture the true size first.
+                        int matchSize = group.Tiles.Count;
                         specialFactory.TryCreateSpecial(group, boardGrid);
-                        OnMatchGroupResolved?.Invoke(group.Tiles.Count);
+                        OnMatchGroupResolved?.Invoke(matchSize);
                     }
                     yield return StartCoroutine(ClearMatchGroups(matches));
                 }

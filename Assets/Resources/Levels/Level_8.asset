@@ -30,8 +30,8 @@ MonoBehaviour:
   dropStoneData: {fileID: 11400000, guid: 5a301398d763f534eb494afc32c11a80, type: 2}
   stonePositions:
   - {x: 4, y: 5}
-  - {x: 3, y: 2}
   - {x: 1, y: 4}
+  - {x: 6, y: 3}
   scoreTar1: 500
   scoreTar2: 1000
   scoreTar3: 2000

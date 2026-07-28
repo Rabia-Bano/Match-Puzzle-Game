@@ -777,7 +777,6 @@ MonoBehaviour:
   specialActivator: {fileID: 1274777451}
   specialCombinations: {fileID: 1359998018}
   jellyManager: {fileID: 1507804464}
-  hardTileManager: {fileID: 1618798698}
   stoneManager: {fileID: 386117578}
   clearPopDuration: 0.13
   clearStagger: 0.02
@@ -2577,6 +2576,8 @@ MonoBehaviour:
   scoreProgressBar: {fileID: 1570155213}
   moveNumberText: {fileID: 2014154103}
   moveLabelText: {fileID: 952198757}
+  normalMoveColor: {r: 1, g: 1, b: 1, a: 1}
+  lowMoveColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   goalIconContainer: {fileID: 1007652992}
   goalIconPrefab: {fileID: 1654894261996063059, guid: e52724ab1c9162d4cb0ec2893f51b682, type: 3}
   boosterSlots: []
@@ -4584,6 +4585,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   boardGrid: {fileID: 1680278335}
   boardController: {fileID: 212349650}
+  levelManager: {fileID: 472770729}
+  jellyManager: {fileID: 1507804464}
   hStripedData: {fileID: 11400000, guid: 724d41f2095c3564897d52a3602fd427, type: 2}
   vStripedData: {fileID: 11400000, guid: 1d0b741803822ab4787ea98ed5ea94c0, type: 2}
   wrappedData: {fileID: 11400000, guid: 9e0cac533e98e9f4ca08d3e50925bf20, type: 2}
@@ -4857,7 +4860,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1337976853}
-  - component: {fileID: 1337976852}
   m_Layer: 0
   m_Name: SaveManager
   m_TagString: Untagged
@@ -4865,18 +4867,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1337976852
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1337976851}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8da77625b0dfe0c47bcd62e47de57710, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!4 &1337976853
 Transform:
   m_ObjectHideFlags: 0
@@ -4996,7 +4986,6 @@ MonoBehaviour:
   levelManager: {fileID: 472770729}
   boardController: {fileID: 212349650}
   specialActivator: {fileID: 1274777451}
-  hardTileManager: {fileID: 1618798698}
   jellyManager: {fileID: 1507804464}
   hStripedData: {fileID: 11400000, guid: 724d41f2095c3564897d52a3602fd427, type: 2}
   vStripedData: {fileID: 11400000, guid: 1d0b741803822ab4787ea98ed5ea94c0, type: 2}
@@ -5023,7 +5012,6 @@ MonoBehaviour:
   boardGrid: {fileID: 0}
   levelManager: {fileID: 0}
   specialActivator: {fileID: 0}
-  hardTileManager: {fileID: 0}
   jellyManager: {fileID: 0}
   arcParticlePrefab: {fileID: 0}
   rainbowFlashPrefab: {fileID: 0}
@@ -5048,7 +5036,6 @@ MonoBehaviour:
   boardGrid: {fileID: 0}
   levelManager: {fileID: 0}
   specialActivator: {fileID: 0}
-  hardTileManager: {fileID: 0}
   jellyManager: {fileID: 0}
   pulsePause: 0.3
   expandRingPrefab: {fileID: 411733699387787422, guid: eeeaef61329c5af4d89c34e0222aa4ab, type: 3}
@@ -5072,7 +5059,6 @@ MonoBehaviour:
   boardGrid: {fileID: 0}
   levelManager: {fileID: 0}
   specialActivator: {fileID: 0}
-  hardTileManager: {fileID: 0}
   jellyManager: {fileID: 0}
   hLaserTrailPrefab: {fileID: 0}
   vLaserTrailPrefab: {fileID: 0}

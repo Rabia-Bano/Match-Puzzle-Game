@@ -69,8 +69,10 @@ namespace Match3
         // ── Hard tile (blocker obstacle) ───────────────────────
         [Header("Hard Tile (Blocker)")]
         [Tooltip("Is this a hard/blocker obstacle? Cannot be matched or swapped " +
-                 "(spawns with TileState.Locked). Takes 1 damage whenever a " +
-                 "NORMAL tile clears in an adjacent cell, and breaks at 0 HP.")]
+                 "(spawns with TileState.Locked). Takes 1 damage only when a special " +
+                 "blast / combo / pet skill's own target area DIRECTLY includes this " +
+                 "tile's cell — never just for being next to a tile that cleared. " +
+                 "Breaks at 0 HP.")]
         public bool isHardTile;
 
         [Tooltip("Hit points before this hard tile breaks. Only used when isHardTile == true.")]

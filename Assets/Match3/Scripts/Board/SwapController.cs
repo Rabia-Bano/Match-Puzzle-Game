@@ -55,6 +55,14 @@ namespace Match3
 
             IsBusy = true;
             inputHandler.SetInputEnabled(false);
+
+            // FIX: tapping a special tile to fire it is still a "move" —
+            // this was missing before, so a direct tap never advanced the
+            // move counter / rotation counter even though it clearly
+            // consumed a move like a swap does.
+            boardRotation?.RegisterMove();
+            levelManager?.OnMoveCompleted();
+
             specialActivator.ActivateSingle(tile);
             StartCoroutine(WaitForActivator());
         }
@@ -83,7 +91,24 @@ namespace Match3
             // ── Step 1: Do Special + Special combo check (NEW) ─
             if (aSpecial && bSpecial && specialCombinations != null)
             {
-                bool comboHandled = specialCombinations.TryHandleCombo(tileA, tileB);
+                bool comboHandled = false;
+                try
+                {
+                    comboHandled = specialCombinations.TryHandleCombo(tileA, tileB);
+                }
+                catch (System.Exception e)
+                {
+                    // DEBUG: if this ever fires, TryHandleCombo threw BEFORE
+                    // returning — usually a missing Inspector ref inside
+                    // SpecialCombinations (stripedEffect/wrappedEffect/
+                    // colorBombEffect/boardGrid/levelManager/boardController).
+                    // Without this catch, the exception would abort SwapRoutine
+                    // right here — before RegisterMove()/OnMoveCompleted() ever
+                    // run, AND before IsBusy gets reset — so the move silently
+                    // never counts and every swipe after this one is ignored too.
+                    Debug.LogError($"[SwapController] TryHandleCombo threw: {e}", this);
+                }
+
                 if (comboHandled)
                 {
                     boardRotation?.RegisterMove();
@@ -132,7 +157,20 @@ namespace Match3
             // its blast even with no match, that's the whole point of it).
             if (aSpecial || bSpecial)
             {
-                bool handled = specialActivator.TryActivateSwap(tileA, tileB);
+                bool handled = false;
+                try
+                {
+                    handled = specialActivator.TryActivateSwap(tileA, tileB);
+                }
+                catch (System.Exception e)
+                {
+                    // Same reasoning as Step 1's catch — a missing ref inside
+                    // SpecialTileActivator (boardGrid/boardController/one of
+                    // the special TileData assets) would otherwise abort here
+                    // silently, before the move ever gets counted.
+                    Debug.LogError($"[SwapController] TryActivateSwap threw: {e}", this);
+                }
+
                 if (handled)
                 {
                     boardRotation?.RegisterMove();

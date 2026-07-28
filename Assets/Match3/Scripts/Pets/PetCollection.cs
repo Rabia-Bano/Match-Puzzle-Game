@@ -10,12 +10,12 @@
 //  the bottom nav bar). Wire up gridContainer + slotPrefab (which
 //  needs a PetCollectionSlot component) in the Inspector.
 //
-//  Unlock check source: SaveManager.Instance.Profile.highestLevelReached
-//  (local, always available) — if you want the cloud copy to win when
-//  online, swap ResolveHighestLevelReached() to read
-//  Game.Firebase.ProfileManager.Instance.Profile.levelsCompleted first,
-//  falling back to the local value when offline (same pattern already
-//  used by ProfileManager.SyncToLocalSaveManager()).
+//  UPDATED: unlock check source is now LocalSaveManager (Newtonsoft-based
+//  local save, wraps the single canonical global PlayerProfile) instead
+//  of the deprecated Match3.SaveManager / Match3.PlayerProfile. If you
+//  want the cloud copy to win when online, swap ResolveHighestLevelReached()
+//  to read Game.Firebase.ProfileManager.Instance.Profile.levelsCompleted
+//  first, falling back to LocalSaveManager when offline.
 // ============================================================
 
 using System.Collections.Generic;
@@ -129,6 +129,7 @@ namespace Match3
         {
             int highestLevelReached = ResolveHighestLevelReached();
             HashSet<string> seen = LoadSeenUnlocks();
+            bool anyNewUnlock = false;
 
             foreach (PetData pet in _allPets)
             {
@@ -136,6 +137,7 @@ namespace Match3
                 if (seen.Contains(pet.id)) continue;
 
                 seen.Add(pet.id);
+                anyNewUnlock = true;
                 ShowUnlockPopup(pet);
                 // Sync to Firebase profile if available/online — safe no-op otherwise.
                 Game.Firebase.ProfileManager.Instance?.OnPetUnlocked(pet.id);
@@ -143,6 +145,16 @@ namespace Match3
             }
 
             SaveSeenUnlocks(seen);
+
+            // Persist the up-to-date unlocked-pet list into the local save
+            // whenever a new pet crosses its unlock threshold.
+            if (anyNewUnlock)
+            {
+                var unlockedIds = petManager != null
+                    ? petManager.GetUnlockedPetIds()
+                    : _allPets.Where(p => highestLevelReached >= p.unlockAfterLevel).Select(p => p.id).ToList();
+                LocalSaveManager.SavePetCollection(unlockedIds);
+            }
         }
 
         private void ShowUnlockPopup(PetData pet)
@@ -157,11 +169,12 @@ namespace Match3
 
         // ── Helpers ───────────────────────────────────────────
 
+        /// <summary>Reads levels-completed from the canonical local save
+        /// (LocalSaveManager), which mirrors the same PlayerProfile used
+        /// by ProfileManager/Firestore — no more separate Match3.SaveManager copy.</summary>
         private int ResolveHighestLevelReached()
         {
-            if (SaveManager.Instance != null && SaveManager.Instance.Profile != null)
-                return SaveManager.Instance.Profile.highestLevelReached;
-            return 0;
+            return LocalSaveManager.GetOrLoadProfile()?.levelsCompleted ?? 0;
         }
 
         private HashSet<string> LoadSeenUnlocks()

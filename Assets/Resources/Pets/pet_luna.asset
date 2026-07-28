@@ -21,4 +21,4 @@ MonoBehaviour:
   skillName: Double Shuffle
   skillDescription: 
   chargeRequired: 100
-  unlockAfterLevel: 15
+  unlockAfterLevel: 10

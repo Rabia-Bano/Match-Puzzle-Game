@@ -358,6 +358,12 @@ namespace Match3
             // ── Save via ProfileManager ───────────────────────
             ProfileManager.Instance?.OnLevelCompleted(_currentLevelId, stars, score, coins);
 
+            // NEW — local save already updated by ProfileManager above; ab background
+            // mein Firestore par bhi push kar do. Fire-and-forget: `_ =` isliye taake
+            // Win panel turant dikhe, network call ke liye ruknа na pade.
+            _ = CloudSyncManager.Instance?.SyncAfterLevelAsync();
+            _ = Game.Firebase.LeaderboardManager.Instance?.SubmitScore(score, _currentLevelId.ToString());
+
             // Populate texts
             if (winLevelText     != null) winLevelText.text     = $"Level {_currentLevelId} Complete!";
             if (winScoreText     != null) winScoreText.text     = $"Score: {score:N0}";

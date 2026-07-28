@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   goalType: 1
   targetTile: {fileID: 0}
-  requiredAmount: 8
+  requiredAmount: 7
   goalIcon: {fileID: 6745137483145456397, guid: c917fb69c34b4a94789836fa3e561211, type: 3}
   goalLabel: Claer Jelly

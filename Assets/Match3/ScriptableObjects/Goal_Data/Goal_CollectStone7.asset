@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   goalType: 4
   targetTile: {fileID: 11400000, guid: 5a301398d763f534eb494afc32c11a80, type: 2}
-  requiredAmount: 6
+  requiredAmount: 7
   goalIcon: {fileID: -6471164996032937220, guid: 446ae90fc19ca67458124a655e811efe, type: 3}
   goalLabel: Collect Stone

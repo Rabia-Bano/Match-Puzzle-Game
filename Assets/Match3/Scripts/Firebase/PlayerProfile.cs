@@ -5,6 +5,9 @@ using UnityEngine;
 [Serializable]
 public class PlayerProfile
 {
+    // ── Save schema version (used by LocalSaveManager / SaveMigration) ──
+    public int saveVersion = 2;
+
     // ── Identity ──────────────────────────────────────────────
     public string uid          = "";
     public string displayName  = "";

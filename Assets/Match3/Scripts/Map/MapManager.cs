@@ -151,12 +151,19 @@ public class MapManager : MonoBehaviour
         if (profile != null)
         {
             stars = profile.GetStars(levelId);
-            if (stars > 0)
-                state = LevelNode.NodeState.Completed;
-            else if (profile.IsLevelUnlocked(levelId))
-                state = LevelNode.NodeState.Unlocked;
-            else
+            bool unlocked = profile.IsLevelUnlocked(levelId);
+
+            // FIXED: unlock chain is now checked FIRST. A level can never show
+            // as Completed unless it's genuinely unlocked — this prevents stale
+            // or out-of-sync star data (e.g. Level 3 has old stars but Level 1's
+            // stars got reset) from producing a broken map with two "PLAY"
+            // buttons / a level showing Completed while an earlier one isn't.
+            if (!unlocked)
                 state = LevelNode.NodeState.Locked;
+            else if (stars > 0)
+                state = LevelNode.NodeState.Completed;
+            else
+                state = LevelNode.NodeState.Unlocked;
         }
         else
         {
@@ -170,7 +177,6 @@ public class MapManager : MonoBehaviour
 
         return node;
     }
-
     private void SpawnBossNode(int bossId, int afterLevel, int posIndex, PlayerProfile profile)
     {
         Vector2    pos = nodePositions[posIndex];

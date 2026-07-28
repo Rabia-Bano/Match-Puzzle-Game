@@ -14,10 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   width: 8
   height: 8
-  moveLimit: 30
+  moveLimit: 20
   goals:
-  - {fileID: 11400000, guid: 82a6455563d790341b67eb1dc94e2ebe, type: 2}
+  - {fileID: 11400000, guid: 3176c22c395b6054dba4a0a48be5dac7, type: 2}
+  - {fileID: 11400000, guid: 23ed864dd2da677499461b990c8a819f, type: 2}
   allowedTiles: []
+  jellyPositions: []
+  jellyLayers: 1
+  hardTileData: {fileID: 0}
+  hardTilePositions: []
+  dropStoneData: {fileID: 11400000, guid: 5a301398d763f534eb494afc32c11a80, type: 2}
+  stonePositions:
+  - {x: 2, y: 7}
+  - {x: 4, y: 7}
+  - {x: 6, y: 7}
   scoreTar1: 500
   scoreTar2: 1000
   scoreTar3: 2000

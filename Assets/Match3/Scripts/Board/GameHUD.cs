@@ -29,6 +29,8 @@ namespace Match3
         [SerializeField] private Image           scoreProgressBar;
         [SerializeField] private TextMeshProUGUI moveNumberText;
         [SerializeField] private TextMeshProUGUI moveLabelText;
+        [SerializeField] private Color           normalMoveColor = Color.white;
+        [SerializeField] private Color           lowMoveColor    = new Color(1f, 0.25f, 0.25f);
 
         [Header("━━ AUTO GOAL PANEL ━━")]
         [SerializeField] private Transform       goalIconContainer;
@@ -79,7 +81,13 @@ namespace Match3
         private void OnMovesChanged(int remaining)
         {
             if (moveNumberText == null) return;
-            moveNumberText.text = remaining.ToString();
+            moveNumberText.text  = remaining.ToString();
+            // FIX: was only ever SET to red inside OnLowMoves() below and never
+            // reset back — so once a level triggered the low-moves warning,
+            // the text stayed red forever after (through boosters adding moves,
+            // and into the next level), since nothing recalculated the colour
+            // on a normal moves-changed update. Recalculate it fresh every time.
+            moveNumberText.color = remaining <= 5 ? lowMoveColor : normalMoveColor;
             moveNumberText.transform.DOKill();
             moveNumberText.transform.localScale = Vector3.one;
             moveNumberText.transform.DOPunchScale(Vector3.one * 0.3f, 0.2f, 5, 0.5f);
@@ -88,7 +96,6 @@ namespace Match3
         private void OnLowMoves(int remaining)
         {
             if (moveNumberText == null) return;
-            moveNumberText.color = new Color(1f, 0.25f, 0.25f);
             moveNumberText.transform.DOShakePosition(0.5f, 8f, 12);
         }
 

@@ -28,16 +28,12 @@ namespace Match3
         [SerializeField] private GameObject expandRingPrefab;
         [SerializeField] private float ringExpandDuration = 0.25f;
 
-        private Vector3 _epicenter;
-
         // ─────────────────────────────────────────────────────
         //  PUBLIC OVERRIDE
         // ─────────────────────────────────────────────────────
 
         public override IEnumerator Activate(Vector2Int position, List<Tile> clearedTiles)
         {
-            _epicenter = boardGrid.GridToWorld(position.x, position.y);
-
             yield return StartCoroutine(Pulse3x3(position.x, position.y, clearedTiles));
             yield return new WaitForSeconds(pulsePause);
             yield return StartCoroutine(Pulse3x3(position.x, position.y, clearedTiles));
@@ -52,9 +48,16 @@ namespace Match3
 
         public IEnumerator Pulse3x3(int cx, int cy, List<Tile> clearedTiles)
         {
-            PlayExpandRing(_epicenter == Vector3.zero
-                ? boardGrid.GridToWorld(cx, cy)
-                : _epicenter);
+            // FIX: was reading a private _epicenter field that only ever got
+            // set inside Activate(). When SpecialCombinations calls Pulse3x3()
+            // directly (Wrapped+Wrapped / Wrapped+Striped combos never go
+            // through Activate()), that field held a STALE value left over
+            // from whatever single Wrapped tile last fired via Activate() —
+            // so the expanding ring FX played at the wrong spot on the board
+            // (the clear logic itself was always correct; only this visual
+            // was off). GridToWorld(cx, cy) is always the correct epicenter
+            // for this call regardless of who's calling it.
+            PlayExpandRing(boardGrid.GridToWorld(cx, cy));
 
             var area = new List<Tile>();
             for (int dx = -1; dx <= 1; dx++)

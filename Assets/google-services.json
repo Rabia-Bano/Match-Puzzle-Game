@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "66214723696",
+    "firebase_url": "https://match-puzzle-game-2c3c1-default-rtdb.firebaseio.com",
     "project_id": "match-puzzle-game-2c3c1",
     "storage_bucket": "match-puzzle-game-2c3c1.firebasestorage.app"
   },

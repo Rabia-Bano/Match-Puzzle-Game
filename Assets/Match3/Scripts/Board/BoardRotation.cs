@@ -97,6 +97,27 @@ namespace Match3
         /// </summary>
         public IEnumerator RotateBoard90()
         {
+            // FIX: RotateGridClockwise()'s math — new(x,y) = old(y, W-1-x) — is
+            // only valid for a SQUARE board. LevelData.cs allows width and height
+            // to be configured independently (e.g. 6x8), and nothing anywhere
+            // enforced them being equal for a level that also uses the rotation
+            // feature. On a non-square board this indexed straight out of the
+            // Grid array's bounds and threw an IndexOutOfRangeException the
+            // moment a rotation triggered (crashing that level outright). Since
+            // a true rectangular 90° rotation would need to resize the board
+            // itself (layout, camera framing, etc. all assume fixed dimensions),
+            // the safe fix here is to skip rotation entirely for non-square
+            // boards rather than crash — log it loudly so it's caught at design
+            // time instead of discovered mid-playtest.
+            if (boardGrid.Width != boardGrid.Height)
+            {
+                Debug.LogError($"[BoardRotation] Board is {boardGrid.Width}x{boardGrid.Height} " +
+                                "(non-square) — the rotation feature only supports square boards. " +
+                                "Skipping this rotation. Either make this level's LevelData " +
+                                "width == height, or don't wire BoardRotation for this level.", this);
+                yield break;
+            }
+
             _rotationCount++;
             OnBeforeRotation?.Invoke(_rotationCount);
             Debug.Log($"[BoardRotation] Rotation #{_rotationCount} starting...");

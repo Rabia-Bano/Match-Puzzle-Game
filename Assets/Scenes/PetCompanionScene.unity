@@ -575,6 +575,26 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: -170
       objectReference: {fileID: 0}
+    - target: {fileID: 7014979301538831143, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7014979301538831143, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7014979301538831143, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7014979301538831143, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7014979301538831143, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7543994397971052055, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -674,6 +694,22 @@ PrefabInstance:
     - target: {fileID: 8197100752109612124, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8871713246497714149, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 1056834451}
+    - target: {fileID: 8871713246497714149, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: OnOpenLeaderboardPressed
+      objectReference: {fileID: 0}
+    - target: {fileID: 8871713246497714149, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: UIManager, Assembly-CSharp
+      objectReference: {fileID: 0}
+    - target: {fileID: 8871713246497714149, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
     - target: {fileID: 9148214475230428202, guid: c22c6bb98cea33b4b9d4e78c24b1ecc6, type: 3}
       propertyPath: m_AnchorMax.y
@@ -1173,7 +1209,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7498fb972bee8640b11a66f5847b238, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 0}
+  mainPanel: {fileID: 2081596667}
   pausePanel: {fileID: 0}
   levelCompletePopup: {fileID: 0}
   levelFailedPopup: {fileID: 0}
@@ -1206,7 +1242,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81b7e557f20f50640925c2e626bb139a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  petManager: {fileID: 0}
   gridContainer: {fileID: 1198246945}
   slotPrefab: {fileID: 292250118840302776, guid: 1c655db732032404ea795d79236243de, type: 3}
   unlockPopup: {fileID: 0}

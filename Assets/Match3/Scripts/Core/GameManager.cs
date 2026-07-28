@@ -1,4 +1,5 @@
 using UnityEngine;
+using Game.Firebase;   // NEW — CloudSyncManager ke liye
 
 /// <summary>
 /// Global singleton that owns the current GameState and a handful
@@ -162,7 +163,14 @@ public class GameManager : MonoBehaviour
             ChangeState(GameState.Playing);
     }
 
-    private void HandlePlayerLoggedIn()  => ChangeState(GameState.Map);
+    private void HandlePlayerLoggedIn()
+    {
+        // NEW — login/register hote hi hybrid save sync trigger karo.
+        // Fire-and-forget: `_ =` isliye taake ChangeState() turant chale,
+        // network sync background mein hoti rahe aur Map screen block na ho.
+        _ = CloudSyncManager.Instance?.SyncOnSessionStartAsync();
+        ChangeState(GameState.Map);
+    }
     private void HandlePlayerLoggedOut() => ChangeState(GameState.Login);
 
     private void HandleCoinsChanged(int newAmount) => Coins = newAmount;

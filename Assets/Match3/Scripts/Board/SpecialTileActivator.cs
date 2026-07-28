@@ -31,6 +31,8 @@ namespace Match3
         [Header("References — ALL must be assigned")]
         [SerializeField] private BoardGrid       boardGrid;
         [SerializeField] private BoardController boardController;  // owns clearing/scoring/gravity/refill/cascade now
+        [SerializeField] private LevelManager    levelManager; 
+        [SerializeField] private JellyManager    jellyManager;
 
         [Header("Special TileData Assets")]
         [SerializeField] private TileData hStripedData;
@@ -178,6 +180,9 @@ namespace Match3
 
             int x = tile.GridX, y = tile.GridY;
             SpecialType type = tile.Data.specialType;
+
+            if (jellyManager != null && jellyManager.DecrementAt(x, y))
+                levelManager?.OnJellyCleared();
 
             boardGrid.RemoveTile(x, y);
 
@@ -379,6 +384,8 @@ namespace Match3
         {
             if (!boardGrid)       Debug.LogError("[SpecialTileActivator] boardGrid missing!", this);
             if (!boardController) Debug.LogError("[SpecialTileActivator] boardController missing! Clearing/scoring/gravity/refill/cascade will NOT run.", this);
+            if (!levelManager)    Debug.LogWarning("[SpecialTileActivator] levelManager not assigned — jelly-goal callbacks won't fire for a special tile's own cell.", this);
+            if (!jellyManager)    Debug.Log("[SpecialTileActivator] jellyManager not assigned — fine if this level doesn't use jelly.", this);
         }
     }
 }

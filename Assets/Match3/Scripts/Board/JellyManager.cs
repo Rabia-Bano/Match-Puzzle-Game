@@ -159,10 +159,19 @@ namespace Match3
 
             foreach (Vector2Int cell in jellyCells)
             {
-                if (_touchedThisTurn.Contains(cell)) continue; // this one WAS cleared this turn — leave it
+                // FIX: a jelly cell whose tile just cleared THIS turn was always
+                // skipped here (the "it was cleared this turn, leave it" case
+                // below) — but if that cell sits below a hard tile/blocker in
+                // its column, BoardRefiller intentionally never refills it
+                // (trapped-cell design), so the tile above it is gone for good.
+                // Without this check the jelly was left rendering over a blank
+                // cell forever. If there's currently no tile here, the jelly
+                // MUST relocate regardless of whether it was touched this turn.
+                bool hasTileHere = boardGrid.GetTile(cell.x, cell.y) != null;
+                if (hasTileHere && _touchedThisTurn.Contains(cell)) continue; // cleared normally this turn — leave it
 
                 List<Vector2Int> candidates = GetAdjacentJellyFreeCells(cell.x, cell.y);
-                if (candidates.Count == 0) continue; // nowhere to go — stays put
+                if (candidates.Count == 0) continue; // nowhere to go — stays put (still stuck, but at least not silently ignored — see HasStrandedJelly below)
 
                 Vector2Int dest = candidates[Random.Range(0, candidates.Count)];
                 MoveJelly(cell, dest);

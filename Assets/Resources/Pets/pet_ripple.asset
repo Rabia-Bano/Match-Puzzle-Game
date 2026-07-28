@@ -21,4 +21,4 @@ MonoBehaviour:
   skillName: Wave Convert
   skillDescription: 
   chargeRequired: 100
-  unlockAfterLevel: 10
+  unlockAfterLevel: 15

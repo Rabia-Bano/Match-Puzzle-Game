@@ -14,6 +14,18 @@
 //    Crystal  — adds +2 moves  
 //    Beam     — clears center column
 //    Refresh  — reshuffles the board
+//
+//  UPDATED: coin balance now reads/writes through LocalSaveManager
+//  (Newtonsoft-based local save, wraps the single canonical global
+//  PlayerProfile) instead of the deprecated Match3.SaveManager /
+//  Match3.PlayerProfile.
+//
+//  NOTE: this component is a "pay-per-use" in-level power-up button
+//  (coins are spent at the moment of tap, during a level) — NOT the
+//  Store screen. It doesn't need LocalSaveManager.SaveBoosterInventory()
+//  (that's for a "buy now, own N, use later" store inventory). When the
+//  Store screen gets built, wire purchases there with SaveBoosterInventory
+//  as discussed separately.
 // ============================================================
 
 using UnityEngine;
@@ -82,9 +94,16 @@ namespace Match3
                 return;
             }
 
-            // Check coins (SaveManager)
-            if (SaveManager.Instance != null &&
-                SaveManager.Instance.Profile.coins < boosterCost)
+            // Check coins (LocalSaveManager)
+            PlayerProfile profile = LocalSaveManager.GetOrLoadProfile();
+            if (profile == null)
+            {
+                Debug.LogWarning("[BoosterSlotUI] No local profile found — treating as 0 coins.");
+                transform.DOShakePosition(0.3f, 5f, 10);
+                return;
+            }
+
+            if (profile.coins < boosterCost)
             {
                 Debug.Log("[BoosterSlotUI] Not enough coins!");
                 // TODO: show "not enough coins" popup
@@ -93,10 +112,10 @@ namespace Match3
             }
 
             // Deduct coins
-            if (boosterCost > 0 && SaveManager.Instance != null)
+            if (boosterCost > 0)
             {
-                SaveManager.Instance.Profile.coins -= boosterCost;
-                SaveManager.Instance.SaveProfile();
+                profile.coins -= boosterCost;
+                LocalSaveManager.SaveProfile(profile);
             }
 
             // Activate
@@ -122,7 +141,13 @@ namespace Match3
                     break;
 
                 case BoosterType.Crystal:
-                    moveCounter?.AddMoves(2);
+                    // FIX: was moveCounter.AddMoves(2), which is capped at
+                    // TotalMoves and silently does nothing if the player still
+                    // has most of their moves left — meaning coins could be
+                    // spent for zero benefit. AddBonusMoves() always applies,
+                    // exactly as MoveCounter.cs's own docs recommend for a
+                    // paid/rewarded move bonus.
+                    moveCounter?.AddBonusMoves(2);
                     Debug.Log("[Booster] Crystal — +2 moves");
                     break;
 

@@ -96,6 +96,31 @@ namespace Game.Firebase
         // ── LOAD ─────────────────────────────────────────────
         public void LoadProfile(string uid) => StartCoroutine(LoadProfileCoroutine(uid));
 
+// ── ADD this new private method anywhere in the class ──
+/// <summary>Grants any pets the player already qualifies for based on
+/// current levelsCompleted — called right after a profile is loaded/created
+/// so "unlockAfterLevel = 0" starter pets show up immediately, without
+/// needing to wait for the player's first level completion.</summary>
+        private void SyncUnlockedPets()
+        {
+            if (Profile == null) return;
+
+            var petManager = Match3.PetManager.GetOrCreateInstance();
+            bool anyNew = false;
+
+            foreach (string petId in petManager.GetUnlockedPetIds(Profile.levelsCompleted))
+            {
+                if (!Profile.pets.Contains(petId))
+                {
+                    Profile.AddPet(petId);   // updates Profile.pets + Profile.unlockedPets
+                    anyNew = true;
+                }
+            }
+
+            if (anyNew)
+                CacheLocally(Profile);   // persist immediately so ProfilePanel shows it right away
+        }
+
         private IEnumerator LoadProfileCoroutine(string uid)
         {
             // Instant cache
@@ -103,6 +128,7 @@ namespace Game.Firebase
             if (cached != null && cached.uid == uid)
             {
                 Profile = cached;
+                SyncUnlockedPets(); 
                 OnProfileLoaded?.Invoke();
                 SyncCoinsToGameManager();
                 if (!string.IsNullOrEmpty(cached.avatarUrl))
@@ -112,23 +138,35 @@ namespace Game.Firebase
             // Fresh from Firestore
             bool done = false;
             _db.Collection(COLLECTION).Document(uid).GetSnapshotAsync()
-               .ContinueWithOnMainThread(t =>
-               {
-                   if (t.IsFaulted || t.IsCanceled) { done = true; return; }
-                   if (!t.Result.Exists)             { done = true; return; }
+            .ContinueWithOnMainThread(t =>
+            {
+                if (t.IsFaulted || t.IsCanceled) { done = true; return; }
+                if (!t.Result.Exists)             { done = true; return; }
 
-                   Profile = PlayerProfile.FromFirestoreDict(t.Result.ToDictionary());
-                   // Always ensure uid is set
-                   if (string.IsNullOrEmpty(Profile.uid)) Profile.uid = uid;
-                   CacheLocally(Profile);
-                   SyncCoinsToGameManager();
-                   SyncToLocalSaveManager();
-                   if (!string.IsNullOrEmpty(Profile.avatarUrl))
-                       StartCoroutine(DownloadAvatarCoroutine(Profile.avatarUrl));
-                   OnProfileLoaded?.Invoke();
-                   done = true;
-               });
-            yield return new WaitUntil(() => done);
+                PlayerProfile cloudProfile = PlayerProfile.FromFirestoreDict(t.Result.ToDictionary());
+                if (string.IsNullOrEmpty(cloudProfile.uid)) cloudProfile.uid = uid;
+
+                bool cloudIsNewer = IsNewer(cloudProfile.lastUpdated, Profile?.lastUpdated);
+
+                if (Profile != null && !cloudIsNewer)
+                {
+                    Debug.LogWarning("[ProfileManager] Local save cloud se newer hai — local progress rakh raha hoon aur Firestore par push kar raha hoon.");
+                    SaveProfile();
+                }
+                else
+                {
+                    Profile = cloudProfile;
+                    CacheLocally(Profile);
+                    LocalSaveManager.SaveProfile(Profile);
+                }
+
+                SyncCoinsToGameManager();
+                if (!string.IsNullOrEmpty(Profile.avatarUrl))
+                    StartCoroutine(DownloadAvatarCoroutine(Profile.avatarUrl));
+                OnProfileLoaded?.Invoke();
+                done = true;
+            });
+            yield return new WaitUntil(() => done);        
         }
 
         // ── SAVE ─────────────────────────────────────────────
@@ -248,19 +286,24 @@ namespace Game.Firebase
             Profile.levelsCompleted = Mathf.Max(Profile.levelsCompleted, levelIndex);
             Profile.level           = Profile.levelsCompleted + 1;
 
-            // Theme check: every 3 levels
-            int newTheme = Profile.levelsCompleted / 3;
+            int newTheme = Profile.levelsCompleted / 5;
             if (newTheme != Profile.currentThemeIndex)
             {
                 Profile.currentThemeIndex = newTheme;
-                
             }
+
+            // ── FIXED: pass Profile.levelsCompleted directly (fresh, just-updated
+            //    value) instead of letting GetUnlockedPetIds() fall back to the
+            //    possibly one-level-stale LocalSaveManager cache. ──
+            var petManager = Match3.PetManager.GetOrCreateInstance();
+            foreach (string petId in petManager.GetUnlockedPetIds(Profile.levelsCompleted))
+                if (!Profile.pets.Contains(petId))
+                    OnPetUnlocked(petId);
 
             if (GameManager.Instance != null) GameManager.Instance.AddCoins(coinsEarned);
             SaveProfile();
-            SyncToLocalSaveManager();
+            LocalSaveManager.SaveProfile(Profile);
         }
-
         /// <summary>Call when Boss Arena is won from BossArenaManager.</summary>
         public void OnBossDefeated(int bossIndex, int rewardCoins)
         {
@@ -309,19 +352,42 @@ namespace Game.Firebase
         }
 
         // ── LOCAL CACHE ──────────────────────────────────────
-        private void CacheLocally(PlayerProfile p)
+        
+        private void CacheLocally(PlayerProfile p) => LocalSaveManager.SaveProfile(p);
+        
+        private bool IsNewer(string aIso, string bIso)
         {
-            try { PlayerPrefs.SetString(LOCAL_CACHE_KEY, JsonUtility.ToJson(p)); PlayerPrefs.Save(); }
-            catch { }
+            bool aOk = DateTime.TryParse(aIso, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime a);
+            bool bOk = DateTime.TryParse(bIso, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime b);
+            if (!aOk) return false;
+            if (!bOk) return true;
+            return a > b;
         }
 
-        private PlayerProfile LoadFromCache()
+        private void OnApplicationPause(bool pauseStatus)
         {
-            try { return PlayerPrefs.HasKey(LOCAL_CACHE_KEY)
-                    ? JsonUtility.FromJson<PlayerProfile>(PlayerPrefs.GetString(LOCAL_CACHE_KEY))
-                    : null; }
-            catch { return null; }
+            if (pauseStatus) FlushSaveImmediately();
         }
+
+        private void OnApplicationQuit()
+        {
+            FlushSaveImmediately();
+        }
+
+        private void FlushSaveImmediately()
+        {
+            if (Profile == null || _db == null) return;
+            if (_pendingSave != null) { StopCoroutine(_pendingSave); _pendingSave = null; }
+
+            LocalSaveManager.SaveProfile(Profile);
+
+            if (GameManager.Instance != null) Profile.coins = GameManager.Instance.Coins;
+            Profile.lastUpdated = DateTime.UtcNow.ToString("o");
+
+            _db.Collection(COLLECTION).Document(Profile.uid)
+            .SetAsync(Profile.ToFirestoreDict(), SetOptions.MergeAll);
+        }
+        private PlayerProfile LoadFromCache()       => LocalSaveManager.LoadProfile();
 
         // ── SYNC HELPERS ─────────────────────────────────────
         private void SyncCoinsToGameManager()
@@ -331,19 +397,6 @@ namespace Game.Firebase
             if (diff > 0) GameManager.Instance.AddCoins(diff);
         }
 
-        private void SyncToLocalSaveManager()
-        {
-            if (Match3.SaveManager.Instance == null || Profile == null) return;
-            var local = Match3.SaveManager.Instance.Profile;
-            if (local == null) return;
-            local.totalScore          = Profile.totalScore;
-            local.coins               = Profile.coins;
-            local.highestLevelReached = Profile.levelsCompleted;
-            foreach (var kv in Profile.levelStars)
-                if (kv.Key.StartsWith("level_") && int.TryParse(kv.Key.Substring(6), out int idx))
-                    local.SetLevelStars(idx, kv.Value);
-            Match3.SaveManager.Instance?.SaveProfile();
-        }
 
         private static Sprite TexToSprite(Texture2D tex) =>
             Sprite.Create(tex, new UnityEngine.Rect(0,0,tex.width,tex.height), new UnityEngine.Vector2(0.5f,0.5f));
