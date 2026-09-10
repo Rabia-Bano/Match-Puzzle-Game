@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ce5f917f031c4546873e80cb1dff952, type: 3}
+  m_Name: boss_2
+  m_EditorClassIdentifier: 
+  id: 2
+  bossName: nova
+  description: 
+  portrait: {fileID: 21300000, guid: 77fa4d7f4e72f57409152260777b732c, type: 3}
+  health: 100
+  weaknessTileType: 3
+  weaknessIcon: {fileID: -6099873399732076034, guid: e10014ed7ba9b204e9212d892d585f01, type: 3}
+  attackPattern: []
+  rewardCoins: 100
+  rewardBoosterCount: 1
+  boosterDropTable:
+  - boosterType: 0
+    weight: 10
+  - boosterType: 1
+    weight: 10
+  - boosterType: 2
+    weight: 10
+  - boosterType: 3
+    weight: 10

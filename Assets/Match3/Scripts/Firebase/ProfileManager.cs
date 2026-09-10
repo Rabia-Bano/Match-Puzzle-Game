@@ -129,9 +129,12 @@ namespace Game.Firebase
             {
                 Profile = cached;
                 SyncUnlockedPets(); 
+                SyncTheme();
                 OnProfileLoaded?.Invoke();
                 SyncCoinsToGameManager();
-                if (!string.IsNullOrEmpty(cached.avatarUrl))
+                if (!string.IsNullOrEmpty(cached.avatarId))
+                    ApplyPresetAvatar(cached.avatarId);
+                else if (!string.IsNullOrEmpty(cached.avatarUrl))
                     StartCoroutine(DownloadAvatarCoroutine(cached.avatarUrl));
             }
 
@@ -161,7 +164,10 @@ namespace Game.Firebase
                 }
 
                 SyncCoinsToGameManager();
-                if (!string.IsNullOrEmpty(Profile.avatarUrl))
+                SyncTheme();
+                if (!string.IsNullOrEmpty(Profile.avatarId))
+                    ApplyPresetAvatar(Profile.avatarId);
+                else if (!string.IsNullOrEmpty(Profile.avatarUrl))
                     StartCoroutine(DownloadAvatarCoroutine(Profile.avatarUrl));
                 OnProfileLoaded?.Invoke();
                 done = true;
@@ -258,6 +264,7 @@ namespace Game.Firebase
                         Profile.avatarUrl = url.Result.ToString();
                         UpdateField("avatarUrl", Profile.avatarUrl);
                         CacheLocally(Profile);
+                        LeaderboardManager.Instance?.SyncAvatarToLeaderboard("", Profile.avatarUrl);
                         OnAvatarLoaded?.Invoke(TexToSprite(tex));
                     }
                     done = true;
@@ -272,6 +279,35 @@ namespace Game.Firebase
             yield return req.SendWebRequest();
             if (req.result != UnityWebRequest.Result.Success) yield break;
             OnAvatarLoaded?.Invoke(TexToSprite(DownloadHandlerTexture.GetContent(req)));
+        }
+
+        /// <summary>Preset avatar picker calls this. No Storage upload, no network needed —
+        /// just saves the chosen id and resolves the sprite from Resources locally.</summary>
+        public void SetPresetAvatar(string avatarId)
+        {
+            if (Profile == null || string.IsNullOrEmpty(avatarId)) return;
+
+            Profile.avatarId = avatarId;
+            // Clear any old uploaded-photo URL so it doesn't come back after a
+            // future profile reload (preset and uploaded-photo are mutually exclusive).
+            Profile.avatarUrl = "";
+
+            UpdateField("avatarId", avatarId);
+            UpdateField("avatarUrl", "");
+            CacheLocally(Profile);
+
+            LeaderboardManager.Instance?.SyncAvatarToLeaderboard(avatarId, "");
+
+            ApplyPresetAvatar(avatarId);
+        }
+
+        private void ApplyPresetAvatar(string avatarId)
+        {
+            var preset = Resources.Load<Match3.AvatarPresetData>("Avatars/" + avatarId);
+            if (preset != null && preset.sprite != null)
+                OnAvatarLoaded?.Invoke(preset.sprite);
+            else
+                Debug.LogWarning($"[ProfileManager] Avatar preset '{avatarId}' not found under Resources/Avatars/.");
         }
 
         // ── GAME EVENTS ──────────────────────────────────────
@@ -291,6 +327,9 @@ namespace Game.Firebase
             {
                 Profile.currentThemeIndex = newTheme;
             }
+            // Actually switch the live visuals - Profile.currentThemeIndex above is
+            // only the saved/synced number, this line is what makes every scene re-skin.
+            SyncTheme();
 
             // ── FIXED: pass Profile.levelsCompleted directly (fresh, just-updated
             //    value) instead of letting GetUnlockedPetIds() fall back to the
@@ -395,6 +434,15 @@ namespace Game.Firebase
             if (GameManager.Instance == null || Profile == null) return;
             int diff = Profile.coins - GameManager.Instance.Coins;
             if (diff > 0) GameManager.Instance.AddCoins(diff);
+        }
+
+        /// <summary>Tells ThemeManager which theme should be active based on the
+        /// player's actual saved progress (levelsCompleted). Safe no-op if
+        /// ThemeManager isn't in the scene yet (e.g. very first frame of Preloader).</summary>
+        private void SyncTheme()
+        {
+            if (Profile == null) return;
+            Match3.Theme.ThemeManager.Instance?.SetHighestLevelCompleted(Profile.levelsCompleted);
         }
 
 

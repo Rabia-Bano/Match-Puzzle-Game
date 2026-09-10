@@ -13,6 +13,10 @@ public class PlayerProfile
     public string displayName  = "";
     public string email        = "";
     public string avatarUrl    = "";
+    // Preset avatar id (e.g. "avatar_1"). Resolved locally from
+    // Resources/Avatars/<avatarId>.asset — no network/Storage needed.
+    // Takes priority over avatarUrl when both are set.
+    public string avatarId     = "";
 
     // ── Progression ───────────────────────────────────────────
     public int  level           = 1;
@@ -26,7 +30,13 @@ public class PlayerProfile
     public int currentThemeIndex  = 0;
     public int highestBossDefeated = 0;
 
-    // ── Settings ──────────────────────────────────────────────
+    // ── Lives (NEW) ───────────────────────────────────────────
+    // nextLifeUtc: ISO-8601 UTC timestamp of when the NEXT life will be
+    // granted by regen. Empty string means "not regenerating" (lives are
+    // already full). See LivesManager.cs for the regen logic that reads
+    // and writes these two fields.
+    public int    lives       = 5;
+    public string nextLifeUtc = "";    // ── Settings ──────────────────────────────────────────────
     public bool soundEnabled     = true;
     public bool musicEnabled     = true;
     public bool vibrationEnabled = true;
@@ -85,6 +95,7 @@ public class PlayerProfile
             { "displayName",      displayName      },
             { "email",            email            },
             { "avatarUrl",        avatarUrl        },
+            { "avatarId",         avatarId         },
             { "level",            level            },
             { "totalScore",       totalScore       },
             { "gems",             gems             },
@@ -93,6 +104,8 @@ public class PlayerProfile
             { "isBanned",         isBanned         },
             { "currentThemeIndex",currentThemeIndex},
             { "highestBossDefeated", highestBossDefeated },
+            { "lives",             lives            },
+            { "nextLifeUtc",       nextLifeUtc      },
             { "soundEnabled",     soundEnabled     },
             { "musicEnabled",     musicEnabled     },
             { "vibrationEnabled", vibrationEnabled },
@@ -115,6 +128,7 @@ public class PlayerProfile
             p.displayName = Get(data, "username");
         p.email            = Get(data, "email");
         p.avatarUrl        = Get(data, "avatarUrl");
+        p.avatarId         = Get(data, "avatarId");
         p.level            = GetInt(data,  "level",            1);
         p.totalScore       = GetInt(data,  "totalScore",       0);
         p.gems             = GetInt(data,  "gems",             0);
@@ -123,6 +137,8 @@ public class PlayerProfile
         p.isBanned         = GetBool(data, "isBanned",         false);
         p.currentThemeIndex   = GetInt(data, "currentThemeIndex",   0);
         p.highestBossDefeated = GetInt(data, "highestBossDefeated", 0);
+        p.lives                = GetInt(data, "lives",              5);
+        p.nextLifeUtc           = Get(data, "nextLifeUtc");
         p.soundEnabled     = GetBool(data, "soundEnabled",     true);
         p.musicEnabled     = GetBool(data, "musicEnabled",     true);
         p.vibrationEnabled = GetBool(data, "vibrationEnabled", true);

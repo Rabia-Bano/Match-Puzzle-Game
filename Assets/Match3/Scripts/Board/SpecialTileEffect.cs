@@ -59,6 +59,12 @@ namespace Match3
             if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
                 levelManager?.OnJellyCleared();
 
+            // NEW — Boss Arena fix: this clear path bypasses BoardController's
+            // normal match loop (OnColorMatchResolved), so without this line the
+            // boss never took damage from striped/wrapped/color-bomb blasts.
+            if (t.Data != null)
+                BossDamageEvents.OnSpecialTileCleared?.Invoke(t.Data.color);
+
             cleared.Add(t);
         }
 

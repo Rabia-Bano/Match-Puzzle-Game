@@ -36,7 +36,9 @@ public class MapManager : MonoBehaviour
 
     [Header("Level Config")]
     public int totalLevels      = 15;
-    public int bossEveryNLevels = 5;
+    public int bossEveryNLevels = 6; // NOTE: was 5 — now matches LevelSession.CheckUnlocks()'s "id % 6" boss cadence.
+                                      // If this GameObject already exists in your scene, Unity kept the OLD
+                                      // serialized value (5) — update it by hand in the Inspector too.
 
     [Header("Path Line")]
     public LineRenderer pathLine;

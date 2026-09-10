@@ -40,6 +40,10 @@ public class LevelNode : MonoBehaviour
     [Header("Boss Node")]
     public bool isBossNode = false;
 
+    [Header("Theme")]
+    [Tooltip("The node's own background Image (LevelNode_/Image) - color changes per theme + state")]
+    public Image nodeImage;
+
     public static event Action<int> OnLevelSelected;
 
     private Tween _bounceTween;
@@ -53,6 +57,8 @@ public class LevelNode : MonoBehaviour
 
         SafeSetActive(lockIcon,      newState == NodeState.Locked);
         SafeSetActive(starContainer, newState == NodeState.Completed);
+
+        ApplyNodeThemeColor(newState);
 
         if (playButton != null)
             playButton.gameObject.SetActive(newState == NodeState.Unlocked);
@@ -68,6 +74,7 @@ public class LevelNode : MonoBehaviour
             playButton.onClick.RemoveAllListeners();
             if (newState == NodeState.Unlocked)
                 playButton.onClick.AddListener(HandleTap);
+                playButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
         }
 
         var rootBtn = GetComponent<Button>();
@@ -75,6 +82,7 @@ public class LevelNode : MonoBehaviour
         {
             rootBtn.onClick.RemoveAllListeners();
             rootBtn.onClick.AddListener(HandleTap);
+            rootBtn.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
         }
     }
 
@@ -86,6 +94,24 @@ public class LevelNode : MonoBehaviour
             return;
         }
         OnLevelSelected?.Invoke(levelId);
+    }
+
+    private void ApplyNodeThemeColor(NodeState state)
+    {
+        if (nodeImage == null) return;
+
+        var theme = Match3.Theme.ThemeManager.Instance != null
+            ? Match3.Theme.ThemeManager.Instance.CurrentTheme
+            : null;
+        if (theme == null) return; // keep whatever color was already there
+
+        nodeImage.color = state switch
+        {
+            NodeState.Locked    => theme.levelNodeLockedColor,
+            NodeState.Unlocked  => theme.levelNodeUnlockedColor,
+            NodeState.Completed => theme.levelNodeCompletedColor,
+            _ => nodeImage.color
+        };
     }
 
     // ── FIX 3: Stars refresh ──────────────────────────────────

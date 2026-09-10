@@ -39,6 +39,9 @@ namespace Match3
         [Header("Animation")]
         [SerializeField] private float barTweenDuration = 0.25f;
 
+        [Header("Skill Effect")]      
+        [SerializeField] private ParticleSystem skillBurstPrefab;
+
         // NOTE: this used to live in OnEnable()/OnDisable(), but Unity does not
         // guarantee Awake() has run on OTHER objects before OnEnable() runs on
         // this one — so PetHUD.OnEnable() could fire before PetManager.Awake()
@@ -55,6 +58,7 @@ namespace Match3
             petManager.OnChargeChanged += HandleChargeChanged;
             petManager.OnPetReady      += HandlePetReady;
             petManager.OnPetChanged    += HandlePetChanged;
+            petManager.OnSkillUsed     += HandleSkillUsed;
             _subscribed = true;
 
             skillButton?.onClick.AddListener(HandleSkillButtonTapped);
@@ -64,6 +68,12 @@ namespace Match3
                 petManager.EquippedPet != null ? petManager.EquippedPet.chargeRequired : 100);
         }
 
+        private void HandleSkillUsed(PetData pet)
+        {
+            AudioManager.Instance?.PlaySFX("pet_skill");
+            TileVisualController.PlayEffect(skillBurstPrefab, TileVisualController.ScreenCenterWorldPoint(), Color.white);
+        }
+
         private void OnDestroy()
         {
             if (!_subscribed || petManager == null) return;
@@ -71,6 +81,7 @@ namespace Match3
             petManager.OnChargeChanged -= HandleChargeChanged;
             petManager.OnPetReady      -= HandlePetReady;
             petManager.OnPetChanged    -= HandlePetChanged;
+            petManager.OnSkillUsed     -= HandleSkillUsed;
 
             skillButton?.onClick.RemoveListener(HandleSkillButtonTapped);
         }
@@ -82,7 +93,16 @@ namespace Match3
             if (petManager.EquippedPet == null) return;
 
             if (petPortrait != null)
+            {
                 petPortrait.sprite = petManager.EquippedPet.sprite;
+
+                // FIX: switching pets while a punch-scale tween is mid-flight (e.g.
+                // player changes equipped pet, or a new level rebinds) used to leave
+                // whatever scale the old tween was interrupted at. Kill + hard reset
+                // here too, same as HandlePetReady below.
+                petPortrait.transform.DOKill();
+                petPortrait.transform.localScale = Vector3.one;
+            }
 
             RefreshSkillButtonInteractable();
             if (skillButtonGlow != null) skillButtonGlow.SetActive(false);
@@ -107,7 +127,25 @@ namespace Match3
                 skillButtonGlow.SetActive(true);
 
             if (petPortrait != null)
-                petPortrait.transform.DOPunchScale(Vector3.one * 0.2f, 0.4f, 6, 0.6f);
+            {
+                // FIX (icon-keeps-growing bug): DOPunchScale animates AWAY from
+                // and back to whatever localScale is AT THE MOMENT it starts. If
+                // this handler ever fires again before the previous punch fully
+                // finished returning to 1 (or if it fires unexpectedly often),
+                // each new punch stacks on top of a slightly-off scale instead of
+                // the intended 1,1,1 — and over repeated fires that drift adds up
+                // to a permanently oversized icon. Killing any in-flight tween and
+                // hard-resetting to Vector3.one first guarantees every punch
+                // starts from — and fully returns to — the same baseline, no
+                // matter how many times or how quickly this fires.
+                petPortrait.transform.DOKill();
+                petPortrait.transform.localScale = Vector3.one;
+                petPortrait.transform
+                    .DOPunchScale(Vector3.one * 0.2f, 0.4f, 6, 0.6f)
+                    // Extra safety net: guarantees the icon lands EXACTLY at (1,1,1)
+                    // once the punch finishes normally, regardless of float rounding.
+                    .OnComplete(() => petPortrait.transform.localScale = Vector3.one);
+            }
         }
 
         private void HandleSkillButtonTapped()

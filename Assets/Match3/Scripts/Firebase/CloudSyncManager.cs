@@ -1,22 +1,3 @@
-// ============================================================
-//  CloudSyncManager.cs  —  Singleton MonoBehaviour (DontDestroyOnLoad)
-//  Attach to: FirebaseManagers GameObject (PreloaderScene) — same
-//             object as FirebaseInitializer, AuthManager, ProfileManager,
-//             NetworkChecker.
-//  Call: Initialize() from FirebaseInitializer.OnFirebaseReady (Inspector
-//        UnityEvent), AFTER AuthManager.Initialize() aur ProfileManager.Initialize().
-//  Access: CloudSyncManager.Instance.SyncOnSessionStartAsync() / SyncAfterLevelAsync()
-//
-//  Ye class LocalSaveManager (offline PlayerPrefs) aur Firestore
-//  (players/{uid}) ke beech ka "hybrid save" pull karti hai, jaisa
-//  scenario mein maanga gaya tha:
-//    - Naye session (login/app-resume) par jo bhi newer hai (ya agar
-//      dono sides last-sync ke baad change hui hain to safe MERGE via
-//      ConflictResolver) wo load hota hai.
-//    - Har level complete hone ke baad local profile background mein
-//      (fire-and-forget) Firestore par push hota hai — UI kabhi block
-//      nahi hoti, aur fail hone par sirf log hota hai, game nahi rukta.
-// ============================================================
 
 using System;
 using System.Threading.Tasks;
@@ -93,6 +74,31 @@ namespace Game.Firebase
             PlayerProfile local   = LocalSaveManager.GetOrLoadProfile();
             DateTime      lastSync = LocalSaveManager.GetLastSyncTime();
 
+            // FIX — ACCOUNT SWITCH DETECTION:
+            // LocalSaveManager's PlayerPrefs cache is a single global slot, not
+            // scoped per-account. If a Guest (or a different registered account)
+            // was cached on THIS device before, and a DIFFERENT account is
+            // logging in now, `local` here still holds the PREVIOUS account's
+            // data (including its own uid). Without this check, that stale
+            // profile could get merged/pushed under the NEW user's session —
+            // which either leaks the old account's boosters/coins into the new
+            // account's UI, or (worse) tries to write to Firestore using the
+            // OLD account's uid while authenticated as the NEW user, which
+            // Firestore Rules correctly reject as "Missing or insufficient
+            // permissions" (request.auth.uid != that stale uid).
+            // Detecting the mismatch and discarding the stale cache makes this
+            // session behave exactly like a fresh install for the new account.
+            if (local != null && !string.IsNullOrEmpty(local.uid) && local.uid != user.UserId)
+            {
+                Debug.LogWarning($"[CloudSyncManager] Local cache belongs to a different account " +
+                                  $"('{local.uid}') than the one logging in now ('{user.UserId}'). " +
+                                  $"Discarding stale local cache for this session.");
+                LocalSaveManager.ClearAll();   // also wipes it from disk so no other
+                                                // UI (TopBarHUD, StorePanel, etc.) can
+                                                // read the old account's data either
+                local = null;
+            }
+
             PlayerProfile cloud;
             try
             {
@@ -108,6 +114,9 @@ namespace Game.Firebase
                 Debug.LogError($"[CloudSyncManager] SyncOnSessionStartAsync fetch failed: {ex.Message}. Local save par continue kar rahe hain.");
                 return;
             }
+
+            // TEMP DEBUG — prints exactly what was fetched from Firestore right now
+            Debug.Log($"[TEMP DEBUG] cloud.isBanned = {(cloud != null ? cloud.isBanned.ToString() : "cloud is null")}");
 
             // ── Case: Firestore par abhi tak profile document hi nahi hai ──
             if (cloud == null)
@@ -128,6 +137,9 @@ namespace Game.Firebase
                 LocalSaveManager.SetLastSyncTime(DateTime.UtcNow);
                 return;
             }
+
+            // TEMP DEBUG — prints exactly what's about to be pushed
+            Debug.Log($"[TEMP DEBUG] local.isBanned = {local.isBanned}, local.uid = '{local.uid}', auth.uid = '{user.UserId}'");
 
             // ── Dono maujood hain — decide karo: newer le lo, ya agar dono
             //    last-sync ke baad independently change hui hain to safe merge karo ──
@@ -153,6 +165,9 @@ namespace Game.Firebase
                 if (logVerbose) Debug.Log("[CloudSyncManager] Local profile newer/equal hai — local ko cloud par push kar rahe hain.");
                 finalProfile = local;
             }
+
+            // TEMP DEBUG — the EXACT value being written, right before it's sent
+            Debug.Log($"[TEMP DEBUG] finalProfile.isBanned (about to push) = {finalProfile.isBanned}, finalProfile.uid = '{finalProfile.uid}'");
 
             ApplyProfile(finalProfile);
             await SafePushAsync(finalProfile, "session-start (post-resolve)");
@@ -237,8 +252,15 @@ namespace Game.Firebase
 
             profile.lastUpdated = DateTime.UtcNow.ToString("o");
 
+            // TEMP DEBUG — the absolute last point before the Firestore call itself.
+            // If this line's isBanned prints "False" but the error still happens,
+            // the problem is 100% NOT isBanned — it's something else in the rules.
+            var dict = profile.ToFirestoreDict();
+            Debug.Log($"[TEMP DEBUG] PushProfileAsync — Document(\"{profile.uid}\"), " +
+                      $"dict[\"isBanned\"] = {(dict.ContainsKey("isBanned") ? dict["isBanned"].ToString() : "KEY MISSING FROM DICT!")}");
+
             await _db.Collection(COLLECTION).Document(profile.uid)
-                     .SetAsync(profile.ToFirestoreDict(), SetOptions.MergeAll);
+                     .SetAsync(dict, SetOptions.MergeAll);
         }
 
         // ============================================================

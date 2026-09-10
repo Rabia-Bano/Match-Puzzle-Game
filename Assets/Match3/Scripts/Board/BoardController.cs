@@ -72,6 +72,14 @@ namespace Match3
         public System.Action<int> OnTilesCleared;
         public System.Action<int> OnMatchGroupResolved;
 
+        /// <summary>
+        /// NEW — fires alongside OnMatchGroupResolved but also passes the matched
+        /// tile's colour. Added for BossController (Boss Arena "weakness colour"
+        /// damage rule) without touching PetManager's existing OnMatchGroupResolved
+        /// subscription (matchSize-only) or its behaviour.
+        /// </summary>
+        public System.Action<TileColor, int> OnColorMatchResolved;
+
         // ─────────────────────────────────────────────────────
         //  PUBLIC API  (unchanged — SwapController depends on this)
         // ─────────────────────────────────────────────────────
@@ -159,8 +167,28 @@ namespace Match3
                         // battery (e.g. a 4-match reported as 3 → only +5%
                         // instead of +10%). Capture the true size first.
                         int matchSize = group.Tiles.Count;
-                        specialFactory.TryCreateSpecial(group, boardGrid);
+                        TileColor matchColor = (group.Tiles.Count > 0 && group.Tiles[0].Data != null)
+                            ? group.Tiles[0].Data.color
+                            : TileColor.None;
+
+                        // FIX (goal off-by-one): the pivot tile that becomes a
+                        // special is removed from group.Tiles inside
+                        // TryCreateSpecial() — it transforms instead of being
+                        // destroyed, so it was never reaching ClearMatchGroups()
+                        // below, and its OnTileCleared()/jelly-decrement never
+                        // fired. It still visually "matched" for goal purposes,
+                        // so report it manually here using the data the factory
+                        // now hands back.
+                        TileData pivotClearedData = specialFactory.TryCreateSpecial(group, boardGrid, out int pivotX, out int pivotY);
+                        if (pivotClearedData != null)
+                        {
+                            levelManager?.OnTileCleared(pivotClearedData);
+                            if (jellyManager != null && jellyManager.DecrementAt(pivotX, pivotY))
+                                levelManager?.OnJellyCleared();
+                        }
+
                         OnMatchGroupResolved?.Invoke(matchSize);
+                        OnColorMatchResolved?.Invoke(matchColor, matchSize);
                     }
                     yield return StartCoroutine(ClearMatchGroups(matches));
                 }
@@ -239,7 +267,21 @@ namespace Match3
         /// Pass true ONLY from ResolveBoard()'s "stone reached the bottom
         /// row" check. Dropdown stones are IMMUNE to every other clear source.
         /// </param>
-        public IEnumerator ClearTiles(IEnumerable<Tile> tiles, bool canDamageHardTiles = false, bool allowStoneCollection = false)
+        /// <param name="isExternalClear">
+        /// NEW (Boss Arena fix). Pass true when this tile list did NOT come from
+        /// ResolveBoard()'s own match-group loop — i.e. a pet skill (IceraSkill's
+        /// row clear, etc.) or a booster calling ClearTiles() directly. Regular
+        /// matches already report their damage via OnColorMatchResolved inside
+        /// ResolveBoard() BEFORE calling ClearTiles() — so ClearMatchGroups()
+        /// leaves this false (the default) to avoid double-counting the same
+        /// clear twice. Anything that calls ClearTiles() directly (bypassing
+        /// ResolveBoard()'s loop) needs to pass true here instead, or the boss
+        /// will never take damage from it. Special-tile blasts/combos don't use
+        /// this flag at all — they report through BossDamageEvents directly via
+        /// their own ClearNormalTileTracked() helper, since they don't call
+        /// ClearTiles() for their own blast tiles in the first place.
+        /// </param>
+        public IEnumerator ClearTiles(IEnumerable<Tile> tiles, bool canDamageHardTiles = false, bool allowStoneCollection = false, bool isExternalClear = false)
         {
             int cleared = 0;
             var chainedSpecials = new List<Tile>();
@@ -254,6 +296,8 @@ namespace Match3
                 // ── Special tile → chain-fire its own blast ──
                 if (tileData != null && tileData.isSpecial)
                 {
+                    AudioManager.Instance?.PlaySFX("special_activate");
+                    tile.GetComponent<TileVisualController>()?.PlaySpecialBurst();
                     if (specialActivator != null)
                     {
                         chainedSpecials.Add(tile);
@@ -320,9 +364,20 @@ namespace Match3
 
                 // ── Normal colour tile ──
                 levelManager?.OnTileCleared(tileData);
+                AudioManager.Instance?.PlaySFX("tile_match");
+                tile.GetComponent<TileVisualController>()?.PlayMatchBurst();
 
                 if (jellyManager != null && jellyManager.DecrementAt(tile.GridX, tile.GridY))
                     levelManager?.OnJellyCleared();
+
+                // NEW — Boss Arena fix: pet skills (IceraSkill's row-clear, etc.)
+                // and boosters call ClearTiles() directly, bypassing ResolveBoard()'s
+                // match loop entirely — so OnColorMatchResolved never fired for them
+                // and the boss never took damage. isExternalClear=true is how THIS
+                // call site tells us that; regular matches (isExternalClear=false,
+                // the default) skip this since ResolveBoard() already reported them.
+                if (isExternalClear && tileData != null)
+                    BossDamageEvents.OnSpecialTileCleared?.Invoke(tileData.color);
 
                 tile.SetState(TileState.Matched);
                 boardGrid.RemoveTile(tile.GridX, tile.GridY);
@@ -348,6 +403,22 @@ namespace Match3
                 if (boardGrid.GetTile(special.GridX, special.GridY) != special) continue;
                 yield return StartCoroutine(specialActivator.ChainActivate(special));
             }
+        }
+
+        private void OnEnable()
+        {
+            if (boardRotation != null) boardRotation.OnBeforeRotation += HandleBeforeRotation;
+        }
+
+        private void OnDisable()
+        {
+            if (boardRotation != null) boardRotation.OnBeforeRotation -= HandleBeforeRotation;
+        }
+
+        private void HandleBeforeRotation(int count)
+        {
+            AudioManager.Instance?.PlaySFX("board_rotate");
+            JuiceManager.Instance?.Shake(0.3f, 0.1f);
         }
 
         // ─────────────────────────────────────────────────────

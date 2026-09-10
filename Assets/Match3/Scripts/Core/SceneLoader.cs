@@ -9,6 +9,11 @@ using UnityEngine.UI;
 ///
 /// Lives only in the Preloader scene, marked DontDestroyOnLoad —
 /// stays alive and listening for the whole app session.
+///
+/// UPDATED: added SCENE_BOSS_GAME_BOARD ("BossGameBoardScene") mapped
+/// to the NEW GameState.BossGameplay — this is the actual boss fight
+/// scene. SCENE_BOSS_ARENA ("BossArenaScene") stays mapped to
+/// GameState.BossArena — that's the boss SELECTION list screen only.
 /// </summary>
 public class SceneLoader : MonoBehaviour
 {
@@ -27,7 +32,8 @@ public class SceneLoader : MonoBehaviour
     private const string SCENE_Login          = "LoginScene";
     private const string SCENE_MAP           = "MapScene";
     private const string SCENE_GAME_BOARD    = "GameBoardScene";
-    private const string SCENE_BOSS_ARENA    = "BossArenaScene";
+    private const string SCENE_BOSS_ARENA    = "BossArenaScene";       // boss SELECTION list
+    private const string SCENE_BOSS_GAME_BOARD = "BossGameBoardScene"; // NEW — boss FIGHT scene
     private const string SCENE_STORE         = "StoreScene";
     private const string SCENE_LEADERBOARD   = "LeaderBoardScene";
     private const string SCENE_SETTINGS      = "SettingScene";
@@ -94,10 +100,11 @@ public class SceneLoader : MonoBehaviour
     {
         switch (state)
         {
-            case GameState.Login:     return SCENE_Login;
+            case GameState.Login:        return SCENE_Login;
             case GameState.Map:          return SCENE_MAP;
             case GameState.Playing:      return SCENE_GAME_BOARD;
-            case GameState.BossArena:    return SCENE_BOSS_ARENA;
+            case GameState.BossArena:    return SCENE_BOSS_ARENA;       // selection list
+            case GameState.BossGameplay: return SCENE_BOSS_GAME_BOARD; // NEW — the fight itself
             case GameState.Store:        return SCENE_STORE;
             case GameState.Leaderboard:  return SCENE_LEADERBOARD;
             case GameState.Settings:     return SCENE_SETTINGS;
@@ -127,6 +134,27 @@ public class SceneLoader : MonoBehaviour
     public void ReloadGameBoardScene()
     {
         LoadScene(SCENE_GAME_BOARD, GameState.Playing);
+    }
+
+    /// <summary>
+    /// Same bypass as ReloadGameBoardScene(), for the boss SELECTION list
+    /// screen (e.g. force-refreshing BossArenaScene after a boss is defeated
+    /// and a new one unlocks, if you ever need it). Most flows won't need this.
+    /// </summary>
+    public void ReloadBossArenaScene()
+    {
+        LoadScene(SCENE_BOSS_ARENA, GameState.BossArena);
+    }
+
+    /// <summary>
+    /// NEW — same bypass, for BossResultManager's Retry button: forces
+    /// BossGameBoardScene to reload even though we're already in it
+    /// (GameManager.ChangeState(BossGameplay) would no-op since the state
+    /// didn't change).
+    /// </summary>
+    public void ReloadBossGameBoardScene()
+    {
+        LoadScene(SCENE_BOSS_GAME_BOARD, GameState.BossGameplay);
     }
 
     /// <summary>Directly starts an async load by scene name.</summary>

@@ -56,7 +56,10 @@ namespace Match3
 
             Debug.Log($"[IceraSkill] Clearing rows [{string.Join(",", chosenRows)}] ({tiles.Count} tiles).");
 
-            yield return boardController.ClearTiles(tiles, canDamageHardTiles: true);
+            // NEW — Boss Arena fix: isExternalClear:true so BoardController reports
+            // these cleared tiles' colours to BossDamageEvents (boss takes damage
+            // from this skill too, same as a regular match would).
+            yield return boardController.ClearTiles(tiles, canDamageHardTiles: true, isExternalClear: true);
             yield return boardController.SettleAfterExternalClear();
         }
     }

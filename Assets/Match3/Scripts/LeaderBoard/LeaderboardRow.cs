@@ -53,11 +53,26 @@ namespace Match3
 
             if (avatarImage != null)
             {
-                if (_avatarLoadRoutine != null) StopCoroutine(_avatarLoadRoutine);
-                if (!string.IsNullOrEmpty(entry.avatarUrl))
+                if (_avatarLoadRoutine != null) { StopCoroutine(_avatarLoadRoutine); _avatarLoadRoutine = null; }
+
+                if (!string.IsNullOrEmpty(entry.avatarId))
+                {
+                    // Preset avatar — same resolution ProfileManager/ProfilePanel use.
+                    // Local + instant, no network needed, and takes priority over avatarUrl.
+                    var preset = Resources.Load<AvatarPresetData>("Avatars/" + entry.avatarId);
+                    if (preset != null && preset.sprite != null)
+                        avatarImage.sprite = preset.sprite;
+                    else if (defaultAvatar != null)
+                        avatarImage.sprite = defaultAvatar;
+                }
+                else if (!string.IsNullOrEmpty(entry.avatarUrl))
+                {
                     _avatarLoadRoutine = StartCoroutine(LoadAvatarCoroutine(entry.avatarUrl));
+                }
                 else if (defaultAvatar != null)
+                {
                     avatarImage.sprite = defaultAvatar;
+                }
             }
 
             if (prevRank != entry.rank)

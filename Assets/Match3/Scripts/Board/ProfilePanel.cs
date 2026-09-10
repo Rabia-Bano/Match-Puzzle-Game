@@ -40,6 +40,12 @@ public class ProfilePanel : MonoBehaviour
 
     [HideInInspector] public Button closeButton;
 
+    // Avatar picker popup — built manually in the Unity Editor, code only wires it.
+    [Header("Avatar Picker (built in Editor)")]
+    [SerializeField] private GameObject avatarPickerPopup;     // the whole popup root GameObject
+    [SerializeField] private Transform  avatarGridContainer;   // empty GameObject with GridLayoutGroup, 3 columns
+    [SerializeField] private GameObject avatarSlotPrefab;      // a Button+Image prefab, one per avatar
+
     // Guest popup refs
     private GameObject     _guestRegisterPopup;
     private TMP_InputField _regUsernameInput;
@@ -65,6 +71,8 @@ public class ProfilePanel : MonoBehaviour
         registerButton?.onClick.AddListener(OnRegisterClicked);
 
         BuildGuestRegisterPopup();
+        PopulateAvatarGrid();
+        if (avatarPickerPopup != null) avatarPickerPopup.SetActive(false);
 
         if (ProfileManager.Instance != null)
         {
@@ -106,6 +114,7 @@ public class ProfilePanel : MonoBehaviour
         SetLoading(false);   // ALWAYS off when opening
         HideError();
         if (_guestRegisterPopup != null) _guestRegisterPopup.SetActive(false);
+        if (avatarPickerPopup  != null) avatarPickerPopup.SetActive(false);
 
         // Refresh immediately, then again after 1 second
         // in case profile was still loading from Firebase
@@ -123,6 +132,7 @@ public class ProfilePanel : MonoBehaviour
     {
         if (_isEditingName) CancelEditName();
         if (_guestRegisterPopup != null) _guestRegisterPopup.SetActive(false);
+        if (avatarPickerPopup  != null) avatarPickerPopup.SetActive(false);
         SetLoading(false);   // Always turn off loading when hiding
         if (panelRoot != null) panelRoot.SetActive(false);
     }
@@ -168,8 +178,28 @@ public class ProfilePanel : MonoBehaviour
         }
 
         // ── Avatar ──
-        if (avatarImage != null && (p == null || string.IsNullOrEmpty(p.avatarUrl)))
-            avatarImage.sprite = defaultAvatarSprite;
+        // Only fall back to the default sprite when there's NEITHER a preset
+        // avatarId NOR an uploaded avatarUrl — otherwise a chosen preset would
+        // get silently reset back to the default every time RefreshUI() runs.
+        bool hasAnyAvatar = p != null && (!string.IsNullOrEmpty(p.avatarId) || !string.IsNullOrEmpty(p.avatarUrl));
+        if (avatarImage != null)
+        {
+            if (!hasAnyAvatar)
+            {
+                avatarImage.sprite = defaultAvatarSprite;
+            }
+            else if (!string.IsNullOrEmpty(p.avatarId))
+            {
+                // Resolve directly instead of relying only on the OnAvatarLoaded
+                // event — that event fires once at app/profile-load time, which
+                // usually happens BEFORE this panel is ever opened (it starts
+                // inactive), so the event gets missed the first time around.
+                var preset = Resources.Load<AvatarPresetData>("Avatars/" + p.avatarId);
+                if (preset != null && preset.sprite != null)
+                    avatarImage.sprite = preset.sprite;
+            }
+            // else: avatarUrl-based uploaded photo — arrives via OnAvatarLoaded once downloaded.
+        }
 
         // ── Stats (safe if profile null) ──
         if (levelText           != null) levelText.text           = (p?.level ?? 1).ToString();
@@ -182,7 +212,9 @@ public class ProfilePanel : MonoBehaviour
         if (logoutButton   != null) logoutButton.gameObject.SetActive(!isGuest);
         if (registerButton != null) registerButton.gameObject.SetActive(isGuest);
 
-        if (changeAvatarButton != null) changeAvatarButton.interactable = !isGuest;
+        // Preset avatars are local-only (no Storage upload, no account needed),
+        // so unlike the old photo-upload flow, Guests CAN change their avatar too.
+        if (changeAvatarButton != null) changeAvatarButton.interactable = true;
         if (editNameButton     != null) editNameButton.gameObject.SetActive(!isGuest);
 
         if (p != null) RefreshPetIcons(p);
@@ -270,7 +302,54 @@ public class ProfilePanel : MonoBehaviour
 
     private void OnChangeAvatarClicked()
     {
-        Debug.Log("[ProfilePanel] Change avatar — integrate NativeGallery here.");
+        if (avatarPickerPopup != null) avatarPickerPopup.SetActive(true);
+    }
+
+    /// <summary>Wired directly to the popup's Close ("X") Button OnClick() in the
+    /// Inspector — no code wiring needed for that button.</summary>
+    public void CloseAvatarPopup()
+    {
+        if (avatarPickerPopup != null) avatarPickerPopup.SetActive(false);
+    }
+
+    private void SelectPresetAvatar(string avatarId)
+    {
+        ProfileManager.Instance?.SetPresetAvatar(avatarId);
+        CloseAvatarPopup();
+    }
+
+    // ── POPULATE AVATAR GRID ──────────────────────────────────
+    // Fills the Editor-built avatarGridContainer with one instance of
+    // avatarSlotPrefab per AvatarPresetData found under Resources/Avatars/.
+    // Everything else (popup layout, title, close button, divider, grid
+    // columns) is built by hand in the Unity Editor — this method only wires data.
+    private void PopulateAvatarGrid()
+    {
+        if (avatarGridContainer == null || avatarSlotPrefab == null)
+        {
+            Debug.LogWarning("[ProfilePanel] PopulateAvatarGrid: avatarGridContainer or avatarSlotPrefab not assigned in Inspector.");
+            return;
+        }
+
+        // Clear any leftover placeholder children left in the grid for editing convenience.
+        for (int i = avatarGridContainer.childCount - 1; i >= 0; i--)
+            Destroy(avatarGridContainer.GetChild(i).gameObject);
+
+        AvatarPresetData[] presets = Resources.LoadAll<AvatarPresetData>("Avatars");
+        Debug.Log($"[ProfilePanel] PopulateAvatarGrid: found {presets.Length} preset(s) in Resources/Avatars/.");
+
+        foreach (AvatarPresetData preset in presets)
+        {
+            if (preset == null || preset.sprite == null) continue;
+            string id = preset.id;
+
+            GameObject slot = Instantiate(avatarSlotPrefab, avatarGridContainer);
+            Image slotImg = slot.GetComponent<Image>();
+            if (slotImg != null) { slotImg.sprite = preset.sprite; slotImg.preserveAspect = true; }
+
+            Button slotBtn = slot.GetComponent<Button>();
+            if (slotBtn != null) slotBtn.onClick.AddListener(() => SelectPresetAvatar(id));
+        }
     }
 
     // ── Display Name Edit ─────────────────────────────────────

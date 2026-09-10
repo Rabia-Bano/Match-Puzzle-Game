@@ -17,6 +17,7 @@ public class PreloaderController : MonoBehaviour
 
     private void Start()
     {
+        AudioManager.Instance?.PlayMusic("ice_world_theme");   // ← ADD THIS — game shuru hote hi music
         StartCoroutine(InitializeGame());
     }
 

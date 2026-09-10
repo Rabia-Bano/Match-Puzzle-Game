@@ -98,6 +98,9 @@ namespace Match3
         [SerializeField] private float panelShowDelay  = 0.6f;
         [SerializeField] private float starRevealDelay = 0.35f;
 
+        [Header("— Win Celebration Effect —")]                              // ← ADD THIS
+        [SerializeField] private ParticleSystem winCelebrationPrefab;
+
         // ─── Private ──────────────────────────────────────────
         private bool _resultShown = false;
         private int  _currentLevelId;
@@ -171,6 +174,15 @@ namespace Match3
             loseReplayButton?.onClick.AddListener(ReplayLevel);
             loseMapButton?   .onClick.AddListener(GoToMap);
             unlockOkButton?  .onClick.AddListener(HideUnlockPopup);
+
+            startButton?     .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            closeButton?     .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            nextLevelButton? .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            winReplayButton? .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            winMapButton?    .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            loseReplayButton?.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            loseMapButton?   .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            unlockOkButton?  .onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
         }
 
         private void OnDisable()
@@ -329,6 +341,9 @@ namespace Match3
         {
             if (_resultShown) return;
             _resultShown = true;
+            AudioManager.Instance?.PlaySFX("level_win");
+            JuiceManager.Instance?.FlashScreen(Color.white, 0.2f);
+            TileVisualController.PlayEffect(winCelebrationPrefab, TileVisualController.ScreenCenterWorldPoint(), Color.white);
             StartCoroutine(ShowWinRoutine());
         }
 
@@ -470,6 +485,13 @@ namespace Match3
         private IEnumerator ShowLoseRoutine()
         {
             inputHandler?.SetInputEnabled(false);
+
+            // Regular-level loss costs 1 life. This is the ONLY place LoseLife()
+            // is called — Boss Arena losses go through BossResultManager instead,
+            // which never touches LivesManager, so boss fights never cost a life.
+            LivesManager.Instance?.LoseLife();
+
+            AudioManager.Instance?.PlaySFX("level_fail");
             yield return StartCoroutine(WaitForBoardToSettle());
             yield return new WaitForSeconds(panelShowDelay);
 

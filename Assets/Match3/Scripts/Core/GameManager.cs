@@ -16,6 +16,17 @@ using Game.Firebase;   // NEW — CloudSyncManager ke liye
 /// OnLevelFailed when a level ends; GameManager reacts to those by
 /// switching state back to Map. That is the ONLY connection between
 /// the two scripts — no direct references either way.
+///
+/// FIXED: HandleBossDefeated() used to immediately ChangeState(Map)
+/// the instant GameEvents.OnBossDefeated fired — but BossResultManager
+/// fires that event right after SHOWING the win panel (reward screen
+/// with pet drop), not after the player dismisses it. That meant the
+/// scene would switch to MapScene mid-reward-screen, before the player
+/// ever saw it or tapped anything. Navigation away from the win/lose
+/// panel is now entirely up to BossResultManager's own Continue/Retry/
+/// Quit buttons (see BossResultManager.cs) — GameManager just logs the
+/// event now, for analytics or anything else that wants to listen
+/// without driving navigation.
 /// </summary>
 public class GameManager : MonoBehaviour
 {
@@ -53,7 +64,7 @@ public class GameManager : MonoBehaviour
     {
         GameEvents.OnLevelCompleted  += HandleLevelCompleted;
         GameEvents.OnLevelFailed     += HandleLevelFailed;
-        //GameEvents.OnBossDefeated    += HandleBossDefeated;
+        GameEvents.OnBossDefeated    += HandleBossDefeated;
         GameEvents.OnReturnToMap     += HandleReturnToMap;
         GameEvents.OnGamePaused      += HandlePause;
         GameEvents.OnGameResumed     += HandleResume;
@@ -66,7 +77,7 @@ public class GameManager : MonoBehaviour
     {
         GameEvents.OnLevelCompleted  -= HandleLevelCompleted;
         GameEvents.OnLevelFailed     -= HandleLevelFailed;
-        //GameEvents.OnBossDefeated    -= HandleBossDefeated;
+        GameEvents.OnBossDefeated    -= HandleBossDefeated;
         GameEvents.OnReturnToMap     -= HandleReturnToMap;
         GameEvents.OnGamePaused      -= HandlePause;
         GameEvents.OnGameResumed     -= HandleResume;
@@ -148,7 +159,21 @@ public class GameManager : MonoBehaviour
         ChangeState(GameState.Map);
     }
 
-    private void HandleBossDefeated()  => ChangeState(GameState.Map);
+    /// <summary>
+    /// FIXED: no longer changes scene here. BossResultManager's win panel
+    /// is still on-screen when this fires (it's invoked right after SHOWING
+    /// the reward screen, not after the player dismisses it) — auto-navigating
+    /// here used to yank the player back to MapScene before they could see
+    /// their reward. Navigation is now entirely driven by BossResultManager's
+    /// own Continue / Retry / Quit buttons (see GoToBossList()/RetryFight()
+    /// in BossResultManager.cs). This handler is kept for anything else that
+    /// wants to react to a boss defeat (analytics, etc.) without moving screens.
+    /// </summary>
+    private void HandleBossDefeated()
+    {
+        Debug.Log("[GameManager] Boss defeated (analytics/logging only — no auto-navigation).");
+    }
+
     private void HandleReturnToMap()   => ChangeState(GameState.Map);
 
     private void HandlePause()

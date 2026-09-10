@@ -40,24 +40,43 @@ namespace Match3
 
         // ── Public API ────────────────────────────────────────
 
-        public void TryCreateSpecial(MatchGroup group, BoardGrid boardGrid)
+        /// <summary>
+        /// Turns a qualifying match into a special tile at its pivot cell.
+        /// Returns the PIVOT TILE'S ORIGINAL TileData (before it became
+        /// special) via pivotData, plus its grid position — or null/-1,-1 if
+        /// no special was created (Line3 match, or invalid data).
+        ///
+        /// WHY THIS RETURNS DATA NOW: the pivot tile is removed from
+        /// group.Tiles right below (it transforms instead of being
+        /// destroyed), so BoardController's caller previously had NO WAY to
+        /// report it for goal tracking / jelly decrement — every match that
+        /// spawned a special silently under-counted color-collection goals
+        /// by exactly 1 (a 4-match registered as 3, a 5-match as 4). The
+        /// pivot still visually "matched" for goal purposes, it just became
+        /// a special tile instead of clearing — so it should still count.
+        /// </summary>
+        public TileData TryCreateSpecial(MatchGroup group, BoardGrid boardGrid, out int pivotX, out int pivotY)
         {
+            pivotX = -1;
+            pivotY = -1;
+
             TileData specialData = GetSpecialData(group.Shape);
-            if (specialData == null) return;    // Line3 → no special
+            if (specialData == null) return null;    // Line3 → no special
 
             // Validate special data is assigned
             if (specialData.sprite == null)
             {
                 Debug.LogError($"[SpecialTileFactory] {group.Shape} TileData has no sprite assigned! " +
                                "Assign a sprite to the TileData asset in the Inspector.", specialData);
-                return;
+                return null;
             }
 
             Tile pivot = PickPivot(group.Tiles, group.Shape, boardGrid);
-            if (pivot == null) return;
+            if (pivot == null) return null;
 
             int px = pivot.GridX;
             int py = pivot.GridY;
+            TileData pivotOriginalData = pivot.Data; // capture BEFORE it's overwritten below
 
             // Remove pivot from the clear list — it becomes the special tile
             group.Tiles.Remove(pivot);
@@ -71,7 +90,7 @@ namespace Match3
             if (special == null)
             {
                 Debug.LogError("[SpecialTileFactory] boardGrid.SpawnTile returned null!");
-                return;
+                return null;
             }
 
             // ── CRITICAL FIX: Force visual refresh ───────────
@@ -92,6 +111,10 @@ namespace Match3
 
             Debug.Log($"[SpecialTileFactory] ✓ Created {group.Shape} → " +
                       $"{specialData.name} at ({px},{py})");
+
+            pivotX = px;
+            pivotY = py;
+            return pivotOriginalData;
         }
 
         // ── Shape → Data mapping ─────────────────────────────

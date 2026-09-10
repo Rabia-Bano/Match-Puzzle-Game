@@ -61,6 +61,47 @@ namespace Match3
             }
         }
 
+        /// <summary>
+        /// NEW — Boss Arena entry point. No LevelData involved: the board starts
+        /// with zero jelly, and BossAttackExecutor.ExecuteAddJelly() drops jelly
+        /// onto the board over time as one of the boss's attacks. Call once,
+        /// right after BoardGrid.InitializeBoard(), instead of Setup().
+        /// </summary>
+        public void SetupEmpty(BoardGrid grid)
+        {
+            boardGrid = grid;
+            ClearExistingOverlays();
+            _jellyLevel = new int[grid.Width, grid.Height];
+            _overlays   = new GameObject[grid.Width, grid.Height];
+        }
+
+        /// <summary>
+        /// NEW — drops `layers` of jelly onto a single cell at runtime (a boss
+        /// attack, not a level-start layout). No-ops if that cell already has
+        /// jelly — caller should pick a different cell in that case.
+        /// </summary>
+        public void AddJellyAt(int x, int y, int layers)
+        {
+            if (boardGrid == null) return; // JellyManager's own boardGrid field must be wired in the Inspector
+
+            // Lazy self-init: if nobody explicitly called Setup()/SetupEmpty() yet
+            // (or the board was resized since), allocate fresh empty arrays now.
+            if (_jellyLevel == null ||
+                _jellyLevel.GetLength(0) != boardGrid.Width ||
+                _jellyLevel.GetLength(1) != boardGrid.Height)
+            {
+                SetupEmpty(boardGrid);
+            }
+
+            if (!boardGrid.IsInBounds(x, y)) return;
+            if (_jellyLevel[x, y] > 0) return; // already jellied — caller picks another cell
+
+            _jellyLevel[x, y] = Mathf.Max(1, layers);
+            SpawnOverlay(x, y);
+            if (_overlays[x, y] != null)
+                _overlays[x, y].transform.DOPunchScale(Vector3.one * 0.25f, 0.3f, 4, 0.6f);
+        }
+
         // ── Queries ───────────────────────────────────────────
 
         /// <summary>True if this cell currently has 1+ jelly layers remaining.</summary>

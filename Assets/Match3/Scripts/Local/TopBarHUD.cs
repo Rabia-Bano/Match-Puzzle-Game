@@ -2,15 +2,17 @@
 //  TopBarHUD.cs  —  MonoBehaviour
 //
 //  Drives the Map screen's TopBarPanel (hearts + coins pill).
-//  This did NOT exist before — CoinsCountText (TMP) was a static
-//  placeholder with no script wired to it at all, which is why
-//  the coin balance never updated even though PlayerProfile.coins
-//  was correct.
+//
+//  UPDATED — lives now come from LivesManager.cs (a real backend that
+//  didn't exist before — see that file for the full regen + Firestore
+//  sync design), not from a static placeholder. Also shows a small
+//  countdown next to the heart icon while lives are regenerating
+//  (e.g. "4 min"), which hides itself automatically once lives are full.
 //
 //  Attach to: TopBarPanel GameObject (Hierarchy: MapScene > UICanvas
-//  > TopBarPanel). Drag CoinsPill/CoinsCountText (TMP) into
-//  coinsText, and LivesPill's count text into livesText, in the
-//  Inspector.
+//  > TopBarPanel). Drag CoinsPill/CoinsCountText (TMP) into coinsText,
+//  LivesPill's count text into livesText, and (optional) a small TMP
+//  text near the heart icon into livesTimerText.
 // ============================================================
 
 using UnityEngine;
@@ -20,17 +22,67 @@ public class TopBarHUD : MonoBehaviour
 {
     [Header("Wire these from Hierarchy")]
     [SerializeField] private TMP_Text coinsText;
-    [SerializeField] private TMP_Text livesText; // optional — leave empty if lives aren't wired yet
+    [SerializeField] private TMP_Text livesText;
+
+    [Header("Lives Regen Countdown (optional)")]
+    [Tooltip("Small text near the heart icon showing time until the next life " +
+             "(e.g. \"4 min\"). Leave empty if you don't want this shown. " +
+             "Automatically hides itself when lives are full.")]
+    [SerializeField] private TMP_Text livesTimerText;
+
+    [Tooltip("The TimerImage GameObject (clock icon) that TimerText sits inside. " +
+             "Whole thing shows/hides together with the countdown — leave empty " +
+             "to just use livesTimerText's own parent automatically.")]
+    [SerializeField] private GameObject livesTimerContainer;
 
     private void OnEnable()
     {
         Refresh();
         LocalSaveManager.OnProfileChanged += HandleProfileChanged;
+
+        if (LivesManager.Instance != null)
+        {
+            LivesManager.Instance.OnLivesChanged += HandleLivesChanged;
+            LivesManager.Instance.RaiseCurrentState();
+        }
     }
 
     private void OnDisable()
     {
         LocalSaveManager.OnProfileChanged -= HandleProfileChanged;
+
+        if (LivesManager.Instance != null)
+            LivesManager.Instance.OnLivesChanged -= HandleLivesChanged;
+    }
+
+    // Countdown text needs to tick every second even when lives AREN'T
+    // changing (that's the whole point of a countdown) — so it's polled
+    // here in Update() rather than driven by OnLivesChanged, which only
+    // fires when the life COUNT itself changes.
+    private void Update()
+    {
+        if (livesTimerText == null || LivesManager.Instance == null) return;
+
+        string countdown = LivesManager.Instance.NextLifeCountdownText;
+        bool shouldShow = !string.IsNullOrEmpty(countdown);
+
+        // Toggle the whole TimerImage (icon + text) together — not just the
+        // text — so the clock icon doesn't sit there empty once lives are full.
+        GameObject target = livesTimerContainer != null
+            ? livesTimerContainer
+            : livesTimerText.transform.parent != null
+                ? livesTimerText.transform.parent.gameObject
+                : livesTimerText.gameObject;
+
+        if (target.activeSelf != shouldShow)
+            target.SetActive(shouldShow);
+
+        if (shouldShow) livesTimerText.text = countdown;
+    }
+
+    private void HandleLivesChanged(int current, int max)
+    {
+        if (livesText != null) livesText.text = current.ToString();
     }
 
     private void HandleProfileChanged(PlayerProfile profile) => Refresh(profile);
@@ -44,9 +96,7 @@ public class TopBarHUD : MonoBehaviour
         if (coinsText != null)
             coinsText.text = (profile?.coins ?? 0).ToString("N0");
 
-        // Lives aren't part of PlayerProfile yet in this codebase — wire this
-        // up once a lives/energy system exists. Left as a safe no-op for now.
-        if (livesText != null && profile == null)
-            livesText.text = "0";
+        if (livesText != null)
+            livesText.text = (LivesManager.Instance?.CurrentLives ?? 0).ToString();
     }
 }

@@ -15,6 +15,10 @@ namespace Match3
         public string uid;
         public string displayName;
         public string avatarUrl;
+        // Preset avatar id (e.g. "avatar_1"), resolved locally from
+        // Resources/Avatars/<avatarId>.asset — same field PlayerProfile uses.
+        // Takes priority over avatarUrl when both are present.
+        public string avatarId;
         public long   totalScore;
 
         // Not stored in RTDB — computed client-side after sorting.
@@ -37,6 +41,7 @@ namespace Match3
                 uid         = snapshot.Key,
                 displayName = raw.TryGetValue("displayName", out var n) ? n?.ToString() : "Player",
                 avatarUrl   = raw.TryGetValue("avatarUrl", out var a) ? a?.ToString() : "",
+                avatarId    = raw.TryGetValue("avatarId", out var id) ? id?.ToString() : "",
                 totalScore  = raw.TryGetValue("totalScore", out var s) && long.TryParse(s.ToString(), out long v) ? v : 0
             };
 

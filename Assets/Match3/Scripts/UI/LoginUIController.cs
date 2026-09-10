@@ -47,18 +47,21 @@ namespace Game.Firebase
             {
                 loginButton.onClick.RemoveAllListeners();
                 loginButton.onClick.AddListener(OnLoginButtonClicked);
+                loginButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
             }
 
             if (guestButton != null)
             {
                 guestButton.onClick.RemoveAllListeners();
                 guestButton.onClick.AddListener(OnGuestButtonClicked);
+                guestButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
             }
 
             if (registerButton != null)
             {
                 registerButton.onClick.RemoveAllListeners();
                 registerButton.onClick.AddListener(OnRegisterButtonClicked);
+                registerButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
             }
 
             if (errorMessageText != null)

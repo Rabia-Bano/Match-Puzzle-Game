@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
+  m_Name: LevelData_BossBoard1
+  m_EditorClassIdentifier: 
+  width: 12
+  height: 12
+  moveLimit: 200
+  goals: []
+  allowedTiles:
+  - {fileID: 11400000, guid: 7cdfc3822445bec46b26a0474efff096, type: 2}
+  - {fileID: 11400000, guid: 1d85cc8cc49e6eb49b67180e12c0998b, type: 2}
+  - {fileID: 11400000, guid: 54e1c496a67178f4899e494245c47d96, type: 2}
+  - {fileID: 11400000, guid: 2b0a9d40d0d96624fae8ea6961fab3fc, type: 2}
+  jellyPositions: []
+  jellyLayers: 1
+  hardTileData: {fileID: 11400000, guid: f906a60d82a019f48aaee3254a6842b4, type: 2}
+  hardTilePositions: []
+  dropStoneData: {fileID: 11400000, guid: 5a301398d763f534eb494afc32c11a80, type: 2}
+  stonePositions: []
+  scoreTar1: 500
+  scoreTar2: 1000
+  scoreTar3: 2000

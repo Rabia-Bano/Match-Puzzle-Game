@@ -13,9 +13,13 @@ MonoBehaviour:
   m_Name: TileData_HStriped
   m_EditorClassIdentifier: 
   id: 0
-  sprite: {fileID: 21300000, guid: 0b45f7da480400640bd2323271b13f3d, type: 3}
+  sprite: {fileID: 21300000, guid: 010a36b7df74d4242a97ab51db32f7d5, type: 3}
   color: 0
   isSpecial: 1
   specialType: 1
-  highlightSprite: {fileID: 21300000, guid: 0b45f7da480400640bd2323271b13f3d, type: 3}
+  isHardTile: 0
+  hardTileMaxHP: 2
+  hardTileDamageSprites: []
+  isDropStone: 0
+  highlightSprite: {fileID: 21300000, guid: 010a36b7df74d4242a97ab51db32f7d5, type: 3}
   clearParticlePrefab: {fileID: 0}

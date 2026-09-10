@@ -21,6 +21,9 @@ EditorBuildSettings:
     path: Assets/Scenes/BossArenaScene.unity
     guid: 97f44130ae32e0144a54e8b350f060b1
   - enabled: 1
+    path: Assets/Scenes/BossGameBoardScene.unity
+    guid: c3fd77e7b8cafed4a9758efde76a7d69
+  - enabled: 1
     path: Assets/Scenes/StoreScene.unity
     guid: a59db2dd73aaddd498bb98475feb5523
   - enabled: 1

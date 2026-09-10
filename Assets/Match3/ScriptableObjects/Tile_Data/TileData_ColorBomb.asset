@@ -13,9 +13,13 @@ MonoBehaviour:
   m_Name: TileData_ColorBomb
   m_EditorClassIdentifier: 
   id: 0
-  sprite: {fileID: 4398037373220439731, guid: 76714005af2360f45b5477fcdff9b165, type: 3}
+  sprite: {fileID: 21300000, guid: 705e9940d29188e439eb700a0f4f1872, type: 3}
   color: 0
   isSpecial: 1
   specialType: 4
-  highlightSprite: {fileID: 4398037373220439731, guid: 76714005af2360f45b5477fcdff9b165, type: 3}
+  isHardTile: 0
+  hardTileMaxHP: 2
+  hardTileDamageSprites: []
+  isDropStone: 0
+  highlightSprite: {fileID: 21300000, guid: 705e9940d29188e439eb700a0f4f1872, type: 3}
   clearParticlePrefab: {fileID: 0}

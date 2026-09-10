@@ -75,7 +75,7 @@ namespace Match3
                 StartCoroutine(BuildGoalIconsDeferred());
             }
 
-            settingsButton?.onClick.AddListener(OnSettingsClicked);
+            //settingsButton?.onClick.AddListener(OnSettingsClicked);
         }
 
         private void OnMovesChanged(int remaining)
@@ -145,6 +145,6 @@ namespace Match3
             if (index >= 0 && index < boosterSlots.Length) boosterSlots[index].Refresh();
         }
 
-        private void OnSettingsClicked() => Debug.Log("[GameHUD] Settings clicked.");
+        //private void OnSettingsClicked() => Debug.Log("[GameHUD] Settings clicked.");
     }
 }

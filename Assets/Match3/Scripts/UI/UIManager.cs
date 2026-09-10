@@ -28,6 +28,9 @@ public class UIManager : MonoBehaviour
     public GameObject levelCompletePopup;
     public GameObject levelFailedPopup;
 
+    [Header("No Lives Popup (needed in MapScene — shown when a regular level is tapped with 0 lives)")]
+    public GameObject noLivesPopup;
+
     [Header("Which state should show mainPanel")]
     public GameState mainPanelState;
 
@@ -46,6 +49,7 @@ public class UIManager : MonoBehaviour
         GameEvents.OnGameStateChanged += HandleStateChanged;
         GameEvents.OnLevelCompleted   += HandleLevelCompleted;
         GameEvents.OnLevelFailed      += HandleLevelFailed;
+        GameEvents.OnNoLivesBlocked   += HandleNoLivesBlocked;
     }
 
     private void OnDisable()
@@ -53,6 +57,7 @@ public class UIManager : MonoBehaviour
         GameEvents.OnGameStateChanged -= HandleStateChanged;
         GameEvents.OnLevelCompleted   -= HandleLevelCompleted;
         GameEvents.OnLevelFailed      -= HandleLevelFailed;
+        GameEvents.OnNoLivesBlocked   -= HandleNoLivesBlocked;
     }
 
     private void Start()
@@ -105,6 +110,11 @@ public class UIManager : MonoBehaviour
     private void HandleLevelFailed(int level)
     {
         if (levelFailedPopup != null) levelFailedPopup.SetActive(true);
+    }
+
+    private void HandleNoLivesBlocked()
+    {
+        if (noLivesPopup != null) noLivesPopup.SetActive(true);
     }
 
     public void OnOpenMapPressed()          => Navigate(GameState.Map);

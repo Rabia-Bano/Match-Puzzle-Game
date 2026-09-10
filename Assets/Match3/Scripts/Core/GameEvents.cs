@@ -37,11 +37,21 @@ public static class GameEvents
     /// <summary>Fired when the player wants to return to the map.</summary>
     public static System.Action OnReturnToMap;
 
+    /// <summary>NEW — fired by BossResultManager after a Boss Arena win (after the reward screen is dismissed).</summary>
+    public static System.Action OnBossDefeated;
+
     /// <summary>Fired when the player successfully logs in.</summary>
     public static System.Action OnPlayerLoggedIn;
 
     /// <summary>Fired when the player logs out.</summary>
     public static System.Action OnPlayerLoggedOut;
+
+    /// <summary>
+    /// Fired when the player tries to start a REGULAR level with 0 lives
+    /// remaining (LevelLoader.LoadLevel blocks the load and fires this instead).
+    /// Boss Arena never fires this — it doesn't consume/require lives.
+    /// </summary>
+    public static System.Action OnNoLivesBlocked;
 
     /// <summary>
     /// Clears every subscriber. Call once, from GameManager.OnApplicationQuit(),
@@ -58,7 +68,9 @@ public static class GameEvents
         OnGamePaused        = null;
         OnGameResumed       = null;
         OnReturnToMap       = null;
+        OnBossDefeated      = null;
         OnPlayerLoggedIn    = null;
         OnPlayerLoggedOut   = null;
+        OnNoLivesBlocked    = null;
     }
 }

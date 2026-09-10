@@ -128,6 +128,55 @@ namespace Game.Firebase
             _isListening = false;
         }
 
+        // ============================================================
+        //  AVATAR SYNC
+        // ============================================================
+
+        /// <summary>
+        /// Patches ONLY the avatar fields into the caller's existing
+        /// /leaderboard/{uid} entry, immediately when they change their avatar —
+        /// without waiting for their next SubmitScore() call. Without this,
+        /// a player who already has an all-time leaderboard row from a previous
+        /// session, and then changes their preset avatar, would keep showing the
+        /// OLD (or empty) avatar on the leaderboard until they finish another
+        /// level. Call this from ProfileManager right after SetPresetAvatar /
+        /// after an avatar photo upload completes.
+        /// No-ops if the player doesn't have a leaderboard entry yet (hasn't
+        /// finished a level) so this never creates a phantom zero-score row.
+        /// </summary>
+        public void SyncAvatarToLeaderboard(string avatarId, string avatarUrl)
+        {
+            if (!_initialized || _leaderboardRootRef == null)
+            {
+                Debug.LogWarning("[LeaderboardManager] SyncAvatarToLeaderboard called before Initialize().");
+                return;
+            }
+
+            FirebaseUser user = AuthManager.CurrentUser;
+            if (user == null) return;
+
+            DatabaseReference entryRef = _leaderboardRootRef.Child(user.UserId);
+            entryRef.GetValueAsync().ContinueWithOnMainThread(t =>
+            {
+                if (t.IsFaulted || t.IsCanceled || !t.Result.Exists)
+                    return; // no leaderboard entry yet — nothing to patch
+
+                var updates = new Dictionary<string, object>
+                {
+                    { "avatarId",  avatarId  ?? "" },
+                    { "avatarUrl", avatarUrl ?? "" }
+                };
+
+                entryRef.UpdateChildrenAsync(updates).ContinueWithOnMainThread(u =>
+                {
+                    if (u.IsFaulted)
+                        Debug.LogError($"[LeaderboardManager] SyncAvatarToLeaderboard failed: {u.Exception?.GetBaseException()?.Message}");
+                    else if (logVerbose)
+                        Debug.Log("[LeaderboardManager] Leaderboard avatar synced.");
+                });
+            });
+        }
+
         private void HandleValueChanged(object sender, ValueChangedEventArgs args)
         {
             if (args.DatabaseError != null)
@@ -211,6 +260,7 @@ namespace Game.Firebase
 
             string displayName = ProfileManager.Instance?.Profile?.displayName ?? "Player";
             string avatarUrl   = ProfileManager.Instance?.Profile?.avatarUrl   ?? "";
+            string avatarId    = ProfileManager.Instance?.Profile?.avatarId    ?? "";
 
             try
             {
@@ -222,6 +272,7 @@ namespace Game.Firebase
                     dict["uid"]         = user.UserId;
                     dict["displayName"] = displayName;
                     dict["avatarUrl"]   = avatarUrl;
+                    dict["avatarId"]    = avatarId;
                     dict["totalScore"]  = existing + score;
 
                     mutableData.Value = dict;

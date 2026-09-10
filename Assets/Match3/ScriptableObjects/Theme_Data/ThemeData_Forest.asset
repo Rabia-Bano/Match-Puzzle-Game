@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0ef747cd64af284c8cadb36b798cc15, type: 3}
+  m_Name: ThemeData_Forest
+  m_EditorClassIdentifier: 
+  themeId: 1
+  themeName: Forest
+  bg1: {fileID: -5009349720014003667, guid: 7d0db37e425e608498b993cd5f55dcda, type: 3}
+  bg2: {fileID: 4855736381065049183, guid: 5782f270a52b0eb41bb36b4790ebeea8, type: 3}
+  bg3: {fileID: 3367848462396384317, guid: 13e78309e90e5ec40a05147632812faa, type: 3}
+  f1: {fileID: 5018260940779456260, guid: 6aeb8632476a832469e91cd66fe7e324, type: 3}
+  f2: {fileID: -6382937286575446966, guid: 0b609d0823ff1db4c9c9461219380bee, type: 3}
+  f3: {fileID: -7673690272460598406, guid: 3bf86ffd5ad7e3742b63accaac0557b2, type: 3}
+  f4: {fileID: -1904376766758692152, guid: 0d8107172335fe741bdd9a965c295970, type: 3}
+  universalButtonSprite: {fileID: 8339864000630805643, guid: 28614802564271c4f82f810888d116d7, type: 3}
+  settingsGearIcon: {fileID: 103806193274548188, guid: 15cc9858ada35ef4fae7f59a3a74600d, type: 3}
+  mapIcon: {fileID: -3198025259688707482, guid: 719f1a6f07de46f49b99c30062867f34, type: 3}
+  bossArenaIcon: {fileID: 4807747184187761757, guid: a4b3e1fd89bd94a4cb8d0db98dd90c2b, type: 3}
+  petsIcon: {fileID: 9076786845726831145, guid: ffa12879643fb024298835b2be82a7fd, type: 3}
+  storeIcon: {fileID: -5365739889109940680, guid: 72d057edbe47d9546a2cc0b33d39787c, type: 3}
+  leaderBoardIcon: {fileID: 3879897070109248213, guid: 48885bc63766e3841bb054cc8e29a2d8, type: 3}
+  settingIcon: {fileID: 103806193274548188, guid: 15cc9858ada35ef4fae7f59a3a74600d, type: 3}
+  levelNodeLockedColor: {r: 1, g: 1, b: 1, a: 1}
+  levelNodeUnlockedColor: {r: 1, g: 1, b: 1, a: 1}
+  levelNodeCompletedColor: {r: 1, g: 1, b: 1, a: 1}
+  gameBoardTopBarImage: {fileID: 3101737556292566227, guid: bdc7e22901f49f248836e3908abed453, type: 3}
+  bossArenaHUDColor: {r: 1, g: 1, b: 1, a: 1}

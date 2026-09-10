@@ -36,6 +36,17 @@ namespace Match3
         public static void LoadLevel(int levelId,
                                       List<BoosterType> selectedBoosters = null)
         {
+            // 0. Lives gate — REGULAR levels only. Boss Arena goes through
+            // BossLevelLoader.LoadBoss() instead, which never calls this method,
+            // so boss fights are never blocked by this check.
+            if (LivesManager.Instance != null && !LivesManager.Instance.HasLives)
+            {
+                Debug.Log("[LevelLoader] Blocked — 0 lives remaining. " +
+                          "Firing GameEvents.OnNoLivesBlocked for UI to show a popup.");
+                GameEvents.OnNoLivesBlocked?.Invoke();
+                return;
+            }
+
             // 1. Load ScriptableObject from Resources/Levels/Level_{id}
             string path = $"{LEVELS_PATH}{levelId}";
             LevelData data = Resources.Load<LevelData>(path);

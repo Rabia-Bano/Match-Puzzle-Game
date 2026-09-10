@@ -137,6 +137,8 @@ namespace Match3
                 ObstacleHP = 0;
                 SetState(TileState.Normal);
             }
+
+            GetComponent<TileVisualController>()?.StartIdleAnimation();
         }
 
         // ── Hard tile damage ──────────────────────────────────
@@ -266,6 +268,7 @@ namespace Match3
             transform.DOKill();
             if (tileRenderer != null)     tileRenderer.DOKill();
             if (highlightRenderer != null) highlightRenderer.DOKill();
+            GetComponent<TileVisualController>()?.KillAllTweens();
         }
 
         // ── Debug ─────────────────────────────────────────────

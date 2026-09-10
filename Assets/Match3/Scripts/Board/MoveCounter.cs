@@ -89,6 +89,30 @@ namespace Match3
         }
 
         /// <summary>
+        /// NEW — removes N moves at once (e.g. a Boss Arena "ReduceMoves" attack).
+        /// Same low-move / exhausted event behaviour as UseMove(), just for a
+        /// bigger, externally-triggered chunk instead of 1 per swap.
+        /// </summary>
+        public void ReduceMoves(int amount)
+        {
+            if (amount <= 0 || MovesRemaining <= 0) return;
+
+            MovesRemaining = Mathf.Max(0, MovesRemaining - amount);
+            OnMovesChanged?.Invoke(MovesRemaining);
+
+            Debug.Log($"[MoveCounter] Boss attack removed {amount} move(s). Remaining: {MovesRemaining}/{TotalMoves}");
+
+            if (MovesRemaining <= lowMoveThreshold && MovesRemaining > 0)
+                OnLowMoves?.Invoke(MovesRemaining);
+
+            if (MovesRemaining <= 0)
+            {
+                Debug.Log("[MoveCounter] No moves remaining (boss attack)!");
+                OnMovesExhausted?.Invoke();
+            }
+        }
+
+        /// <summary>
         /// Adds bonus moves (e.g. from store purchase), capped at TotalMoves.
         /// Correct for a booster bought mid-level after moves were already spent,
         /// but it means the bonus silently does nothing if the player still has

@@ -78,6 +78,7 @@ namespace Match3
         {
             IsBusy = true;
             inputHandler.SetInputEnabled(false);
+            AudioManager.Instance?.PlaySFX("tile_swap");
 
             Tile tileA = boardGrid.GetTile(fromPos.x, fromPos.y);
             Tile tileB = boardGrid.GetTile(toPos.x,   toPos.y);
@@ -114,6 +115,44 @@ namespace Match3
                     boardRotation?.RegisterMove();
                     levelManager?.OnMoveCompleted();
                     yield return StartCoroutine(WaitForCombinations());
+                    yield break;
+                }
+            }
+
+            // ── Step 1.5: Rainbow (color bomb) + a normal tile — ALWAYS clear
+            // its target colour FIRST, before any board settle/refill/rotate.
+            //
+            // WHY THIS IS NEEDED: without this, Step 2 below checks for an
+            // incidental match this same swap might have formed. If it did
+            // (fairly common — the normal tile now sits in the colour bomb's
+            // old cell), Step 2 fully resolves that match — clear, gravity,
+            // refill, AND board rotation if due — through
+            // boardController.ProcessTurn(), and only AFTER all of that
+            // finishes does it fire the colour bomb's own blast. Visually:
+            // board settles/rotates first, THEN the target-colour tiles
+            // disappear. Scoped to Rainbow-only (checked via aRainbow/bRainbow
+            // below) so every other special+normal swap (striped, bomb) keeps
+            // its exact previous order — untouched.
+            bool aRainbow = aSpecial && tileA.Data.specialType == SpecialType.Rainbow;
+            bool bRainbow = bSpecial && tileB.Data.specialType == SpecialType.Rainbow;
+
+            if ((aRainbow && !bSpecial) || (bRainbow && !aSpecial))
+            {
+                bool rainbowHandled = false;
+                try
+                {
+                    rainbowHandled = specialActivator.TryActivateSwap(tileA, tileB);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[SwapController] Rainbow-priority TryActivateSwap threw: {e}", this);
+                }
+
+                if (rainbowHandled)
+                {
+                    boardRotation?.RegisterMove();
+                    levelManager?.OnMoveCompleted();
+                    yield return StartCoroutine(WaitForActivator());
                     yield break;
                 }
             }

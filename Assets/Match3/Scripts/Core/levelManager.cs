@@ -77,6 +77,7 @@ public class LevelManager : MonoBehaviour
                   $"{(Match3.PetManager.Instance == null ? "NULL — PetManager not found!" : "found, OK")}. " +
                   $"boardController field is {(boardController == null ? "NULL — not wired in Inspector!" : "assigned, OK")}.");
         Match3.PetManager.Instance?.BindToLevel(boardGrid, boardController, goalTracker, moveCounter);
+        Match3.BoosterManager.GetOrCreateInstance().BindToLevel(boardGrid, boardController, inputHandler, goalTracker, moveCounter);
         // ───────────────────────────────────────────────────────────
 
         // ── Notify LevelResultManager that we are ready ──────

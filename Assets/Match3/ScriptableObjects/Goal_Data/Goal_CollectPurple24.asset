@@ -15,5 +15,5 @@ MonoBehaviour:
   goalType: 0
   targetTile: {fileID: 11400000, guid: 2b0a9d40d0d96624fae8ea6961fab3fc, type: 2}
   requiredAmount: 24
-  goalIcon: {fileID: -2615874204119335, guid: 9d55f03a879b8e24dbc1b33dc682ae0f, type: 3}
-  goalLabel: Collect Blue
+  goalIcon: {fileID: -2093324750932669864, guid: f7d07a6bc5e821e4988a0c42bfe8ae7c, type: 3}
+  goalLabel: Collect Purple

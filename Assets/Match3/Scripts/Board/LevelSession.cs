@@ -76,10 +76,15 @@ namespace Match3
         /// UPDATED cadence: the starter pet (index 0) is unlocked from Level 1,
         /// before the player has completed anything, so it is NOT granted here.
         /// Every pet after that unlocks after every 5th level completed
-        /// (after Level 5, 10, 15 ...) — same cadence as Boss Arena, so both
-        /// checks below share the same "id % 5 == 0" condition.
+        /// (after Level 5, 10, 15 ...).
         /// PetData.unlockAfterLevel should be set to match: starter pet = 0,
         /// second pet = 5, third pet = 10, etc.
+        ///
+        /// NOTE: Boss Arena now unlocks on its OWN cadence — every 6th level
+        /// (after Level 6, 12, 18 ...) — intentionally decoupled from the pet
+        /// cadence above (they used to share the same "id % 5" check). Only
+        /// the boss block below changed; the pet block above is untouched, so
+        /// regular level-play / pet unlocking behaves exactly as before.
         /// </summary>
         public static void CheckUnlocks()
         {
@@ -92,10 +97,10 @@ namespace Match3
                 Debug.Log($"[LevelSession] Pet unlock! Index={UnlockedPetIndex}");
             }
 
-            if (id > 0 && id % 5 == 0)
+            if (id > 0 && id % 6 == 0)
             {
                 BossArenaUnlocked = true;
-                UnlockedBossId    = id / 5;
+                UnlockedBossId    = id / 6;   // 1 = boss unlocked after Level 6, 2 = after Level 12, ...
                 Debug.Log($"[LevelSession] Boss unlock! BossId={UnlockedBossId}");
             }
         }

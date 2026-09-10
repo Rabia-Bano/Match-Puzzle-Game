@@ -49,6 +49,7 @@ namespace Match3
         public event Action           OnPetChanged;
 
         private PetSkill _skillInstance;
+        private Coroutine _skillCoroutine;
 
         private void Awake()
         {
@@ -67,6 +68,31 @@ namespace Match3
         {
             if (boardController != null)
                 boardController.OnMatchGroupResolved -= HandleMatchGroupResolved;
+
+            // FIX ("charge stuck at 0%, never moves in later levels"): if a
+            // skill was still mid-animation when the level ended/transitioned,
+            // its coroutine (owned by THIS DontDestroyOnLoad PetManager) kept
+            // running into the new scene, referencing the OLD scene's now-
+            // destroyed boardGrid/boardController — Unity throws and silently
+            // KILLS the coroutine right there, so it never reaches the
+            // `IsBusy = false` line at the end of UseSkillRoutine(). IsBusy
+            // then stays stuck true forever, and HandleMatchGroupResolved's
+            // very first line ("if (... || IsBusy) return;") blocks EVERY
+            // future charge gain for the rest of the play session. A brand
+            // new level binding is the correct, safe point to guarantee a
+            // clean slate regardless of what happened in the previous scene.
+            if (_skillCoroutine != null)
+            {
+                StopCoroutine(_skillCoroutine);
+                _skillCoroutine = null;
+            }
+            if (IsBusy)
+            {
+                Debug.LogWarning("[PetManager] IsBusy was still true when a new level bound — " +
+                                  "a previous skill never finished cleanly (likely a scene change " +
+                                  "mid-animation). Resetting so charging works again this level.");
+                IsBusy = false;
+            }
 
             boardGrid       = grid;
             boardController = controller;
@@ -189,6 +215,17 @@ namespace Match3
         {
             if (EquippedPet == null || IsBusy) return;
 
+            // FIX (pet icon size bug — root cause): IsCharged stays TRUE for every
+            // match the player makes AFTER first reaching 100%, right up until they
+            // tap Use. The old code fired OnPetReady on EVERY one of those matches
+            // (not just the first time), so during a fast cascade PetHUD's "ready"
+            // punch-scale animation on the pet icon was getting killed and restarted
+            // several times a second. Each individual restart resets scale safely,
+            // but that many back-to-back restarts is what made the icon look like
+            // it never settled back to its normal size. Only fire OnPetReady on the
+            // single frame charge crosses from "not ready" to "ready".
+            bool wasCharged = IsCharged;
+
             int gain = matchSize switch
             {
                 3 => 5,
@@ -202,14 +239,14 @@ namespace Match3
             ChargeProgress = Mathf.Min(max, ChargeProgress + gain);
             OnChargeChanged?.Invoke(ChargeProgress, max);
 
-            if (IsCharged)
+            if (!wasCharged && IsCharged)
                 OnPetReady?.Invoke();
         }
 
         public void UseSkill()
         {
             if (!IsCharged || IsBusy || _skillInstance == null || EquippedPet == null) return;
-            StartCoroutine(UseSkillRoutine());
+            _skillCoroutine = StartCoroutine(UseSkillRoutine());
         }
 
         private IEnumerator UseSkillRoutine()
@@ -219,11 +256,25 @@ namespace Match3
 
             Debug.Log($"[PetManager] Using skill: {EquippedPet.skillName} ({EquippedPet.skillType})");
 
-            yield return _skillInstance.UseSkill(boardGrid, boardController, goalTracker, moveCounter);
-
-            ChargeProgress = 0;
-            OnChargeChanged?.Invoke(ChargeProgress, EquippedPet.chargeRequired);
-            IsBusy = false;
+            // try/finally: guarantees IsBusy always clears even if the skill's
+            // own coroutine throws partway through (e.g. a board object it
+            // touches got destroyed by a scene change mid-animation) — a raw
+            // exception inside a coroutine otherwise aborts it silently and
+            // skips every line after the failure point, including the
+            // IsBusy = false reset that used to sit unprotected at the bottom
+            // of this method.
+            try
+            {
+                yield return _skillInstance.UseSkill(boardGrid, boardController, goalTracker, moveCounter);
+            }
+            finally
+            {
+                ChargeProgress = 0;
+                if (EquippedPet != null)
+                    OnChargeChanged?.Invoke(ChargeProgress, EquippedPet.chargeRequired);
+                IsBusy = false;
+                _skillCoroutine = null;
+            }
         }
     }
 }

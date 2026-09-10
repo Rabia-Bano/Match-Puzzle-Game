@@ -65,6 +65,26 @@ namespace Match3
         [Header("5-Row Sweep Settings")]
         [SerializeField] private int wrappedStripedSweepCount = 3;
 
+        [Header("Rainbow + Other Combo Speed (color bomb + row/column/adjacent bomb)")]
+        [Tooltip("Delay between spawning each replacement special tile while the " +
+                 "color bomb converts same-color tiles. Lower = faster. Only affects " +
+                 "the Rainbow+Other combo, nothing else.")]
+        [SerializeField] private float rainbowComboSpawnStagger = 0.006f;   // was hardcoded 0.015f
+        [Tooltip("Buffer pause after all replacement tiles are spawned, before they " +
+                 "fire. Only affects the Rainbow+Other combo.")]
+        [SerializeField] private float rainbowComboFireBuffer = 0.05f;      // was hardcoded 0.1f
+
+        [Header("Other Special+Special Combo Speed")]
+        [Tooltip("Pause between the two pulses in a Bomb+Bomb combo (Candy-Crush-style " +
+                 "double pulse). Only affects Bomb+Bomb.")]
+        [SerializeField] private float wrappedWrappedPulseGap = 0.04f;      // was hardcoded 0.08f
+        [Tooltip("Delay per tile in the outer 5x5 ring of a Bomb+Bomb combo. Only " +
+                 "affects Bomb+Bomb.")]
+        [SerializeField] private float wrappedWrappedRingStagger = 0.006f;  // was hardcoded 0.015f
+        [Tooltip("Delay per column while a Rainbow+Rainbow combo sweeps the whole " +
+                 "board. Only affects Rainbow+Rainbow.")]
+        [SerializeField] private float rainbowRainbowColumnStagger = 0.01f; // was hardcoded 0.025f
+
         [Header("Timings")]
         [SerializeField] private float settleDelay = 0.08f;
 
@@ -138,11 +158,15 @@ namespace Match3
 
             PlayComboFlash(boardGrid.GridToWorld(ax, ay));
 
-            // One full row + one full column, centered on the swap (a plus/
-            // cross shape) — tA's position is enough since tA and tB are
-            // always exactly one cell apart after a swap.
-            yield return StartCoroutine(stripedEffect.BlastRow(ay, _clearedThisCombo));
-            yield return StartCoroutine(stripedEffect.BlastColumn(ax, _clearedThisCombo));
+            // SPEED FIX: row and column only ever share the swap's own center
+            // cell, which is already removed above (RemoveBothFromBoard) — so
+            // they never touch the same live tile. Safe to fire both at once
+            // instead of waiting for the row to fully finish before starting
+            // the column.
+            int pendingCross = 2;
+            StartCoroutine(RunCounted(stripedEffect.BlastRow(ay, _clearedThisCombo), () => pendingCross--));
+            StartCoroutine(RunCounted(stripedEffect.BlastColumn(ax, _clearedThisCombo), () => pendingCross--));
+            yield return new WaitUntil(() => pendingCross <= 0);
 
             levelManager?.AddScore(_clearedThisCombo.Count * 60);
 
@@ -163,13 +187,21 @@ namespace Match3
 
             int halfSweep = wrappedStripedSweepCount / 2;
 
+            // SPEED FIX: each row (or column) in the sweep is a separate line —
+            // no two share a cell — so fire them all together instead of one
+            // finishing before the next starts.
+            int pendingSweep = 0;
+
             if (isHorizontal)
             {
                 for (int dy = -halfSweep; dy <= halfSweep; dy++)
                 {
                     int row = cy + dy;
                     if (row >= 0 && row < boardGrid.Height)
-                        yield return StartCoroutine(stripedEffect.BlastRow(row, _clearedThisCombo));
+                    {
+                        pendingSweep++;
+                        StartCoroutine(RunCounted(stripedEffect.BlastRow(row, _clearedThisCombo), () => pendingSweep--));
+                    }
                 }
             }
             else
@@ -178,9 +210,15 @@ namespace Match3
                 {
                     int col = cx + dx;
                     if (col >= 0 && col < boardGrid.Width)
-                        yield return StartCoroutine(stripedEffect.BlastColumn(col, _clearedThisCombo));
+                    {
+                        pendingSweep++;
+                        StartCoroutine(RunCounted(stripedEffect.BlastColumn(col, _clearedThisCombo), () => pendingSweep--));
+                    }
                 }
             }
+
+            if (pendingSweep > 0)
+                yield return new WaitUntil(() => pendingSweep <= 0);
 
             levelManager?.AddScore(_clearedThisCombo.Count * 70);
 
@@ -197,7 +235,7 @@ namespace Match3
             RemoveBothFromBoard(tA, tB);
 
             yield return StartCoroutine(wrappedEffect.Pulse3x3(cx, cy, _clearedThisCombo));
-            yield return new WaitForSeconds(0.08f);
+            yield return new WaitForSeconds(wrappedWrappedPulseGap);
             yield return StartCoroutine(wrappedEffect.Pulse3x3(cx, cy, _clearedThisCombo));
 
             yield return StartCoroutine(Blast5x5AtPosition(cx, cy));
@@ -265,10 +303,10 @@ namespace Match3
                         newSpecial.RefreshVisuals();
                         newSpecial.transform.DOPunchScale(Vector3.one * 0.4f, 0.2f, 4, 0.5f);
                     }
-                    yield return new WaitForSeconds(0.015f);
+                    yield return new WaitForSeconds(rainbowComboSpawnStagger);
                 }
 
-                yield return new WaitForSeconds(0.1f);
+                yield return new WaitForSeconds(rainbowComboFireBuffer);
 
                 var specials = new List<Tile>();
                 for (int x = 0; x < boardGrid.Width;  x++)
@@ -281,8 +319,21 @@ namespace Match3
                         specials.Add(t);
                 }
 
+                // SPEED FIX: these newly-spawned specials sit on completely
+                // separate cells (no two ever share a position), so firing them
+                // ONE AT A TIME (the old `yield return StartCoroutine(...)` per
+                // tile, waiting for each to fully finish before starting the
+                // next) was pure serial waiting for no reason — SpecialTileEffect
+                // subclasses hold no mutable shared state between calls (verified:
+                // only read-only Inspector fields), so running them concurrently
+                // is safe. Fire them all together and wait once for all to finish,
+                // instead of waiting once per tile.
+                int pending = specials.Count;
                 foreach (Tile sp in specials)
-                    yield return StartCoroutine(FireSingleSpecial(sp));
+                    StartCoroutine(FireSingleSpecialCounted(sp, () => pending--));
+
+                if (pending > 0)
+                    yield return new WaitUntil(() => pending <= 0);
             }
 
             levelManager?.AddScore(_clearedThisCombo.Count * 90);
@@ -336,6 +387,12 @@ namespace Match3
             if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
                 levelManager?.OnJellyCleared();
 
+            // NEW — Boss Arena fix: same bridge as SpecialTileEffect.ClearNormalTileTracked().
+            // Combo blasts (this method) have their own separate clear path and were
+            // never damaging the boss either.
+            if (t.Data != null)
+                BossDamageEvents.OnSpecialTileCleared?.Invoke(t.Data.color);
+
             cleared.Add(t);
 
             boardGrid.RemoveTile(t.GridX, t.GridY);
@@ -366,6 +423,16 @@ namespace Match3
         {
             for (int x = 0; x < boardGrid.Width; x++)
             {
+                // SPEED FIX: tiles inside the same column never share a cell,
+                // so clear them all together — before this, each tile cost its
+                // own sequential frame of wait (via `yield return
+                // StartCoroutine(...)`) even though there was no real reason
+                // for tile 2 to wait for tile 1 to finish first. The left-to-
+                // right column sweep (the stagger below) is kept exactly as
+                // before — only the wasted per-tile wait inside each column
+                // is removed.
+                int pendingColumn = 0;
+
                 for (int y = 0; y < boardGrid.Height; y++)
                 {
                     Tile t = boardGrid.GetTile(x, y);
@@ -384,9 +451,14 @@ namespace Match3
                         }
                     }
 
-                    yield return StartCoroutine(ClearOneObstacleAwareTile(t, _clearedThisCombo));
+                    pendingColumn++;
+                    StartCoroutine(RunCounted(ClearOneObstacleAwareTile(t, _clearedThisCombo), () => pendingColumn--));
                 }
-                yield return new WaitForSeconds(0.025f);
+
+                if (pendingColumn > 0)
+                    yield return new WaitUntil(() => pendingColumn <= 0);
+
+                yield return new WaitForSeconds(rainbowRainbowColumnStagger);
             }
         }
 
@@ -399,7 +471,7 @@ namespace Match3
 
                 Tile t = boardGrid.GetTile(cx + dx, cy + dy);
                 yield return StartCoroutine(ClearOneObstacleAwareTile(t, _clearedThisCombo));
-                yield return new WaitForSeconds(0.015f);
+                yield return new WaitForSeconds(wrappedWrappedRingStagger);
             }
         }
 
@@ -427,6 +499,30 @@ namespace Match3
                     yield return StartCoroutine(colorBombEffect.Activate(pos, _clearedThisCombo));
                     break;
             }
+        }
+
+        /// <summary>
+        /// Wraps FireSingleSpecial() with a completion callback so several of
+        /// these can be started together (StartCoroutine, no yield) and waited
+        /// on once as a group — used by ComboRainbowWithOther() to fire all the
+        /// newly-created specials in parallel instead of one after another.
+        /// </summary>
+        private IEnumerator FireSingleSpecialCounted(Tile tile, System.Action onDone)
+        {
+            yield return StartCoroutine(FireSingleSpecial(tile));
+            onDone?.Invoke();
+        }
+
+        /// <summary>
+        /// Generic version of the same pattern — runs any coroutine and reports
+        /// back via callback when it's done, so several independent coroutines
+        /// (e.g. BlastRow + BlastColumn, or several sweep lines) can be started
+        /// together and waited on once as a group instead of one after another.
+        /// </summary>
+        private IEnumerator RunCounted(IEnumerator routine, System.Action onDone)
+        {
+            yield return StartCoroutine(routine);
+            onDone?.Invoke();
         }
 
         // ─────────────────────────────────────────────────────

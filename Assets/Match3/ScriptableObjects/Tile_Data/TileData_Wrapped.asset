@@ -13,9 +13,13 @@ MonoBehaviour:
   m_Name: TileData_Wrapped
   m_EditorClassIdentifier: 
   id: 0
-  sprite: {fileID: -1258879124242894070, guid: 92bcd472475b5bb42a9b11e53f004e66, type: 3}
+  sprite: {fileID: 21300000, guid: 149adbdb5128c1b4daec0cc51f33f7c2, type: 3}
   color: 0
   isSpecial: 1
   specialType: 3
-  highlightSprite: {fileID: -1258879124242894070, guid: 92bcd472475b5bb42a9b11e53f004e66, type: 3}
+  isHardTile: 0
+  hardTileMaxHP: 2
+  hardTileDamageSprites: []
+  isDropStone: 0
+  highlightSprite: {fileID: 21300000, guid: 149adbdb5128c1b4daec0cc51f33f7c2, type: 3}
   clearParticlePrefab: {fileID: 0}

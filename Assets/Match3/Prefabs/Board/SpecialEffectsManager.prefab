@@ -1,0 +1,133 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4232446299538846049
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1403276693167972486}
+  - component: {fileID: 7990540819537561806}
+  - component: {fileID: 9182760785345249203}
+  - component: {fileID: 7322149371597552010}
+  - component: {fileID: 2072975204575794619}
+  m_Layer: 0
+  m_Name: SpecialEffectsManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1403276693167972486
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4232446299538846049}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7990540819537561806
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4232446299538846049}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 09cb37595cceedf4c90f35378db31707, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  blastParticlePrefab: {fileID: 9049089973445843705, guid: b331b5b32b191f4459bd586ad57b26a8, type: 3}
+  sparkleParticlePrefab: {fileID: 0}
+  tileBlastDelay: 0.04
+  effectDuration: 0.15
+  boardGrid: {fileID: 0}
+  levelManager: {fileID: 0}
+  specialActivator: {fileID: 0}
+  jellyManager: {fileID: 0}
+  hLaserTrailPrefab: {fileID: 0}
+  vLaserTrailPrefab: {fileID: 0}
+  laserDuration: 0.4
+--- !u!114 &9182760785345249203
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4232446299538846049}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55fadcadf11c4384fb93542320ccbae0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  blastParticlePrefab: {fileID: 9049089973445843705, guid: b331b5b32b191f4459bd586ad57b26a8, type: 3}
+  sparkleParticlePrefab: {fileID: 0}
+  tileBlastDelay: 0.04
+  effectDuration: 0.15
+  boardGrid: {fileID: 0}
+  levelManager: {fileID: 0}
+  specialActivator: {fileID: 0}
+  jellyManager: {fileID: 0}
+  pulsePause: 0.3
+  expandRingPrefab: {fileID: 411733699387787422, guid: eeeaef61329c5af4d89c34e0222aa4ab, type: 3}
+  ringExpandDuration: 0.25
+--- !u!114 &7322149371597552010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4232446299538846049}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 804f2c1240651374488d70dc9d9a7b60, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  blastParticlePrefab: {fileID: 9049089973445843705, guid: b331b5b32b191f4459bd586ad57b26a8, type: 3}
+  sparkleParticlePrefab: {fileID: 4520518573514833955, guid: fddb0fc29c804e549be719adb280aa87, type: 3}
+  tileBlastDelay: 0.04
+  effectDuration: 0.15
+  boardGrid: {fileID: 0}
+  levelManager: {fileID: 0}
+  specialActivator: {fileID: 0}
+  jellyManager: {fileID: 0}
+  arcParticlePrefab: {fileID: 0}
+  rainbowFlashPrefab: {fileID: 0}
+  flashDuration: 0.3
+  minClearDelay: 0.03
+--- !u!114 &2072975204575794619
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4232446299538846049}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7d49c07d8da08d4d9eaa28e733dd0a7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  stripedEffect: {fileID: 7990540819537561806}
+  wrappedEffect: {fileID: 9182760785345249203}
+  colorBombEffect: {fileID: 7322149371597552010}
+  boardGrid: {fileID: 0}
+  levelManager: {fileID: 0}
+  boardController: {fileID: 0}
+  specialActivator: {fileID: 0}
+  jellyManager: {fileID: 0}
+  hStripedData: {fileID: 11400000, guid: 724d41f2095c3564897d52a3602fd427, type: 2}
+  vStripedData: {fileID: 11400000, guid: 1d0b741803822ab4787ea98ed5ea94c0, type: 2}
+  wrappedData: {fileID: 11400000, guid: 9e0cac533e98e9f4ca08d3e50925bf20, type: 2}
+  colorBombData: {fileID: 11400000, guid: 0ad687c47e475eb4da1ebb6202186a4d, type: 2}
+  wrappedStripedSweepCount: 3
+  settleDelay: 0.2
