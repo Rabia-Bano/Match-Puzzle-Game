@@ -36,6 +36,9 @@ public class BossLevelNode : MonoBehaviour
     public TMP_Text  numberText;
     [Tooltip("Chain / padlock overlay — shown only when Locked.")]
     public GameObject lockOverlay;
+    [Tooltip("NEW — shown only when Locked, e.g. 'Unlocks after Level 12'. " +
+             "Same pattern as PetCollectionSlot.lockedLabel in the Pet Companion scene.")]
+    public TMP_Text  lockedLabel;
     [Tooltip("Optional checkmark / crown icon — shown only when already Defeated at least once (replayable).")]
     public GameObject defeatedBadge;
     [Tooltip("Optional glow/pulse image — shown when Unlocked (not yet defeated), draws the eye to the next fight.")]
@@ -52,7 +55,10 @@ public class BossLevelNode : MonoBehaviour
     // ─────────────────────────────────────────────────────
 
     /// <summary>Called by BossArenaListManager right after Instantiate.</summary>
-    public void Setup(int id, NodeState state)
+    /// <param name="unlockedAfterLevel">NEW — the regular level this boss needs
+    /// completed first. Only used to populate lockedLabel while State == Locked
+    /// (e.g. "Unlocks after Level 12") — pass 0 if you don't want the label.</param>
+    public void Setup(int id, NodeState state, int unlockedAfterLevel = 0)
     {
         bossId = id;
         State  = state;
@@ -62,6 +68,12 @@ public class BossLevelNode : MonoBehaviour
         SafeSetActive(lockOverlay,   state == NodeState.Locked);
         SafeSetActive(defeatedBadge, state == NodeState.Defeated);
         SafeSetActive(glowEffect,    state == NodeState.Unlocked);
+
+        // NEW — "Unlocks after Level N", same pattern PetCollectionSlot uses
+        // for a locked pet ("Unlocks after Level X").
+        if (lockedLabel != null) lockedLabel.gameObject.SetActive(state == NodeState.Locked);
+        if (lockedLabel != null)
+            lockedLabel.text = $"Unlocks after Level {unlockedAfterLevel}";
 
         ApplyNodeThemeColor(state);
 

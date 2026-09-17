@@ -87,11 +87,32 @@ namespace Match3
         [SerializeField] private Button     loseMapButton;
 
         // ─── UNLOCK POPUP ─────────────────────────────────────
+        // UPDATED: this used to show AT MOST one of "new pet" / "new boss"
+        // (an `else if`), and never showed a theme-change notice at all — so
+        // if a level completion triggered more than one unlock at once, or
+        // triggered ONLY a theme change, the player saw nothing or an
+        // incomplete popup. It now queues every unlock that happened this
+        // level (theme change, pet, boss — any combination) and shows them
+        // one at a time; tapping OK advances to the next queued notice.
         [Header("— Unlock Popup (optional) —")]
         [SerializeField] private GameObject unlockPopup;
         [SerializeField] private TMP_Text   unlockTitleText;
         [SerializeField] private TMP_Text   unlockNameText;
+        [Tooltip("Optional — shows the theme's bg3 thumbnail / the pet's portrait / the boss's " +
+                 "portrait for whichever notice is currently on screen. Leave unassigned if you " +
+                 "don't want an icon on this popup.")]
+        [SerializeField] private Image      unlockIconImage;
         [SerializeField] private Button     unlockOkButton;
+
+        /// <summary>One entry in the unlock-notice queue — see ShowUnlockPopup header comment.</summary>
+        private struct UnlockNotice
+        {
+            public string Title;
+            public string Message;
+            public Sprite Icon;
+        }
+
+        private readonly Queue<UnlockNotice> _unlockQueue = new Queue<UnlockNotice>();
 
         // ─── ANIMATION ────────────────────────────────────────
         [Header("Animation")]
@@ -331,6 +352,15 @@ namespace Match3
                     startPanel.SetActive(false);
                     inputHandler?.SetInputEnabled(true);
                     Debug.Log("[LevelResultManager] Gameplay started!");
+
+                    // NEW — Rabia's request: obstacle tutorial cards must not
+                    // appear until the player has seen the goal panel AND
+                    // tapped Start on it. Previously LevelManager queued these
+                    // itself right after InitializeLevel(), same frame as the
+                    // goal panel — so the tutorial's dim overlay covered the
+                    // goal panel before the player even saw it. Now they're
+                    // queued only here, right as gameplay actually begins.
+                    LevelManager.Instance?.QueueObstacleTutorials();
                 });
         }
 
@@ -370,8 +400,33 @@ namespace Match3
             LevelSession.CurrentScore = score;
             LevelSession.CheckUnlocks();
 
+            // NEW — catch a theme change the instant it happens. ProfileManager.
+            // OnLevelCompleted() below calls SyncTheme() synchronously, which (if
+            // the theme's index actually changed) fires ThemeManager.OnThemeChanged
+            // BEFORE OnLevelCompleted() returns. Subscribing right here — for just
+            // this one call — is the only reliable way to know a theme changed
+            // this exact level, since ThemeManager itself doesn't remember "did I
+            // just change" afterward.
+            bool themeJustChanged = false;
+            Match3.Theme.ThemeData newTheme = null;
+            System.Action<Match3.Theme.ThemeData> onThemeChanged = t =>
+            {
+                themeJustChanged = true;
+                newTheme = t;
+            };
+            if (Match3.Theme.ThemeManager.Instance != null)
+                Match3.Theme.ThemeManager.Instance.OnThemeChanged += onThemeChanged;
+
             // ── Save via ProfileManager ───────────────────────
             ProfileManager.Instance?.OnLevelCompleted(_currentLevelId, stars, score, coins);
+
+            if (Match3.Theme.ThemeManager.Instance != null)
+                Match3.Theme.ThemeManager.Instance.OnThemeChanged -= onThemeChanged;
+
+            // NEW — build this level's unlock queue (theme + pet + boss can all
+            // land on the same level completion; every one of them gets its own
+            // notice, shown in this order).
+            BuildUnlockQueue(themeJustChanged, newTheme);
 
             // NEW — local save already updated by ProfileManager above; ab background
             // mein Firestore par bhi push kar do. Fire-and-forget: `_ =` isliye taake
@@ -394,10 +449,11 @@ namespace Match3
             yield return new WaitForSeconds(0.25f);
             yield return StartCoroutine(RevealStars(stars));
 
-            // Unlock popup
+            // Unlock popup(s) — shows the first queued notice, if any;
+            // ShowNextUnlockNotice()/HideUnlockPopup() advance through the rest.
             yield return new WaitForSeconds(0.4f);
-            if (LevelSession.NewPetUnlocked || LevelSession.BossArenaUnlocked)
-                ShowUnlockPopup();
+            if (_unlockQueue.Count > 0)
+                ShowNextUnlockNotice();
         }
 
         /// <summary>
@@ -505,21 +561,72 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        // UNLOCK POPUP
+        // UNLOCK POPUP — queued: theme change + pet unlock + boss unlock
+        // can all happen on the same level completion, so every one of
+        // them gets queued here and shown one at a time.
         // ─────────────────────────────────────────────────────
-        private void ShowUnlockPopup()
+
+        /// <summary>Queues one UnlockNotice per unlock that happened THIS level.
+        /// Called once from ShowWinRoutine(), right after ProfileManager.OnLevelCompleted().</summary>
+        private void BuildUnlockQueue(bool themeJustChanged, Match3.Theme.ThemeData newTheme)
         {
-            if (unlockPopup == null) return;
+            _unlockQueue.Clear();
+
+            if (themeJustChanged && newTheme != null)
+            {
+                _unlockQueue.Enqueue(new UnlockNotice
+                {
+                    Title   = "A New Theme is Unlocked!",
+                    Message = newTheme.themeName,
+                    Icon    = newTheme.bg3
+                });
+            }
 
             if (LevelSession.NewPetUnlocked)
             {
-                if (unlockTitleText != null) unlockTitleText.text = "New Pet Unlocked!";
-                if (unlockNameText  != null) unlockNameText.text  = $"Pet #{LevelSession.UnlockedPetIndex + 1}";
+                // Resources folder must match PetManager's own PETS_RESOURCE_FOLDER ("Pets").
+                PetData unlockedPet = null;
+                foreach (PetData p in Resources.LoadAll<PetData>("Pets"))
+                {
+                    if (p != null && p.unlockAfterLevel == _currentLevelId) { unlockedPet = p; break; }
+                }
+
+                _unlockQueue.Enqueue(new UnlockNotice
+                {
+                    Title   = "A New Pet is Unlocked!",
+                    Message = unlockedPet != null ? unlockedPet.petName : $"Pet #{LevelSession.UnlockedPetIndex + 1}",
+                    Icon    = unlockedPet != null ? unlockedPet.sprite : null
+                });
             }
-            else if (LevelSession.BossArenaUnlocked)
+
+            if (LevelSession.BossArenaUnlocked)
             {
-                if (unlockTitleText != null) unlockTitleText.text = "Boss Arena Unlocked!";
-                if (unlockNameText  != null) unlockNameText.text  = $"Boss Arena {LevelSession.UnlockedBossId}";
+                // Same load path BossController/BossLevelLoader use for boss data.
+                BossData unlockedBoss = Resources.Load<BossData>($"Bosses/boss_{LevelSession.UnlockedBossId}");
+
+                _unlockQueue.Enqueue(new UnlockNotice
+                {
+                    Title   = "A New Boss Arena is Unlocked!",
+                    Message = unlockedBoss != null ? unlockedBoss.bossName : $"Boss Arena {LevelSession.UnlockedBossId}",
+                    Icon    = unlockedBoss != null ? unlockedBoss.portrait : null
+                });
+            }
+        }
+
+        /// <summary>Pops the next queued notice and shows it. No-ops (leaves the
+        /// popup hidden) once the queue is empty.</summary>
+        private void ShowNextUnlockNotice()
+        {
+            if (unlockPopup == null || _unlockQueue.Count == 0) return;
+
+            UnlockNotice notice = _unlockQueue.Dequeue();
+
+            if (unlockTitleText != null) unlockTitleText.text = notice.Title;
+            if (unlockNameText  != null) unlockNameText.text  = notice.Message;
+            if (unlockIconImage != null)
+            {
+                unlockIconImage.sprite  = notice.Icon;
+                unlockIconImage.enabled = notice.Icon != null;
             }
 
             SafeShow(unlockPopup);
@@ -527,13 +634,20 @@ namespace Match3
             unlockPopup.transform.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutElastic);
         }
 
+        /// <summary>Called by unlockOkButton. Hides the current notice, then — once
+        /// the hide animation finishes — shows the next queued one, if any.</summary>
         private void HideUnlockPopup()
         {
             if (unlockPopup == null) return;
             unlockPopup.transform
                 .DOScale(Vector3.zero, 0.2f)
                 .SetEase(Ease.InBack)
-                .OnComplete(() => unlockPopup.SetActive(false));
+                .OnComplete(() =>
+                {
+                    unlockPopup.SetActive(false);
+                    if (_unlockQueue.Count > 0)
+                        ShowNextUnlockNotice();
+                });
         }
 
         // ─────────────────────────────────────────────────────

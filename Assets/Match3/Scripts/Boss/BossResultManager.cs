@@ -219,8 +219,9 @@ namespace Match3
                     var parts = new List<string>();
                     foreach (var r in rewards)
                         if (r != null && !string.IsNullOrEmpty(r.boosterId) && r.count > 0)
-                            parts.Add($"{DisplayName(r.boosterId)} x{r.count}");
-                    boosterRewardFallbackText.text = string.Join("   ", parts);
+                            parts.Add($"x{r.count}");   // UPDATED: no booster name, just "x<count>"
+                    boosterRewardFallbackText.text  = string.Join("   ", parts);
+                    boosterRewardFallbackText.color = Color.black;   // UPDATED
                 }
                 return;
             }
@@ -237,7 +238,11 @@ namespace Match3
                 if (icon != null) icon.sprite = Resources.Load<Sprite>($"StoreIcons/{reward.boosterId}");
 
                 TMP_Text label = item.GetComponentInChildren<TMP_Text>();
-                if (label != null) label.text = $"{DisplayName(reward.boosterId)} x{reward.count}";
+                if (label != null)
+                {
+                    label.text  = $"x{reward.count}";   // UPDATED: no booster name, just "x<count>"
+                    label.color = Color.black;           // UPDATED
+                }
             }
         }
 

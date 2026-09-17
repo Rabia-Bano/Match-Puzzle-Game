@@ -133,6 +133,17 @@ namespace Match3
                         ? normalTile.Data.color
                         : GetMostCommonColorOnBoard();
 
+                    // FIX (bug report — "color bomb pe jelly thi, effect chala
+                    // but jelly clear nahi hui"): this branch removed the bomb's
+                    // own tile directly, without ever calling
+                    // jellyManager.DecrementAt() on ITS OWN cell first — unlike
+                    // FireSingle()/tap-to-activate, which always does. So a
+                    // jelly layer sitting under the color bomb itself never got
+                    // peeled when the bomb was fired via a SWAP. Mirror
+                    // FireSingle()'s own-cell jelly handling here too.
+                    if (jellyManager != null && jellyManager.DecrementAt(special.GridX, special.GridY))
+                        levelManager?.OnJellyCleared();
+
                     boardGrid.RemoveTile(special.GridX, special.GridY);
                     if (target != TileColor.None)
                         yield return StartCoroutine(ClearAllOfColor(target));

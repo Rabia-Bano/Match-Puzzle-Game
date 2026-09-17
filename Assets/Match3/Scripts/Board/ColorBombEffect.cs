@@ -63,6 +63,14 @@ namespace Match3
                 yield break;
             }
 
+            // FIX (same root cause as the swap-activation bug): GetAllTilesOfColor()
+            // below explicitly excludes special tiles, so the color bomb's OWN cell
+            // (isSpecial == true) never appeared in `targets` and its jelly was
+            // never peeled — even though the bomb clearly fires from that cell.
+            // Peel its own cell's jelly here, same as every other clear path does.
+            if (jellyManager != null && jellyManager.DecrementAt(position.x, position.y))
+                levelManager?.OnJellyCleared();
+
             PlayRainbowFlash(bombWorldPos);
             yield return new WaitForSeconds(flashDuration * 0.5f);
 
@@ -73,6 +81,14 @@ namespace Match3
             yield return StartCoroutine(ArcAndClear(bombWorldPos, targets, clearedTiles));
 
             AddScoreForCleared(clearedTiles.Count);
+
+            // NEW (Rabia's request): a Color Bomb's single blast always hurts
+            // the boss at the "5+ weakness tiles" tier — regardless of which
+            // colour it actually cleared. Every other special tile's single
+            // blast does zero boss damage now (see SpecialTileEffect.
+            // ClearNormalTileTracked's reportBossDamage default).
+            if (targets.Count > 0)
+                BossDamageEvents.OnColorBombBlast?.Invoke();
         }
 
         // ─────────────────────────────────────────────────────

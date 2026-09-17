@@ -15,5 +15,5 @@ MonoBehaviour:
   goalType: 2
   targetTile: {fileID: 0}
   requiredAmount: 2000
-  goalIcon: {fileID: 6589173366163356057, guid: 76714005af2360f45b5477fcdff9b165, type: 3}
+  goalIcon: {fileID: 6904219460542411274, guid: ab738373b49a36f46ad3d14c451377dc, type: 3}
   goalLabel: Reach Score

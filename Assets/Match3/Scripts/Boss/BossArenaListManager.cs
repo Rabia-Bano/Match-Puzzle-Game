@@ -121,7 +121,7 @@ public class BossArenaListManager : MonoBehaviour
             else
                 state = BossLevelNode.NodeState.Locked;
 
-            node.Setup(id, state);
+            node.Setup(id, state, afterLevel);
             _spawnedNodes.Add(node);
 
             Debug.Log($"[BossArenaListManager] Boss {id}: needs Level {afterLevel} complete " +

@@ -61,6 +61,7 @@ namespace Match3.Theme
         public Sprite gameBoardTopBarImage;
 
         [Header("BossGameBoard HUD")]
-        public Color bossArenaHUDColor = Color.white;
+        [Tooltip("BossArenaHUD panel image, themed the same way as GameBoard TopBar (gameBoardTopBarImage below).")]
+        public Sprite bossArenaHUDImage;
     }
 }

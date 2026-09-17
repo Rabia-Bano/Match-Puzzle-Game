@@ -121,11 +121,15 @@ namespace Match3
         [Tooltip("Percent of MaxHealth regenerated per heal tick.")]
         [Range(0f, 100f)] public float healPercentPerTick = 5f;
 
-        [Header("Legacy / Optional")]
-        [Tooltip("NOT used by the default passive-defense loop anymore (BossController now picks " +
-                 "Jelly/StoneTiles/AddObstacles/LockTiles on its own every 5s, escalating as HP drops). " +
-                 "Left here in case you want a specific boss to follow a scripted attack order instead — " +
-                 "wire that up yourself if/when needed. Safe to leave empty.")]
+        [Header("Attack Pool (which hurdle types THIS boss can throw)")]
+        [Tooltip("Add ONE entry per attack type you want this boss to be allowed to use — " +
+                 "e.g. just a 'Jelly' entry and a 'Lock Tiles' entry means this boss will ONLY " +
+                 "ever throw jelly or freeze attacks, picked randomly each tick (severity/HP still " +
+                 "escalates the amount, same as before). Attack Params / Lock Duration / Warning " +
+                 "Message on each entry are NOT used — severity + bossData.freezeDuration + the " +
+                 "built-in warning text still drive those, exactly like before. Leave this list " +
+                 "EMPTY to keep the old default: cycle randomly through all four types " +
+                 "(Jelly / Stone Tiles / Add Obstacles(rocks) / Lock Tiles).")]
         public List<BossAttack> attackPattern = new List<BossAttack>();
 
         [Header("Rewards (on victory)")]

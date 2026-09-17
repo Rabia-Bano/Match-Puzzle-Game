@@ -79,6 +79,7 @@ namespace Match3
             IsBusy = true;
             inputHandler.SetInputEnabled(false);
             AudioManager.Instance?.PlaySFX("tile_swap");
+            SettingsUIController.Vibrate();   // NEW — Vibration toggle ka pehla real hook
 
             Tile tileA = boardGrid.GetTile(fromPos.x, fromPos.y);
             Tile tileB = boardGrid.GetTile(toPos.x,   toPos.y);
@@ -157,43 +158,24 @@ namespace Match3
                 }
             }
 
-            // ── Step 2: does this swap ALSO form a genuine match? ──
-            // FIXED: previously, "one of the swapped tiles is special" always
-            // short-circuited straight to just activating that special (below),
-            // which meant a match this same swap ALSO formed — one that should
-            // have created a BRAND NEW special tile — never got checked at all.
-            // Now we check for a match FIRST. If one formed, we let it resolve
-            // through the normal pipeline (new specials get created there), and
-            // only afterward — if the swapped-in special is still sitting on
-            // the board (i.e. it wasn't swept up into that match's clear) — do
-            // we also fire its own blast, so it still bursts like the player
-            // expects from moving it.
-            bool matchFormed = boardController.HasMatches();
-
-            if (matchFormed)
-            {
-                boardRotation?.RegisterMove();
-                levelManager?.OnMoveCompleted();
-
-                boardController.ProcessTurn();
-                yield return StartCoroutine(WaitForBoardController());
-
-                if (aSpecial && boardGrid.GetTile(tileA.GridX, tileA.GridY) == tileA)
-                    specialActivator.ActivateSingle(tileA);
-                if (bSpecial && boardGrid.GetTile(tileB.GridX, tileB.GridY) == tileB)
-                    specialActivator.ActivateSingle(tileB);
-
-                if (aSpecial || bSpecial)
-                    yield return StartCoroutine(WaitForActivator());
-
-                IsBusy = false;
-                inputHandler.SetInputEnabled(true);
-                yield break;
-            }
-
-            // ── Step 3: no match formed, but a special was swapped ──
-            // (original behaviour — a special can always be swapped to fire
-            // its blast even with no match, that's the whole point of it).
+            // ── Step 2: a special tile was swapped — its OWN effect fires
+            // FIRST, before any board "adjustment" (gravity/refill/an
+            // incidental match this same swap also formed/rotation).
+            //
+            // FIX (this was the actual bug being reported): the old code
+            // below checked "does this swap ALSO form a genuine match?"
+            // FIRST, and if so ran boardController.ProcessTurn() — the full
+            // clear/gravity/refill/rotation pipeline — to completion BEFORE
+            // ever activating the special tile's own blast. Visually that
+            // meant: board settles/rotates first, THEN (only afterward) the
+            // special tile's effect plays — exactly backwards from what a
+            // player expects when they swap a special tile.
+            //
+            // Now: if either tile is special, fire it immediately via
+            // TryActivateSwap() and wait for that blast to fully resolve.
+            // Only AFTER that do we check whether the same swap also left
+            // behind a genuine leftover match (e.g. the non-special tile
+            // landed somewhere that completes 3+) and let THAT resolve.
             if (aSpecial || bSpecial)
             {
                 bool handled = false;
@@ -215,8 +197,37 @@ namespace Match3
                     boardRotation?.RegisterMove();
                     levelManager?.OnMoveCompleted();
                     yield return StartCoroutine(WaitForActivator());
+
+                    // Special's own blast has fully settled — NOW handle any
+                    // leftover adjustment (an incidental match, gravity/refill,
+                    // rotation) exactly like a normal turn would.
+                    if (boardController.HasMatches())
+                    {
+                        boardController.ProcessTurn();
+                        yield return StartCoroutine(WaitForBoardController());
+                    }
+
+                    IsBusy = false;
+                    inputHandler.SetInputEnabled(true);
                     yield break;
                 }
+            }
+
+            // ── Step 3: no special involved (or it didn't handle the swap) —
+            // does this swap form a genuine normal match? ──────────────
+            bool matchFormed = boardController.HasMatches();
+
+            if (matchFormed)
+            {
+                boardRotation?.RegisterMove();
+                levelManager?.OnMoveCompleted();
+
+                boardController.ProcessTurn();
+                yield return StartCoroutine(WaitForBoardController());
+
+                IsBusy = false;
+                inputHandler.SetInputEnabled(true);
+                yield break;
             }
 
             // ── Step 4: fallback — invalid swap, reverse it ───────

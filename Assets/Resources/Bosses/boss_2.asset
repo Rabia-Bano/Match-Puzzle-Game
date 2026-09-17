@@ -13,21 +13,34 @@ MonoBehaviour:
   m_Name: boss_2
   m_EditorClassIdentifier: 
   id: 2
-  bossName: nova
+  bossName: Blaze
   description: 
-  portrait: {fileID: 21300000, guid: 77fa4d7f4e72f57409152260777b732c, type: 3}
+  portrait: {fileID: 8893106417932202396, guid: b92ea9595a0f5f145866c5a34b9b01a6, type: 3}
   health: 100
   weaknessTileType: 3
   weaknessIcon: {fileID: -6099873399732076034, guid: e10014ed7ba9b204e9212d892d585f01, type: 3}
+  attackIntervalSeconds: 5
+  attackWarningDelay: 1.2
+  freezeDuration: 10
+  severityTier2HpFraction: 0.66
+  severityTier3HpFraction: 0.33
+  damagePercent1To2: 1
+  damagePercent3: 2
+  damagePercent4: 3
+  damagePercent5Plus: 5
+  specialClearBatchWindow: 0.2
+  healIntervalSeconds: 10
+  healPercentPerTick: 5
   attackPattern: []
-  rewardCoins: 100
-  rewardBoosterCount: 1
-  boosterDropTable:
-  - boosterType: 0
-    weight: 10
-  - boosterType: 1
-    weight: 10
-  - boosterType: 2
-    weight: 10
-  - boosterType: 3
-    weight: 10
+  rewardCoins: 200
+  boosterRewards:
+  - boosterId: hammer
+    count: 2
+  - boosterId: row_bomb
+    count: 2
+  - boosterId: column_bomb
+    count: 2
+  - boosterId: shuffle_2tiles
+    count: 2
+  - boosterId: shuffle_board
+    count: 2

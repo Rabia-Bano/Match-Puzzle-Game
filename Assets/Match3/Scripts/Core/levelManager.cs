@@ -72,6 +72,18 @@ public class LevelManager : MonoBehaviour
 
         InitializeLevel();
 
+        // ── NEW: first-time "what is this obstacle?" tutorial cards ──
+        // FIX: this used to be queued here (in Start(), same frame as the
+        // goal/"Start" panel) — so the tutorial's full-screen dim overlay
+        // covered the goal panel before the player ever got to read it or
+        // tap Start. Per Rabia's request, the obstacle tutorial must not
+        // appear until AFTER the player taps the goal panel's Start button.
+        // So this call is REMOVED from here — LevelResultManager now calls
+        // the public QueueObstacleTutorials() itself, right when
+        // OnStartClicked() finishes closing the Start panel and enabling
+        // input. See LevelResultManager.cs.
+        // ──────────────────────────────────────────────────────────
+
         // ── NEW: re-bind PetManager to THIS level's board objects ────
         Debug.Log($"[LevelManager] About to bind PetManager. PetManager.Instance is " +
                   $"{(Match3.PetManager.Instance == null ? "NULL — PetManager not found!" : "found, OK")}. " +
@@ -83,6 +95,32 @@ public class LevelManager : MonoBehaviour
         // ── Notify LevelResultManager that we are ready ──────
         OnLevelInitialized?.Invoke();
         // ─────────────────────────────────────────────────────
+    }
+
+    /// <summary>
+    /// Queues a first-time explainer card for each obstacle type present in
+    /// this level's LevelData (Jelly / Hard Tile / Dropdown Stone), via
+    /// TutorialManager. Each card only shows once ever per player — repeat
+    /// calls (replaying a level, or a later level with the same obstacle) are
+    /// harmless no-ops once TutorialManager has recorded it as seen.
+    ///
+    /// PUBLIC — called by LevelResultManager.OnStartClicked(), right after the
+    /// goal panel's Start button closes the panel, so obstacle tutorials only
+    /// ever appear AFTER the player has seen the goals and pressed Start.
+    /// </summary>
+    public void QueueObstacleTutorials()
+    {
+        var tm = Match3.TutorialManager.Instance;
+        if (tm == null) return; // no TutorialManager in this scene — feature simply not used
+
+        if (levelData.jellyPositions != null && levelData.jellyPositions.Length > 0)
+            tm.RequestTutorial("obstacle_jelly");
+
+        if (levelData.hardTilePositions != null && levelData.hardTilePositions.Length > 0)
+            tm.RequestTutorial("obstacle_hardtile");
+
+        if (levelData.stonePositions != null && levelData.stonePositions.Length > 0)
+            tm.RequestTutorial("obstacle_stone");
     }
 
     /// <summary>

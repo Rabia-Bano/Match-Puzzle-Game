@@ -15,7 +15,7 @@ MonoBehaviour:
   id: pet_luna
   petName: Luna
   rarity: 2
-  sprite: {fileID: 0}
+  sprite: {fileID: 4125636645744980110, guid: ea8362f157dc91a41886494657f9ad43, type: 3}
   description: 
   skillType: 1
   skillName: Double Shuffle

@@ -97,7 +97,7 @@ namespace Match3
             // Defensive second kill — in case anything queued a tween on this
             // GameObject between ObjectPool.Get() and this call.
             KillTweens();
-            transform.localScale = Vector3.one;
+            transform.localScale = Vector3.one * BoardGrid.TileVisualScale;
 
             Data  = data;
             GridX = x;
@@ -238,7 +238,7 @@ namespace Match3
         public void ResetForPool()
         {
             KillTweens();
-            transform.localScale = Vector3.one;
+            transform.localScale = Vector3.one * BoardGrid.TileVisualScale;
 
             Data  = null;
             GridX = -1;

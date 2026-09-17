@@ -33,4 +33,4 @@ MonoBehaviour:
   levelNodeUnlockedColor: {r: 1, g: 1, b: 1, a: 1}
   levelNodeCompletedColor: {r: 1, g: 1, b: 1, a: 1}
   gameBoardTopBarImage: {fileID: 3101737556292566227, guid: bdc7e22901f49f248836e3908abed453, type: 3}
-  bossArenaHUDColor: {r: 1, g: 1, b: 1, a: 1}
+  bossArenaHUDImage: {fileID: 9151570955757876623, guid: 1549aec3c7ead7345931ea64247beda9, type: 3}

@@ -4,6 +4,26 @@ using UnityEngine.UI;
 using TMPro;
 using Game.Firebase;
 using Match3;
+
+/// ---------------------------------------------------------------------
+/// UPDATED:
+///  1) GuestRegisterPopup is no longer built at runtime with code
+///     (BuildGuestRegisterPopup() + the MakeGO/AddLabel/AddInput/AddBtn/
+///     Stretch helpers have all been removed). It now follows the exact
+///     same pattern as avatarPickerPopup: build the whole popup by hand
+///     in the Unity Editor as a child of panelRoot, and assign every
+///     piece to the [SerializeField] references below. See the setup
+///     guide in chat for the exact hierarchy to build.
+///  2) NEW — Guest Email Verification panel: after UpgradeGuestAccount()
+///     succeeds, AuthManager no longer fires OnRegisterSuccess right
+///     away — it fires OnVerificationRequired(email) instead (same as
+///     the main Register() flow). This panel shows that "check your
+///     inbox" step, with Resend + Continue + Later buttons, also built
+///     by hand in the Editor.
+///  3) NEW — SetLoading(true) now starts a watchdog coroutine (same
+///     fix as LoginUIController) so the loading overlay / disabled
+///     buttons can never stay stuck if a callback never arrives.
+/// ---------------------------------------------------------------------
 public class ProfilePanel : MonoBehaviour
 {
     [Header("Panel Root")]
@@ -46,17 +66,43 @@ public class ProfilePanel : MonoBehaviour
     [SerializeField] private Transform  avatarGridContainer;   // empty GameObject with GridLayoutGroup, 3 columns
     [SerializeField] private GameObject avatarSlotPrefab;      // a Button+Image prefab, one per avatar
 
-    // Guest popup refs
-    private GameObject     _guestRegisterPopup;
-    private TMP_InputField _regUsernameInput;
-    private TMP_InputField _regEmailInput;
-    private TMP_InputField _regPasswordInput;
-    private TMP_InputField _regConfirmInput;
-    private TMP_Text       _regErrorText;
+    // -----------------------------------------------------------------
+    // Guest Register popup — NOW built manually in the Unity Editor,
+    // exactly like avatarPickerPopup above. Code only wires these refs.
+    // -----------------------------------------------------------------
+    [Header("Guest Register Popup (built in Editor)")]
+    [SerializeField] private GameObject     guestRegisterPopup;   // the whole popup root GameObject
+    [SerializeField] private TMP_InputField regUsernameInput;
+    [SerializeField] private TMP_InputField regEmailInput;
+    [SerializeField] private TMP_InputField regPasswordInput;
+    [SerializeField] private TMP_InputField regConfirmInput;
+    [SerializeField] private TMP_Text       regErrorText;
+    [SerializeField] private Button         regCancelButton;
+    [SerializeField] private Button         regSubmitButton;      // "Create Account"
+
+    // -----------------------------------------------------------------
+    // NEW — Guest email verification popup, also built in the Editor.
+    // Shown after regSubmitButton succeeds (AuthManager.OnVerificationRequired).
+    // -----------------------------------------------------------------
+    [Header("Guest Verification Popup (built in Editor, NEW)")]
+    [SerializeField] private GameObject guestVerificationPanel;
+    [SerializeField] private TMP_Text   guestVerificationEmailText;
+    [SerializeField] private Button     guestVerificationContinueButton;  // "I've verified, Continue"
+    [SerializeField] private Button     guestVerificationResendButton;    // "Resend Email"
+    [SerializeField] private TMP_Text   guestVerificationResendConfirmText;
+    [SerializeField] private Button     guestVerificationLaterButton;     // "Later" — keep playing, verify later
+    [Tooltip("NEW — BUG FIX: verification errors ('not verified yet', resend failed, etc.) used to be routed to regErrorText, which lives inside GuestRegisterPopup — a GameObject that is already INACTIVE while this panel is showing, so the message was set correctly in code but never actually visible on screen. This is a dedicated error text living inside VerificationPanel itself so it is always visible when needed. Add a TMP_Text here (red, initially inactive) as a child of VerificationPanel.")]
+    [SerializeField] private TMP_Text   guestVerificationErrorText;
+
+    [Header("Loading Watchdog (NEW)")]
+    [Tooltip("If no AuthManager response arrives within this many seconds, the UI unlocks itself with a timeout error instead of staying stuck.")]
+    [SerializeField] private float loadingTimeoutSeconds = 15f;
 
     private bool      _isEditingName     = false;
     private bool      _isSavingName      = false;
     private Coroutine _hideErrorCoroutine;
+    private Coroutine _loadingWatchdog;
+    private bool      _lostFocusWhileVerifying = false;   // NEW — see OnApplicationFocus below
 
     // ── Lifecycle ─────────────────────────────────────────────
 
@@ -70,9 +116,20 @@ public class ProfilePanel : MonoBehaviour
         logoutButton?.onClick.AddListener(OnLogoutClicked);
         registerButton?.onClick.AddListener(OnRegisterClicked);
 
-        BuildGuestRegisterPopup();
+        // Guest register popup buttons (Editor-built — code only wires clicks)
+        regCancelButton?.onClick.AddListener(OnRegisterCancelClicked);
+        regSubmitButton?.onClick.AddListener(OnRegisterSubmit);
+
+        // Guest verification popup buttons (NEW)
+        guestVerificationContinueButton?.onClick.AddListener(OnGuestVerificationContinueClicked);
+        guestVerificationResendButton?.onClick.AddListener(OnGuestVerificationResendClicked);
+        guestVerificationLaterButton?.onClick.AddListener(OnGuestVerificationLaterClicked);
+
         PopulateAvatarGrid();
         if (avatarPickerPopup != null) avatarPickerPopup.SetActive(false);
+        if (guestRegisterPopup != null) guestRegisterPopup.SetActive(false);
+        if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
+        if (guestVerificationResendConfirmText != null) guestVerificationResendConfirmText.gameObject.SetActive(false);
 
         if (ProfileManager.Instance != null)
         {
@@ -83,7 +140,20 @@ public class ProfilePanel : MonoBehaviour
         }
 
         if (AuthManager.Instance != null)
+        {
             AuthManager.Instance.OnRegisterSuccess.AddListener(OnGuestUpgradeSuccess);
+            AuthManager.Instance.OnVerificationRequired.AddListener(OnGuestVerificationRequired);
+            AuthManager.Instance.OnVerificationEmailResent.AddListener(OnGuestVerificationEmailResent);
+
+            // NEW — single persistent subscription for the whole guest-upgrade
+            // flow's errors (both "submit register form" errors AND "check
+            // verification" errors land here). Replaces the old per-click
+            // AddListener/RemoveListener pattern, which was fragile and (along
+            // with routing everything to regErrorText — see the BUG FIX note
+            // on guestVerificationErrorText above) was why verification errors
+            // never actually showed on screen.
+            AuthManager.Instance.OnAuthError.AddListener(OnGuestFlowError);
+        }
 
         SetEditMode(false);
         HideError();
@@ -103,7 +173,14 @@ public class ProfilePanel : MonoBehaviour
             ProfileManager.Instance.OnAvatarLoaded.RemoveListener(SetAvatarSprite);
         }
         if (AuthManager.Instance != null)
+        {
             AuthManager.Instance.OnRegisterSuccess.RemoveListener(OnGuestUpgradeSuccess);
+            AuthManager.Instance.OnVerificationRequired.RemoveListener(OnGuestVerificationRequired);
+            AuthManager.Instance.OnVerificationEmailResent.RemoveListener(OnGuestVerificationEmailResent);
+            AuthManager.Instance.OnAuthError.RemoveListener(OnGuestFlowError);
+        }
+
+        StopWatchdog();
     }
 
     // ── Show / Hide ───────────────────────────────────────────
@@ -113,8 +190,9 @@ public class ProfilePanel : MonoBehaviour
         if (panelRoot != null) panelRoot.SetActive(true);
         SetLoading(false);   // ALWAYS off when opening
         HideError();
-        if (_guestRegisterPopup != null) _guestRegisterPopup.SetActive(false);
-        if (avatarPickerPopup  != null) avatarPickerPopup.SetActive(false);
+        if (guestRegisterPopup     != null) guestRegisterPopup.SetActive(false);
+        if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
+        if (avatarPickerPopup      != null) avatarPickerPopup.SetActive(false);
 
         // Refresh immediately, then again after 1 second
         // in case profile was still loading from Firebase
@@ -131,8 +209,9 @@ public class ProfilePanel : MonoBehaviour
     public void Hide()
     {
         if (_isEditingName) CancelEditName();
-        if (_guestRegisterPopup != null) _guestRegisterPopup.SetActive(false);
-        if (avatarPickerPopup  != null) avatarPickerPopup.SetActive(false);
+        if (guestRegisterPopup     != null) guestRegisterPopup.SetActive(false);
+        if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
+        if (avatarPickerPopup      != null) avatarPickerPopup.SetActive(false);
         SetLoading(false);   // Always turn off loading when hiding
         if (panelRoot != null) panelRoot.SetActive(false);
     }
@@ -145,6 +224,12 @@ public class ProfilePanel : MonoBehaviour
 
         PlayerProfile p = ProfileManager.Instance?.CurrentProfile;
         bool isGuest = AuthManager.IsGuest;
+        // NEW — FIX: once LinkWithCredentialAsync succeeds, Firebase's IsAnonymous
+        // flips to false immediately — BEFORE the email is verified — so isGuest
+        // alone would already show the "member" UI (Logout button) right after
+        // tapping "Later", even though nothing has been verified yet. This extra
+        // check keeps the UI in its "still needs to verify" state until it's real.
+        bool pendingVerification = AuthManager.IsPendingEmailVerification;
 
         // ── Display Name ──
         if (displayNameText != null)
@@ -173,7 +258,7 @@ public class ProfilePanel : MonoBehaviour
             else
             {
                 string mail = p?.email ?? AuthManager.CurrentUser?.Email ?? "";
-                emailText.text = mail;
+                emailText.text = pendingVerification ? $"{mail}  (Not verified)" : mail;
             }
         }
 
@@ -209,13 +294,18 @@ public class ProfilePanel : MonoBehaviour
         if (petsCountText       != null) petsCountText.text       = (p?.pets?.Count ?? 0).ToString();
 
         // ── Button visibility ──
-        if (logoutButton   != null) logoutButton.gameObject.SetActive(!isGuest);
-        if (registerButton != null) registerButton.gameObject.SetActive(isGuest);
+        // NEW — FIX: "showRegisterUI" now also covers the pending-verification
+        // state, not just isGuest, so the Logout button doesn't appear (and
+        // Save-Account/Register doesn't disappear) the instant linking succeeds
+        // but before the email is actually verified.
+        bool showRegisterUI = isGuest || pendingVerification;
+        if (logoutButton   != null) logoutButton.gameObject.SetActive(!showRegisterUI);
+        if (registerButton != null) registerButton.gameObject.SetActive(showRegisterUI);
 
         // Preset avatars are local-only (no Storage upload, no account needed),
         // so unlike the old photo-upload flow, Guests CAN change their avatar too.
         if (changeAvatarButton != null) changeAvatarButton.interactable = true;
-        if (editNameButton     != null) editNameButton.gameObject.SetActive(!isGuest);
+        if (editNameButton     != null) editNameButton.gameObject.SetActive(!showRegisterUI);
 
         if (p != null) RefreshPetIcons(p);
     }
@@ -408,7 +498,7 @@ public class ProfilePanel : MonoBehaviour
     {
         if (displayNameText  != null) displayNameText.gameObject.SetActive(!editing);
         if (editNameInput    != null) editNameInput.gameObject.SetActive(editing);
-        if (editNameButton   != null) editNameButton.gameObject.SetActive(!editing && !AuthManager.IsGuest);
+        if (editNameButton   != null) editNameButton.gameObject.SetActive(!editing && !AuthManager.IsGuest && !AuthManager.IsPendingEmailVerification);
         if (saveNameButton   != null) saveNameButton.gameObject.SetActive(editing);
         if (cancelNameButton != null) cancelNameButton.gameObject.SetActive(editing);
     }
@@ -417,11 +507,11 @@ public class ProfilePanel : MonoBehaviour
 
     private void OnLogoutClicked()
     {
-        // Logout turant hota hai — koi loading screen/blocking wait nahi.
-        // NEW: ek fire-and-forget cloud push chhod dete hain taake agar
-        // internet available ho to latest progress cloud par bhi chala jaye
-        // (Profile already levels complete hone par auto-save/push hoti rehti hai,
-        // ye sirf ek extra "safety push" hai logout ke waqt).
+        // Logout is immediate — no loading screen/blocking wait.
+        // Fire-and-forget a cloud push so if internet is available the
+        // latest progress also reaches the cloud (levels already
+        // auto-push on completion — this is just an extra safety push
+        // at logout time).
         Debug.Log("[ProfilePanel] Logging out...");
         _ = CloudSyncManager.Instance?.SyncAfterLevelAsync();
         Hide();
@@ -432,62 +522,184 @@ public class ProfilePanel : MonoBehaviour
 
     private void OnRegisterClicked()
     {
-        if (_guestRegisterPopup != null)
+        // NEW — FIX: if the guest's account is already linked and only
+        // waiting on verification (they tapped "Later" earlier), this same
+        // button must NOT reopen the registration form — UpgradeGuestAccount()
+        // would immediately fail with "No guest account to upgrade" because
+        // _currentUser.IsAnonymous is already false at this point. Instead,
+        // just reopen the verification panel directly.
+        if (AuthManager.IsPendingEmailVerification)
+        {
+            ReopenVerificationPanel();
+            return;
+        }
+
+        if (guestRegisterPopup != null)
         {
             ClearRegisterForm();
-            _guestRegisterPopup.SetActive(true);
+            guestRegisterPopup.SetActive(true);
         }
+    }
+
+    /// <summary>NEW — re-shows the verification panel for the currently signed-in
+    /// (already-linked-but-unverified) account, without going through
+    /// UpgradeGuestAccount() again.</summary>
+    private void ReopenVerificationPanel()
+    {
+        string email = AuthManager.CurrentUser?.Email ?? "";
+        OnGuestVerificationRequired(email);
+    }
+
+    private void OnRegisterCancelClicked()
+    {
+        if (guestRegisterPopup != null) guestRegisterPopup.SetActive(false);
     }
 
     private void OnRegisterSubmit()
     {
-        string username = _regUsernameInput?.text.Trim() ?? "";
-        string email    = _regEmailInput?.text.Trim()    ?? "";
-        string password = _regPasswordInput?.text        ?? "";
-        string confirm  = _regConfirmInput?.text         ?? "";
+        string username = regUsernameInput?.text.Trim() ?? "";
+        string email    = regEmailInput?.text.Trim()    ?? "";
+        string password = regPasswordInput?.text        ?? "";
+        string confirm  = regConfirmInput?.text         ?? "";
 
         if (username.Length < 3)
-        { ShowRegError("Username minimum 3 characters."); return; }
+        { ShowRegError("Username must be at least 3 characters."); return; }
         if (!email.Contains("@") || !email.Contains("."))
-        { ShowRegError("Enter a valid email address."); return; }
+        { ShowRegError("Please enter a valid email address."); return; }
         if (password.Length < 6)
-        { ShowRegError("Password minimum 6 characters."); return; }
+        { ShowRegError("Password must be at least 6 characters."); return; }
         if (password != confirm)
-        { ShowRegError("Passwords do not match."); return; }
+        { ShowRegError("Password and Confirm Password do not match."); return; }
 
         ShowRegError("");
-        if (_regErrorText != null) _regErrorText.gameObject.SetActive(false);
+        if (regErrorText != null) regErrorText.gameObject.SetActive(false);
+
+        SetLoading(true);
 
         // AuthManager handles token refresh + link internally
         AuthManager.Instance?.UpgradeGuestAccount(username, email, password);
+    }
 
-        // FIX: this used to AddListener(OnUpgradeError) on every single submit
-        // tap with no de-dupe. If the first attempt failed (e.g. "email already
-        // in use") and the player edited and resubmitted, each retry stacked
-        // ANOTHER subscription on top — so a later error fired OnUpgradeError
-        // multiple times, and since RemoveListener only clears one matching
-        // entry per call, the extras were never fully cleaned up for the rest
-        // of the session. Remove any existing subscription first so there's
-        // always exactly one.
-        if (AuthManager.Instance != null)
+    /// <summary>
+    /// NEW — single error handler for the ENTIRE guest-upgrade flow
+    /// (both the register-form submit and the later verification check).
+    /// Routes the message to whichever popup is actually on screen right
+    /// now, so it's always visible — this is the fix for "error nahi
+    /// dikhta": the old code always wrote to regErrorText, which is a
+    /// child of GuestRegisterPopup and stays invisible while
+    /// VerificationPanel is the one showing.
+    /// </summary>
+    private void OnGuestFlowError(string message)
+    {
+        StopWatchdog();
+        SetLoading(false);
+
+        if (guestVerificationResendButton != null) guestVerificationResendButton.interactable = true;
+
+        if (guestVerificationPanel != null && guestVerificationPanel.activeInHierarchy)
         {
-            AuthManager.Instance.OnAuthError.RemoveListener(OnUpgradeError);
-            AuthManager.Instance.OnAuthError.AddListener(OnUpgradeError);
+            ShowGuestVerificationError(message);
         }
+        else if (guestRegisterPopup != null && guestRegisterPopup.activeInHierarchy)
+        {
+            ShowRegError(message);
+        }
+        else
+        {
+            // Neither guest popup is open — fall back to the main profile error text.
+            ShowError(message);
+        }
+    }
+
+    // ── NEW — Guest Email Verification ─────────────────────────
+
+    /// <summary>
+    /// Fired by AuthManager once UpgradeGuestAccount() links the account.
+    /// Switches from the register form to the "check your inbox" panel.
+    /// </summary>
+    private void OnGuestVerificationRequired(string email)
+    {
+        StopWatchdog();
+        SetLoading(false);
+
+        if (guestRegisterPopup != null) guestRegisterPopup.SetActive(false);
+        if (guestVerificationPanel != null) guestVerificationPanel.SetActive(true);
+
+        if (guestVerificationEmailText != null)
+            guestVerificationEmailText.text = string.IsNullOrEmpty(email)
+                ? "Please verify your email address."
+                : $"We sent a verification link to {email}.\nPlease check your inbox (and Spam folder).";
+
+        if (guestVerificationResendConfirmText != null)
+            guestVerificationResendConfirmText.gameObject.SetActive(false);
+
+        // Clear any leftover error from a previous attempt.
+        if (guestVerificationErrorText != null)
+            guestVerificationErrorText.gameObject.SetActive(false);
+    }
+
+    private void OnGuestVerificationContinueClicked()
+    {
+        SetLoading(true);
+        if (guestVerificationErrorText != null) guestVerificationErrorText.gameObject.SetActive(false);
+        AuthManager.Instance?.CheckEmailVerifiedAndContinue();
+        // On success -> AuthManager fires OnRegisterSuccess -> OnGuestUpgradeSuccess() below.
+        // On failure -> AuthManager fires OnAuthError -> OnGuestFlowError() (already subscribed
+        // once in Start()) -> shown via guestVerificationErrorText since this panel is active.
+    }
+
+    private void OnGuestVerificationResendClicked()
+    {
+        if (guestVerificationResendButton != null) guestVerificationResendButton.interactable = false;
+        AuthManager.Instance?.ResendVerificationEmail();
+    }
+
+    private void OnGuestVerificationEmailResent()
+    {
+        if (guestVerificationResendButton != null) guestVerificationResendButton.interactable = true;
+
+        if (guestVerificationResendConfirmText != null)
+        {
+            guestVerificationResendConfirmText.text = "Verification email sent again.";
+            guestVerificationResendConfirmText.gameObject.SetActive(true);
+        }
+    }
+
+    /// <summary>
+    /// "Later" button — the guest's account is already linked to this
+    /// email/password (LinkWithCredentialAsync already succeeded), so the
+    /// player can keep playing under the new account right away. Only the
+    /// emailVerified flag stays false until they come back and verify —
+    /// nothing here is undone by closing this panel.
+    /// </summary>
+    private void OnGuestVerificationLaterClicked()
+    {
+        if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
+        FinishGuestUpgradeUI();
     }
 
     private void OnGuestUpgradeSuccess()
     {
-        if (AuthManager.Instance != null)
-            AuthManager.Instance.OnAuthError.RemoveListener(OnUpgradeError);
+        StopWatchdog();
+        SetLoading(false);
 
-        // 1. Close the register popup
-        if (_guestRegisterPopup != null) _guestRegisterPopup.SetActive(false);
+        // Close both popups
+        if (guestRegisterPopup     != null) guestRegisterPopup.SetActive(false);
+        if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
 
-        // 2. Update in-memory profile IMMEDIATELY (don't wait for Firestore reload)
-        //    so the name/email shows instantly in the UI
-        string newUsername = _regUsernameInput?.text.Trim() ?? "";
-        string newEmail    = _regEmailInput?.text.Trim()    ?? "";
+        FinishGuestUpgradeUI();
+    }
+
+    /// <summary>
+    /// Shared tail-end of the guest-upgrade flow — updates the in-memory
+    /// profile immediately (so the name/email show instantly) and reloads
+    /// from Firestore in the background. Used both by the normal success
+    /// path and by "Later".
+    /// </summary>
+    private void FinishGuestUpgradeUI()
+    {
+        string newUsername = regUsernameInput?.text.Trim() ?? "";
+        string newEmail    = regEmailInput?.text.Trim()    ?? "";
 
         if (ProfileManager.Instance?.CurrentProfile != null && !string.IsNullOrEmpty(newUsername))
         {
@@ -495,176 +707,58 @@ public class ProfilePanel : MonoBehaviour
             ProfileManager.Instance.CurrentProfile.email       = newEmail;
         }
 
-        // 3. Reload from Firestore in background to confirm sync
-        if (AuthManager.CurrentUser != null)
+        // NEW — FIX: only reload from Firestore when verification is actually
+        // done. While still pending (e.g. right after "Later"), Firestore still
+        // has the OLD "Guest_xxxx" placeholder data (the real username/email
+        // are only written once CheckEmailVerifiedAndContinue() confirms
+        // verification) — reloading here would silently overwrite the optimistic
+        // update above and flip the name/email back to the guest placeholder.
+        if (AuthManager.CurrentUser != null && !AuthManager.IsPendingEmailVerification)
             ProfileManager.Instance?.LoadProfile(AuthManager.CurrentUser.UserId);
 
-        // 4. Refresh UI immediately with new in-memory data
         RefreshUI();
-
-        // 5. Hide the profile panel — user can reopen it to see updated info
-        //    (panel was already open when user clicked "Save Progress")
         StartCoroutine(HidePanelAfterDelay(0.5f));
     }
 
-    private System.Collections.IEnumerator HidePanelAfterDelay(float delay)
+    private IEnumerator HidePanelAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
         Hide();
     }
 
-    private void OnUpgradeError(string message)
-    {
-        if (AuthManager.Instance != null)
-            AuthManager.Instance.OnAuthError.RemoveListener(OnUpgradeError);
-        ShowRegError(message);
-    }
-
     private void ClearRegisterForm()
     {
-        if (_regUsernameInput != null) _regUsernameInput.text = "";
-        if (_regEmailInput    != null) _regEmailInput.text    = "";
-        if (_regPasswordInput != null) _regPasswordInput.text = "";
-        if (_regConfirmInput  != null) _regConfirmInput.text  = "";
-        if (_regErrorText != null)
+        if (regUsernameInput != null) regUsernameInput.text = "";
+        if (regEmailInput    != null) regEmailInput.text    = "";
+        if (regPasswordInput != null) regPasswordInput.text = "";
+        if (regConfirmInput  != null) regConfirmInput.text  = "";
+        if (regErrorText != null)
         {
-            _regErrorText.text = "";
-            _regErrorText.gameObject.SetActive(false);
+            regErrorText.text = "";
+            regErrorText.gameObject.SetActive(false);
         }
     }
 
     private void ShowRegError(string msg)
     {
-        if (_regErrorText == null) return;
-        _regErrorText.text = msg;
-        _regErrorText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
+        if (regErrorText == null) return;
+        regErrorText.text = msg;
+        regErrorText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
     }
 
-    // ── BUILD GUEST REGISTER POPUP ────────────────────────────
-
-    private void BuildGuestRegisterPopup()
+    /// <summary>NEW — dedicated error display for the verification panel (see BUG FIX note on guestVerificationErrorText field).</summary>
+    private void ShowGuestVerificationError(string msg)
     {
-        if (panelRoot == null) return;
-
-        _guestRegisterPopup = MakeGO("GuestRegisterPopup", panelRoot.transform);
-        RectTransform rt = _guestRegisterPopup.GetComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
-        _guestRegisterPopup.AddComponent<Image>().color = new Color(0, 0, 0, 0.72f);
-
-        GameObject card = MakeGO("PopupCard", _guestRegisterPopup.transform);
-        RectTransform cardRT = card.GetComponent<RectTransform>();
-        cardRT.anchorMin = new Vector2(0.14f, 0.16f);
-        cardRT.anchorMax = new Vector2(0.86f, 0.84f);
-        cardRT.offsetMin = cardRT.offsetMax = Vector2.zero;
-        card.AddComponent<Image>().color = Color.white;
-
-        VerticalLayoutGroup vlg = card.AddComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(30, 30, 30, 30);
-        vlg.spacing = 30;
-        vlg.childControlWidth = true; vlg.childForceExpandWidth = true;
-        vlg.childControlHeight = false; vlg.childForceExpandHeight = false;
-
-        AddLabel(card.transform, "Create Account", 40, FontStyles.Bold, Color.black, TextAlignmentOptions.Center, 40);
-        AddLabel(card.transform, "Your coins, pets and level progress will be saved to your new account.",
-                 30, FontStyles.Normal, new Color(0.3f, 0.55f, 0.35f), TextAlignmentOptions.Center, 30 );
-
-        _regUsernameInput = AddInput(card.transform, "Username (min 3 chars)", false, 70);
-        _regEmailInput    = AddInput(card.transform, "Email address",          false, 70);
-        _regPasswordInput = AddInput(card.transform, "Password (min 6 chars)", true,  70);
-        _regConfirmInput  = AddInput(card.transform, "Confirm password",       true,  70);
-
-        GameObject errGO = MakeGO("RegError", card.transform);
-        _regErrorText = errGO.AddComponent<TextMeshProUGUI>();
-        _regErrorText.fontSize = 30;
-        _regErrorText.color = new Color(0.85f, 0.2f, 0.2f);
-        _regErrorText.alignment = TextAlignmentOptions.Center;
-        errGO.AddComponent<LayoutElement>().preferredHeight = 24;
-        errGO.SetActive(false);
-
-        GameObject btnRow = MakeGO("BtnRow", card.transform);
-        HorizontalLayoutGroup bHLG = btnRow.AddComponent<HorizontalLayoutGroup>();
-        bHLG.spacing = 14; bHLG.childForceExpandWidth = true; bHLG.childControlHeight = true;
-        btnRow.AddComponent<LayoutElement>().preferredHeight = 60;
-
-        Button cancelBtn = AddBtn(btnRow.transform, "Cancel", new Color(0.78f,0.78f,0.80f), Color.white, 30);
-
-        Button submitBtn = AddBtn(btnRow.transform, "Create Account", new Color(0.18f,0.74f,0.47f), Color.white, 30);
-        
-        cancelBtn.onClick.AddListener(() => _guestRegisterPopup.SetActive(false));
-        submitBtn.onClick.AddListener(OnRegisterSubmit);
-        _guestRegisterPopup.SetActive(false);
-    }
-
-    // ── Helpers ───────────────────────────────────────────────
-
-    private GameObject MakeGO(string name, Transform parent)
-    {
-        var go = new GameObject(name);
-        go.AddComponent<RectTransform>();
-        go.transform.SetParent(parent, false);
-        return go;
-    }
-
-    private void AddLabel(Transform parent, string text, float size,
-                          FontStyles style, Color color,
-                          TextAlignmentOptions align, float height)
-    {
-        GameObject go = MakeGO("Label", parent);
-        TMP_Text t = go.AddComponent<TextMeshProUGUI>();
-        t.text = text; t.fontSize = size; t.fontStyle = style;
-        t.color = color; t.alignment = align;
-        go.AddComponent<LayoutElement>().preferredHeight = height;
-    }
-
-    private TMP_InputField AddInput(Transform parent, string placeholder,
-                                    bool isPassword, float height)
-    {
-        GameObject go = MakeGO("Input", parent);
-        go.AddComponent<Image>().color = new Color(0.95f, 0.96f, 0.98f);
-        TMP_InputField field = go.AddComponent<TMP_InputField>();
-        go.AddComponent<LayoutElement>().preferredHeight = height;
-
-        GameObject area = MakeGO("Area", go.transform);
-        RectTransform aRT = area.GetComponent<RectTransform>();
-        aRT.anchorMin = Vector2.zero; aRT.anchorMax = Vector2.one;
-        aRT.offsetMin = new Vector2(14, 8); aRT.offsetMax = new Vector2(-14, -8);
-        area.AddComponent<RectMask2D>();
-
-        TMP_Text txt = MakeGO("Txt", area.transform).AddComponent<TextMeshProUGUI>();
-        txt.fontSize = 30; txt.color = new Color(0.1f, 0.1f, 0.1f);
-        Stretch(txt.gameObject);
-
-        TMP_Text ph = MakeGO("Ph", area.transform).AddComponent<TextMeshProUGUI>();
-        ph.text = placeholder; ph.fontSize = 30;
-        ph.color = new Color(0.65f, 0.65f, 0.65f); ph.fontStyle = FontStyles.Italic;
-        Stretch(ph.gameObject);
-
-        field.textViewport = aRT; field.textComponent = txt; field.placeholder = ph;
-        field.characterLimit = 40;
-        if (isPassword) field.contentType = TMP_InputField.ContentType.Password;
-        return field;
-    }
-
-    private Button AddBtn(Transform parent, string label,
-                          Color bg, Color textColor, float fontSize)
-    {
-        GameObject go = MakeGO(label, parent);
-        go.AddComponent<Image>().color = bg;
-        Button btn = go.AddComponent<Button>();
-        TMP_Text txt = MakeGO("L", go.transform).AddComponent<TextMeshProUGUI>();
-        txt.text = label; txt.fontSize = fontSize;
-        txt.fontStyle = FontStyles.Bold; txt.color = textColor;
-        txt.alignment = TextAlignmentOptions.Center;
-        Stretch(txt.gameObject);
-        return btn;
-    }
-
-    private void Stretch(GameObject go)
-    {
-        RectTransform rt = go.GetComponent<RectTransform>() ?? go.AddComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        if (guestVerificationErrorText == null)
+        {
+            // Fallback so the message is at least visible somewhere if the
+            // Inspector field hasn't been wired yet — see chat setup guide.
+            Debug.LogWarning("[ProfilePanel] guestVerificationErrorText is not assigned in the Inspector — showing error on the main profile error text instead.");
+            ShowError(msg);
+            return;
+        }
+        guestVerificationErrorText.text = msg;
+        guestVerificationErrorText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
     }
 
     // ── Callbacks ─────────────────────────────────────────────
@@ -695,8 +789,72 @@ public class ProfilePanel : MonoBehaviour
         HideError();
     }
 
+    // ── Loading + Watchdog (NEW) ────────────────────────────────
+
     private void SetLoading(bool show)
     {
         if (loadingOverlay != null) loadingOverlay.SetActive(show);
+
+        if (regSubmitButton != null) regSubmitButton.interactable = !show;
+        if (guestVerificationContinueButton != null) guestVerificationContinueButton.interactable = !show;
+
+        // Same watchdog pattern as LoginUIController — guarantees the
+        // loading overlay/buttons can never stay stuck no matter what
+        // interrupts the underlying Firebase call.
+        StopWatchdog();
+        if (show)
+            _loadingWatchdog = StartCoroutine(LoadingWatchdogRoutine());
+    }
+
+    private IEnumerator LoadingWatchdogRoutine()
+    {
+        yield return new WaitForSecondsRealtime(loadingTimeoutSeconds);
+
+        Debug.LogWarning("[ProfilePanel] Loading watchdog fired — no response in time. Force-unlocking UI.");
+        SetLoading(false);
+        ShowRegError("Request timed out. Check your internet connection and try again.");
+    }
+
+    private void StopWatchdog()
+    {
+        if (_loadingWatchdog != null)
+        {
+            StopCoroutine(_loadingWatchdog);
+            _loadingWatchdog = null;
+        }
+    }
+
+    // ── NEW — same "Resend Email looks like a pause" fix as LoginUIController ──
+    // See the long comment in LoginUIController.cs for the full explanation:
+    // this is a genuine OS focus-loss event (a security dialog or the Mail
+    // app opening), not a scripted GameState.Paused. These handlers just make
+    // returning from it smooth, and silently re-check verification so the
+    // player doesn't have to tap "Continue" again if they already verified.
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus)
+        {
+            if (guestVerificationPanel != null && guestVerificationPanel.activeSelf)
+            {
+                _lostFocusWhileVerifying = true;
+                Debug.Log("[ProfilePanel] Lost focus while guest verification panel was open.");
+            }
+            return;
+        }
+
+        Debug.Log("[ProfilePanel] Regained focus.");
+
+        if (_lostFocusWhileVerifying)
+        {
+            _lostFocusWhileVerifying = false;
+            StopWatchdog();
+            SetLoading(false);
+
+            if (guestVerificationPanel != null && guestVerificationPanel.activeSelf && AuthManager.Instance != null)
+            {
+                Debug.Log("[ProfilePanel] Auto re-checking email verification after regaining focus.");
+                AuthManager.Instance.CheckEmailVerifiedAndContinue();
+            }
+        }
     }
 }

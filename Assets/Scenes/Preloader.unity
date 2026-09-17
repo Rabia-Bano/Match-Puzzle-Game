@@ -318,6 +318,50 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 205927430}
   m_CullTransparentMesh: 1
+--- !u!1 &308485379
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 308485381}
+  - component: {fileID: 308485380}
+  m_Layer: 0
+  m_Name: BackButtonHandler
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &308485380
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 308485379}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b863411ef37f9f94abc44f0d8ea8ac03, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!4 &308485381
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 308485379}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 241.75003, y: 306.71573, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &314871538
 GameObject:
   m_ObjectHideFlags: 0
@@ -1509,7 +1553,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 400}
-  m_SizeDelta: {x: 500, y: 400}
+  m_SizeDelta: {x: 450, y: 400}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1846398434
 MonoBehaviour:
@@ -1639,6 +1683,15 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   OnAuthError:
+    m_PersistentCalls:
+      m_Calls: []
+  OnVerificationRequired:
+    m_PersistentCalls:
+      m_Calls: []
+  OnVerificationEmailResent:
+    m_PersistentCalls:
+      m_Calls: []
+  OnSessionResumeFailed:
     m_PersistentCalls:
       m_Calls: []
 --- !u!4 &1960924681
@@ -1810,6 +1863,7 @@ SceneRoots:
   - {fileID: 466608667}
   - {fileID: 1975043605}
   - {fileID: 684144600}
+  - {fileID: 308485381}
   - {fileID: 1659426171}
   - {fileID: 1960924681}
   - {fileID: 622968620}

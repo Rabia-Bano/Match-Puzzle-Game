@@ -83,6 +83,7 @@ namespace Match3
         [SerializeField] private float wrappedWrappedRingStagger = 0.006f;  // was hardcoded 0.015f
         [Tooltip("Delay per column while a Rainbow+Rainbow combo sweeps the whole " +
                  "board. Only affects Rainbow+Rainbow.")]
+    
         [SerializeField] private float rainbowRainbowColumnStagger = 0.01f; // was hardcoded 0.025f
 
         [Header("Timings")]
@@ -421,45 +422,40 @@ namespace Match3
 
         private IEnumerator RainbowSweepClearAll()
         {
+            // UPDATED (Rabia's request): "pura board ek dam se clear ho" — the
+            // whole board now clears SIMULTANEOUSLY. Previously this went
+            // column-by-column with a small stagger delay between each column
+            // (rainbowRainbowColumnStagger), which gave a left-to-right sweep
+            // feel instead of one instant full-board clear. Every eligible
+            // tile now fires its clear coroutine in the same frame; we just
+            // wait for all of them to finish before returning.
+            int pending = 0;
+
             for (int x = 0; x < boardGrid.Width; x++)
+            for (int y = 0; y < boardGrid.Height; y++)
             {
-                // SPEED FIX: tiles inside the same column never share a cell,
-                // so clear them all together — before this, each tile cost its
-                // own sequential frame of wait (via `yield return
-                // StartCoroutine(...)`) even though there was no real reason
-                // for tile 2 to wait for tile 1 to finish first. The left-to-
-                // right column sweep (the stagger below) is kept exactly as
-                // before — only the wasted per-tile wait inside each column
-                // is removed.
-                int pendingColumn = 0;
+                Tile t = boardGrid.GetTile(x, y);
+                if (t == null || t.State == TileState.Inactive) continue;
 
-                for (int y = 0; y < boardGrid.Height; y++)
+                bool willActuallyClear = t.Data != null && !t.Data.isSpecial && !t.Data.isHardTile && !t.Data.isDropStone;
+                if (willActuallyClear)
                 {
-                    Tile t = boardGrid.GetTile(x, y);
-                    if (t == null || t.State == TileState.Inactive) continue;
-
-                    bool willActuallyClear = t.Data != null && !t.Data.isSpecial && !t.Data.isHardTile && !t.Data.isDropStone;
-                    if (willActuallyClear)
+                    SpriteRenderer sr = t.GetComponent<SpriteRenderer>();
+                    if (sr != null)
                     {
-                        SpriteRenderer sr = t.GetComponent<SpriteRenderer>();
-                        if (sr != null)
-                        {
-                            Color rainbowColor = Color.HSVToRGB(
-                                (x * boardGrid.Height + y) / (float)(boardGrid.Width * boardGrid.Height),
-                                1f, 1f);
-                            sr.DOColor(rainbowColor, 0.05f);
-                        }
+                        Color rainbowColor = Color.HSVToRGB(
+                            (x * boardGrid.Height + y) / (float)(boardGrid.Width * boardGrid.Height),
+                            1f, 1f);
+                        sr.DOColor(rainbowColor, 0.05f);
                     }
-
-                    pendingColumn++;
-                    StartCoroutine(RunCounted(ClearOneObstacleAwareTile(t, _clearedThisCombo), () => pendingColumn--));
                 }
 
-                if (pendingColumn > 0)
-                    yield return new WaitUntil(() => pendingColumn <= 0);
-
-                yield return new WaitForSeconds(rainbowRainbowColumnStagger);
+                pending++;
+                StartCoroutine(RunCounted(ClearOneObstacleAwareTile(t, _clearedThisCombo), () => pending--));
             }
+
+            if (pending > 0)
+                yield return new WaitUntil(() => pending <= 0);
         }
 
         private IEnumerator Blast5x5AtPosition(int cx, int cy)

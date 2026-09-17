@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
   m_Name: LevelData_BossBoard1
   m_EditorClassIdentifier: 
-  width: 12
-  height: 12
+  width: 11
+  height: 11
   moveLimit: 200
   goals: []
   allowedTiles:

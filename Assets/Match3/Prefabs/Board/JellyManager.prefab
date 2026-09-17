@@ -47,4 +47,4 @@ MonoBehaviour:
   boardGrid: {fileID: 0}
   jellyOverlayPrefab: {fileID: 6095924353339355464, guid: 4f1a2e01bae055946bddbbc71eea6b6d, type: 3}
   jellyLayerSprites:
-  - {fileID: 6745137483145456397, guid: c917fb69c34b4a94789836fa3e561211, type: 3}
+  - {fileID: -8566028455312386561, guid: 70a4b60b447a62848a34d3e6223cecb6, type: 3}

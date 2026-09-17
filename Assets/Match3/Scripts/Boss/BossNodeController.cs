@@ -45,6 +45,10 @@ public class BossNodeController : MonoBehaviour
     [Tooltip("Chain / lock overlay — shown when Locked")]
     public GameObject chainOverlay;
 
+    [Tooltip("NEW — shown only while Locked, e.g. 'Unlocks after Level 12'. " +
+             "Same pattern as PetCollectionSlot.lockedLabel in the Pet Companion scene.")]
+    public TMP_Text lockedLabel;
+
     [Tooltip("Glow particle or image — shown when Unlocked")]
     public GameObject glowEffect;
 
@@ -103,6 +107,12 @@ public class BossNodeController : MonoBehaviour
         // Visual state
         SafeSetActive(chainOverlay, !isUnlocked);
         SafeSetActive(glowEffect,    isUnlocked);
+
+        // NEW — "Unlocks after Level N" label while locked, exactly like
+        // PetCollectionSlot shows "Unlocks after Level X" for a locked pet.
+        if (lockedLabel != null) lockedLabel.gameObject.SetActive(!isUnlocked);
+        if (lockedLabel != null)
+            lockedLabel.text = $"Unlocks after Level {unlockedAfterLevel}";
 
         // Pulse when unlocked
         KillPulse();

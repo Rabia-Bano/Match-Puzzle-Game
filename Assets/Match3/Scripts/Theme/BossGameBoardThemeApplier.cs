@@ -7,7 +7,7 @@ namespace Match3.Theme
     public class BossGameBoardThemeApplier : MonoBehaviour, IThemeApplier
     {
         [SerializeField] private SpriteRenderer background; // world-space "Background" 2D sprite -> BG3
-        [SerializeField] private Image bossArenaHUD;          // BossArenaHUD -> color only
+        [SerializeField] private Image bossArenaHUD;          // BossArenaHUD -> sprite (themed image)
         [SerializeField] private Image[] petAndBoosterSlots;  // Slot_Pet + InventoryBoosterSlot -> F2
         [SerializeField] private Image settingIcon;             // SettingsButton/Icon
         [SerializeField] private Image settingPanel;            // SettingPanel -> F2
@@ -20,7 +20,7 @@ namespace Match3.Theme
         {
             if (theme == null) return;
             if (background && theme.bg3) background.sprite = theme.bg3;
-            if (bossArenaHUD) bossArenaHUD.color = theme.bossArenaHUDColor;
+            if (bossArenaHUD && theme.bossArenaHUDImage != null) bossArenaHUD.sprite = theme.bossArenaHUDImage;
 
             if (petAndBoosterSlots != null)
                 foreach (var img in petAndBoosterSlots)

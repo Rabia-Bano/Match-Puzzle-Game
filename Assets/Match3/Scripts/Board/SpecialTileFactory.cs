@@ -98,7 +98,7 @@ namespace Match3
             special.RefreshVisuals();
 
             // ── Pop animation so player sees it appear ────────
-            special.transform.localScale = Vector3.one;
+            special.transform.localScale = Vector3.one * BoardGrid.TileVisualScale;
             special.transform.DOPunchScale(
                     Vector3.one * (popScale - 1f),
                     duration:  0.35f,
@@ -111,6 +111,23 @@ namespace Match3
 
             Debug.Log($"[SpecialTileFactory] ✓ Created {group.Shape} → " +
                       $"{specialData.name} at ({px},{py})");
+
+            // ── NEW: first-time "you just made a special tile!" callout ──
+            // Only fires the FIRST time each shape is ever created for this
+            // player (TutorialManager tracks that) — every later match of the
+            // same shape is silent, exactly like the real games do.
+            string tutorialKey = group.Shape switch
+            {
+                MatchShape.HLine4 => "special_striped_h",
+                MatchShape.VLine4 => "special_striped_v",
+                MatchShape.Line5  => "special_colorbomb",
+                MatchShape.TShape => "special_wrapped",
+                MatchShape.LShape => "special_wrapped",
+                _                 => null
+            };
+            if (tutorialKey != null)
+                TutorialManager.Instance?.RequestTutorial(tutorialKey, boardGrid.GridToWorld(px, py));
+            // ──────────────────────────────────────────────────────────
 
             pivotX = px;
             pivotY = py;

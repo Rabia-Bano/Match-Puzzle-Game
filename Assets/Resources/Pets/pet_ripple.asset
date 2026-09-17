@@ -15,7 +15,7 @@ MonoBehaviour:
   id: pet_ripple
   petName: Ripple
   rarity: 1
-  sprite: {fileID: 0}
+  sprite: {fileID: -1693485935312475804, guid: 9ff2923b731c3e841bad9ee0a0f97634, type: 3}
   description: 
   skillType: 3
   skillName: Wave Convert

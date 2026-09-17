@@ -30,9 +30,26 @@ namespace Match3
         [Tooltip("Gap between cell centres (0 = tiles touch each other).")]
         [SerializeField] private float cellSpacing = 0.05f;
 
+        [Header("Tile Size")]
+        [Tooltip("Scales every tile's visual sprite relative to its cell. 1 = full size (fills the cell, current look). Lower it (e.g. 0.8) to make gems visually smaller and add a small gap around each one — this does NOT change cell spacing/positions, only how big the sprite is drawn inside its cell.")]
+        [Range(0.3f, 1f)]
+        [SerializeField] private float tileVisualScale = 1f;
+
+        /// <summary>Current board's tile visual scale — read by Tile.cs and
+        /// SpecialTileFactory.cs so every tile (regular or special) stays visually
+        /// consistent without threading this value through every spawn call.</summary>
+        public static float TileVisualScale { get; private set; } = 1f;
+
         [Header("References")]
         [Tooltip("The ObjectPool that hands out Tile GameObjects.")]
         [SerializeField] private ObjectPool tilePool;
+
+        [Header("Camera Fit")]
+        [Tooltip("Board is fit into this camera's view. Leave blank to use Camera.main.")]
+        [SerializeField] private Camera targetCamera;
+
+        [Tooltip("Extra world-space margin kept around the board so tiles don't touch screen edges.")]
+        [SerializeField] private float viewportPadding = 0.5f;
 
         // ── Public read-only state ────────────────────────────
 
@@ -65,6 +82,8 @@ namespace Match3
             Height = height;
             Grid   = new Tile[width, height];
 
+            TileVisualScale = tileVisualScale;
+
             float step = cellSize + cellSpacing;
             _originOffset = transform.position
                 - new Vector3((width  - 1) * step * 0.5f,
@@ -73,6 +92,36 @@ namespace Match3
 
             Debug.Log($"[BoardGrid] Initialized {width}x{height} board. " +
                       $"Origin={_originOffset}  CellStep={step:F3}");
+
+            FitCameraToBoard(width, height);
+        }
+
+        /// <summary>
+        /// NEW — zooms the orthographic camera out just enough so the FULL board width
+        /// (not just height) always fits the current device's screen, regardless of its
+        /// aspect ratio. Without this, cellSize/cellSpacing produce a fixed world-space
+        /// board size while the camera's orthographicSize was only tuned for one aspect
+        /// ratio in the editor — on narrower/taller phones the board overflows and gets
+        /// cut off at the sides. Runs every time a level (re)initializes the board.
+        /// </summary>
+        private void FitCameraToBoard(int width, int height)
+        {
+            Camera cam = targetCamera != null ? targetCamera : Camera.main;
+            if (cam == null || !cam.orthographic)
+            {
+                Debug.LogWarning("[BoardGrid] Camera fit skipped — no orthographic camera assigned.");
+                return;
+            }
+
+            float step = cellSize + cellSpacing;
+            float boardWorldWidth  = width  * step;
+            float boardWorldHeight = height * step;
+            float screenAspect     = (float)Screen.width / Screen.height;
+
+            float sizeForHeight = (boardWorldHeight * 0.5f) + viewportPadding;
+            float sizeForWidth  = ((boardWorldWidth * 0.5f) + viewportPadding) / screenAspect;
+
+            cam.orthographicSize = Mathf.Max(sizeForHeight, sizeForWidth);
         }
 
         // ── Coordinate conversion ─────────────────────────────

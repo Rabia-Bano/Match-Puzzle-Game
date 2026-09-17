@@ -40,6 +40,7 @@
 // ============================================================
 
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -182,6 +183,7 @@ namespace Match3
                 boardController.OnColorMatchResolved -= HandleColorMatchResolved;
 
             BossDamageEvents.OnSpecialTileCleared -= HandleSpecialTileCleared;
+            BossDamageEvents.OnColorBombBlast     -= HandleColorBombBlast;
 
             if (Instance == this) Instance = null;
         }
@@ -204,6 +206,7 @@ namespace Match3
                 boardController.OnColorMatchResolved += HandleColorMatchResolved;
 
             BossDamageEvents.OnSpecialTileCleared += HandleSpecialTileCleared;
+            BossDamageEvents.OnColorBombBlast     += HandleColorBombBlast;
 
             _defenseLoopHandle = StartCoroutine(PassiveDefenseLoop());
             _healLoopHandle    = StartCoroutine(SelfHealLoop());
@@ -270,6 +273,23 @@ namespace Match3
 
             _pendingSpecialWeaknessHits++;
             _lastSpecialClearTime = Time.time;
+        }
+
+        /// <summary>
+        /// NEW — Color Bomb's single blast (not the Rainbow+Rainbow combo)
+        /// ALWAYS damages the boss at the same tier as clearing 5+ weakness
+        /// tiles, regardless of which colour it actually targeted. Deliberately
+        /// bypasses the weakness-colour check entirely — this is Color Bomb's
+        /// own dedicated damage rule, separate from HandleSpecialTileCleared.
+        /// </summary>
+        private void HandleColorBombBlast()
+        {
+            if (!HasFightBegun || bossData == null || IsDefeated) return;
+
+            float percent = bossData.damagePercent5Plus;
+            int amount = Mathf.Max(1, Mathf.CeilToInt(MaxHealth * (percent / 100f)));
+            Debug.Log($"[BossController] Color Bomb blast → treated as a 5+ weakness hit → {percent}% → {amount} dmg.");
+            TakeDamage(amount);
         }
 
         private void Update()
@@ -352,15 +372,14 @@ namespace Match3
         {
             int severity = GetCurrentSeverity();
 
-            // Pick ONE hurdle type at random each tick — over several ticks the
-            // boss cycles through a mix of jelly / stone / rock / freeze.
-            BossAttackType[] pool =
-            {
-                BossAttackType.Jelly,
-                BossAttackType.StoneTiles,
-                BossAttackType.AddObstacles,
-                BossAttackType.LockTiles
-            };
+            // Pick ONE hurdle type at random each tick. Which types are even
+            // eligible now comes from bossData.attackPattern (the "Legacy /
+            // Optional" list in the Inspector) — add ONLY the BossAttack
+            // entries for the types you want this boss to ever throw (e.g.
+            // just LockTiles + Jelly), and every tick will only ever pick
+            // among those. Leave attackPattern EMPTY to keep the old
+            // behaviour: cycle randomly through all four types.
+            BossAttackType[] pool = BuildAttackPool();
             BossAttackType chosen = pool[Random.Range(0, pool.Length)];
 
             BossAttack attack = new BossAttack
@@ -411,6 +430,41 @@ namespace Match3
             }
         }
 
+        /// <summary>
+        /// NEW — builds the set of attack types this boss is allowed to throw,
+        /// from bossData.attackPattern (distinct attackType values, duplicates
+        /// collapsed). Falls back to the full default four-type pool if
+        /// attackPattern is empty, so existing bosses that never touched this
+        /// list keep working exactly as before.
+        /// </summary>
+        private BossAttackType[] BuildAttackPool()
+        {
+            if (bossData.attackPattern != null && bossData.attackPattern.Count > 0)
+            {
+                var distinct = new HashSet<BossAttackType>();
+                foreach (BossAttack entry in bossData.attackPattern)
+                    if (entry != null)
+                        distinct.Add(entry.attackType);
+
+                if (distinct.Count > 0)
+                {
+                    var arr = new BossAttackType[distinct.Count];
+                    distinct.CopyTo(arr);
+                    return arr;
+                }
+            }
+
+            // Default — every existing boss with an empty attackPattern list
+            // keeps this exact behaviour (unchanged from before this fix).
+            return new[]
+            {
+                BossAttackType.Jelly,
+                BossAttackType.StoneTiles,
+                BossAttackType.AddObstacles,
+                BossAttackType.LockTiles
+            };
+        }
+
         /// <summary>1 = healthy (&gt;66% HP), 2 = hurt (33–66%), 3 = desperate (&lt;33%) — "wo khud ko bachane ki koshish karta hai".</summary>
         private int GetCurrentSeverity()
         {
@@ -422,7 +476,7 @@ namespace Match3
 
         private static string WarningTextFor(BossAttackType type) => type switch
         {
-            BossAttackType.Jelly        => "Boss is spreading jelly!",
+            BossAttackType.Jelly        => "Boss is spreading Chain!",
             BossAttackType.StoneTiles   => "Boss is dropping stones!",
             BossAttackType.AddObstacles => "Boss is summoning rocks!",
             BossAttackType.LockTiles    => "Boss is freezing tiles!",

@@ -15,5 +15,5 @@ MonoBehaviour:
   goalType: 1
   targetTile: {fileID: 0}
   requiredAmount: 7
-  goalIcon: {fileID: 6745137483145456397, guid: c917fb69c34b4a94789836fa3e561211, type: 3}
-  goalLabel: Claer Jelly
+  goalIcon: {fileID: -8566028455312386561, guid: 70a4b60b447a62848a34d3e6223cecb6, type: 3}
+  goalLabel: Break chain

@@ -44,6 +44,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc26b94c20e82874ea14e6af3e934784, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cellSize: 0.7
+  cellSize: 0.73
   cellSpacing: 0.01
   tilePool: {fileID: 0}

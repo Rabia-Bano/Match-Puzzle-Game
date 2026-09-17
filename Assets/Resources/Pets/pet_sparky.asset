@@ -15,7 +15,7 @@ MonoBehaviour:
   id: pet_sparky
   petName: Sparky
   rarity: 1
-  sprite: {fileID: -7551223808955595413, guid: ce77ab711cb15c44685e2cc390898bbb, type: 3}
+  sprite: {fileID: 2186602288099788976, guid: e40304d9197733a4da19637effaaf619, type: 3}
   description: 
   skillType: 2
   skillName: Energy Surge

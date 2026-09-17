@@ -5,9 +5,6 @@ TextureImporter:
   - first:
       213: 3822379315886523921
     second: GameLogo_0
-  - first:
-      213: -1146488530801002513
-    second: GameLogo_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -132,10 +129,10 @@ TextureImporter:
       name: GameLogo_0
       rect:
         serializedVersion: 2
-        x: 41
-        y: 122
-        width: 423
-        height: 308
+        x: 0
+        y: 0
+        width: 512
+        height: 512
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -146,28 +143,6 @@ TextureImporter:
       bones: []
       spriteID: 11687386cb1db0530800000000000000
       internalID: 3822379315886523921
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: GameLogo_1
-      rect:
-        serializedVersion: 2
-        x: 460
-        y: 15
-        width: 26
-        height: 25
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: fe7fb8e61cad610f0800000000000000
-      internalID: -1146488530801002513
       vertices: []
       indices: 
       edges: []
@@ -187,7 +162,6 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       GameLogo_0: 3822379315886523921
-      GameLogo_1: -1146488530801002513
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

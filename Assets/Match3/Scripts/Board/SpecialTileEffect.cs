@@ -51,18 +51,23 @@ namespace Match3
         /// Reports goal progress + peels jelly for a NORMAL tile that a combo
         /// blast is clearing. Callers must have already ruled out special /
         /// hard / drop-stone tiles before calling this.
+        ///
+        /// UPDATED (Rabia's request): a single special-tile blast (Striped,
+        /// Wrapped) should NEVER damage the boss anymore — only a Color Bomb's
+        /// blast should (and that's now reported separately as a fixed "5+"
+        /// hit via BossDamageEvents.OnColorBombBlast, NOT through here — see
+        /// ColorBombEffect.Activate()). So `reportBossDamage` defaults to
+        /// false; only pass true from a caller that explicitly wants the old
+        /// per-tile-colour Boss report behaviour.
         /// </summary>
-        protected void ClearNormalTileTracked(Tile t, List<Tile> cleared)
+        protected void ClearNormalTileTracked(Tile t, List<Tile> cleared, bool reportBossDamage = false)
         {
             levelManager?.OnTileCleared(t.Data);
 
             if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
                 levelManager?.OnJellyCleared();
 
-            // NEW — Boss Arena fix: this clear path bypasses BoardController's
-            // normal match loop (OnColorMatchResolved), so without this line the
-            // boss never took damage from striped/wrapped/color-bomb blasts.
-            if (t.Data != null)
+            if (reportBossDamage && t.Data != null)
                 BossDamageEvents.OnSpecialTileCleared?.Invoke(t.Data.color);
 
             cleared.Add(t);

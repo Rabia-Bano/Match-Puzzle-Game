@@ -29,8 +29,8 @@ MonoBehaviour:
   storeIcon: {fileID: 3046817259674528574, guid: 070688311931094419101a4a8eb82df4, type: 3}
   leaderBoardIcon: {fileID: 8356569790972587181, guid: a678dc0f7b671cc4185b9806612fbd13, type: 3}
   settingIcon: {fileID: -6416704506416456542, guid: 2a9b0a963de25b649ab84215775e7804, type: 3}
-  levelNodeLockedColor: {r: 1, g: 1, b: 1, a: 1}
-  levelNodeUnlockedColor: {r: 1, g: 1, b: 1, a: 1}
-  levelNodeCompletedColor: {r: 1, g: 1, b: 1, a: 1}
+  levelNodeLockedColor: {r: 0.47058824, g: 0.68235296, b: 0.85490197, a: 1}
+  levelNodeUnlockedColor: {r: 0.47058824, g: 0.68235296, b: 0.85490197, a: 1}
+  levelNodeCompletedColor: {r: 0.47058824, g: 0.68235296, b: 0.85490197, a: 1}
   gameBoardTopBarImage: {fileID: 3101737556292566227, guid: 5a6d23bbeee101a4fa22766110e1d943, type: 3}
-  bossArenaHUDColor: {r: 0.06666667, g: 0.42352945, b: 0.78823537, a: 1}
+  bossArenaHUDImage: {fileID: 9151570955757876623, guid: 1549aec3c7ead7345931ea64247beda9, type: 3}
