@@ -369,21 +369,90 @@ namespace Game.Firebase
                 return;
             }
 
-            _currentUser.SendEmailVerificationAsync().ContinueWithOnMainThread(task =>
+            // First (automatic) email at registration — never gated, never counted as a resend.
+            if (isFirstSend)
+            {
+                DoSendVerificationEmail(email, isFirstSend: true, previousResendCount: 0);
+                return;
+            }
+
+            // NEW — RESEND gate: max VerificationRequestTracker.MAX_RESENDS resends.
+            // After that the request is flagged for the admin panel and further
+            // resends are blocked; a banned uid can't resend at all.
+            string uid = _currentUser.UserId;
+            VerificationRequestTracker.CheckCanResend(uid, (decision, count) =>
+            {
+                switch (decision)
+                {
+                    case VerificationRequestTracker.ResendDecision.Banned:
+                        OnAuthError?.Invoke("Your account has been banned. You can't request more verification emails.");
+                        SignOutInternal();
+                        return;
+
+                    case VerificationRequestTracker.ResendDecision.LimitReached:
+                        OnAuthError?.Invoke($"You have already requested {count} verification emails. " +
+                                            "Please verify using the email already sent (check Spam too). " +
+                                            "Your account has been sent to the admin for review.");
+                        return;
+
+                    case VerificationRequestTracker.ResendDecision.NetworkError:
+                        OnAuthError?.Invoke("Could not send the verification email. Check your internet connection and try again.");
+                        return;
+
+                    default:
+                        DoSendVerificationEmail(email, isFirstSend: false, previousResendCount: count);
+                        return;
+                }
+            });
+        }
+
+        /// <summary>Actually sends the email, then records it in verificationRequests/{uid}.</summary>
+        private void DoSendVerificationEmail(string email, bool isFirstSend, int previousResendCount)
+        {
+            if (_currentUser == null) return;
+            FirebaseUser user = _currentUser;
+
+            user.SendEmailVerificationAsync().ContinueWithOnMainThread(task =>
             {
                 if (task.IsCanceled || task.IsFaulted)
                 {
                     Debug.LogError($"[AuthManager] Sending verification email failed: {task.Exception}");
-                    OnAuthError?.Invoke("Could not send the verification email. Check your internet connection and try again.");
+                    string msg = GetFirebaseErrorMessage(task.Exception);
+                    if (!msg.StartsWith("Too many"))
+                        msg = "Could not send the verification email. Check your internet connection and try again.";
+                    OnAuthError?.Invoke(msg);
                     return;
                 }
 
                 Debug.Log($"[AuthManager] Verification email sent to {email}.");
 
+                LoadPendingRegistrationIfNeeded();
+                VerificationRequestTracker.RecordSend(user.UserId, email, _pendingUsername, isFirstSend, previousResendCount);
+
                 if (isFirstSend)
                     OnVerificationRequired?.Invoke(email);
                 else
                     OnVerificationEmailResent?.Invoke();
+            });
+        }
+
+        /// <summary>NEW — before showing the "check your inbox" panel to an unverified
+        /// account, make sure the admin hasn't banned it from the Verification Alerts page.</summary>
+        private void ShowVerificationPanelUnlessBanned(string email)
+        {
+            if (_currentUser == null) return;
+            VerificationRequestTracker.CheckBanned(_currentUser.UserId, (banned, reason) =>
+            {
+                if (banned)
+                {
+                    Debug.LogWarning("[AuthManager] Unverified account is banned by admin.");
+                    OnAuthError?.Invoke(string.IsNullOrEmpty(reason)
+                        ? "Your account has been banned."
+                        : $"Your account has been banned. Reason: {reason}");
+                    SignOutInternal();
+                    return;
+                }
+                OnVerificationRequired?.Invoke(email);
             });
         }
 
@@ -446,7 +515,7 @@ namespace Game.Firebase
                 if (!_currentUser.IsEmailVerified)
                 {
                     Debug.Log("[AuthManager] Persisted session's email is still unverified.");
-                    OnVerificationRequired?.Invoke(_currentUser.Email);
+                    ShowVerificationPanelUnlessBanned(_currentUser.Email);   // NEW — ban check first
                     return;
                 }
 
@@ -492,26 +561,45 @@ namespace Game.Firebase
                     return;
                 }
 
-                Debug.Log("[AuthManager] Email verified — continuing into the game.");
+                Debug.Log("[AuthManager] Email verified — checking admin ban list before continuing.");
 
-                // BUG FIX: restore the pending username/email from PlayerPrefs
-                // if this app session lost the in-memory copies (see the field
-                // comments above) — without this, only "emailVerified: true"
-                // would ever get written and the real username/email would
-                // silently never make it into Firestore/Realtime DB.
-                LoadPendingRegistrationIfNeeded();
+                // NEW — an admin may have banned this uid while it was still unverified.
+                VerificationRequestTracker.CheckBanned(_currentUser.UserId, (banned, reason) =>
+                {
+                    if (banned)
+                    {
+                        OnAuthError?.Invoke(string.IsNullOrEmpty(reason)
+                            ? "Your account has been banned."
+                            : $"Your account has been banned. Reason: {reason}");
+                        SignOutInternal();
+                        return;
+                    }
 
-                // Final safety net — if the pending data is STILL missing (e.g.
-                // this device never had it, like verifying via a link opened on
-                // a completely different device/browser), fall back to Firebase
-                // Auth's own copy of the email (always reliable) and a username
-                // derived from it, rather than writing blank fields over real data.
-                if (string.IsNullOrEmpty(_pendingEmail))
-                    _pendingEmail = _currentUser.Email ?? "";
-                if (string.IsNullOrEmpty(_pendingUsername))
-                    _pendingUsername = !string.IsNullOrEmpty(_pendingEmail) ? _pendingEmail.Split('@')[0] : "Player";
+                    VerificationRequestTracker.MarkVerified(_currentUser.UserId);
+                    ContinueAfterVerified();
+                });
+            });
+        }
 
-                if (_pendingIsGuestUpgrade)
+        /// <summary>
+        /// The original "verified → create/update profile → enter game" logic, moved
+        /// out of the ReloadAsync callback unchanged EXCEPT one fix: the guest-upgrade
+        /// path used to fire OnPlayerLoggedIn + OnRegisterSuccess TWICE (once inside
+        /// the UpdateAsync callback and once again right after). Now each path fires
+        /// them exactly once.
+        /// </summary>
+        private void ContinueAfterVerified()
+        {
+            // BUG FIX: restore the pending username/email from PlayerPrefs
+            // if this app session lost the in-memory copies.
+            LoadPendingRegistrationIfNeeded();
+
+            if (string.IsNullOrEmpty(_pendingEmail))
+                _pendingEmail = _currentUser.Email ?? "";
+            if (string.IsNullOrEmpty(_pendingUsername))
+                _pendingUsername = !string.IsNullOrEmpty(_pendingEmail) ? _pendingEmail.Split('@')[0] : "Player";
+
+            if (_pendingIsGuestUpgrade)
             {
                 Dictionary<string, object> updates = new Dictionary<string, object>
                 {
@@ -519,7 +607,7 @@ namespace Game.Firebase
                     { "displayName",   _pendingUsername },
                     { "email",         _pendingEmail },
                     { "emailVerified", true },
-                    { "lastUpdated",   DateTime.UtcNow.ToString("o") }   // <-- ADD THIS LINE
+                    { "lastUpdated",   DateTime.UtcNow.ToString("o") }
                 };
 
                 _firestore.Collection(PLAYERS_COLLECTION).Document(_currentUser.UserId)
@@ -529,31 +617,25 @@ namespace Game.Firebase
                     {
                         Debug.LogError($"[AuthManager] Profile Firestore update failed: {updateTask.Exception}");
                         OnAuthError?.Invoke("Verification hui, lekin profile save nahi ho saka. Try again.");
-                        return;   // <-- pending data ClearPendingRegistration() se clear NAHI hogi, retry ho sakega
+                        return;   // pending data kept, so the player can retry
                     }
 
                     Debug.Log("[AuthManager] Firestore profile updated with verified username/email.");
                     ClearPendingRegistration();
                     GameEvents.OnPlayerLoggedIn?.Invoke();
-                    OnRegisterSuccess?.Invoke();   // <-- ab reload sirf write complete hone ke BAAD hoga
+                    OnRegisterSuccess?.Invoke();
                 });
-            }
-            else
-            {
-                CreatePlayerProfile(_currentUser.UserId, _pendingUsername, _pendingEmail);
-                // NOTE: yahan bhi same fix chahiye — CreatePlayerProfile() ko waapis
-                // wire karna hoga taake iske SetAsync().ContinueWithOnMainThread() ke
-                // success branch ke andar hi ClearPendingRegistration()/OnRegisterSuccess
-                // call ho (neeche point 3 dekho).
+                return;   // FIX — don't fall through and fire the events a second time
             }
 
-                // Done — clear the durable copy so it can never be mistakenly
-                // reused for a different account later on this device.
-                ClearPendingRegistration();
+            CreatePlayerProfile(_currentUser.UserId, _pendingUsername, _pendingEmail);
 
-                GameEvents.OnPlayerLoggedIn?.Invoke();
-                OnRegisterSuccess?.Invoke();
-            });
+            // Done — clear the durable copy so it can never be mistakenly
+            // reused for a different account later on this device.
+            ClearPendingRegistration();
+
+            GameEvents.OnPlayerLoggedIn?.Invoke();
+            OnRegisterSuccess?.Invoke();
         }
 
         // -----------------------------------------------------------
@@ -643,7 +725,7 @@ namespace Game.Firebase
                 if (!_currentUser.IsEmailVerified)
                 {
                     Debug.LogWarning("[AuthManager] Login blocked — email not verified.");
-                    OnVerificationRequired?.Invoke(email);
+                    ShowVerificationPanelUnlessBanned(email);   // NEW — ban check first
                     return; // stay signed in so Resend/Continue on the verification panel still work
                 }
 
@@ -657,6 +739,26 @@ namespace Game.Firebase
         /// Otherwise updates lastLogin and fires OnLoginSuccess.
         /// </summary>
         private void CheckBanStatusAndProceed(string uid)
+        {
+            // NEW — first check the Verification-Alerts ban list (an account can be
+            // banned there before its players/{uid} profile even exists).
+            VerificationRequestTracker.CheckBanned(uid, (banned, reason) =>
+            {
+                if (banned)
+                {
+                    Debug.LogWarning("[AuthManager] This account is banned (verificationRequests).");
+                    OnAuthError?.Invoke(string.IsNullOrEmpty(reason)
+                        ? "Your account has been banned."
+                        : $"Your account has been banned. Reason: {reason}");
+                    SignOutInternal();
+                    return;
+                }
+                CheckProfileBanAndProceed(uid);
+            });
+        }
+
+        /// <summary>Original players/{uid}.isBanned check (unchanged).</summary>
+        private void CheckProfileBanAndProceed(string uid)
         {
             DocumentReference docRef = _firestore.Collection(PLAYERS_COLLECTION).Document(uid);
 
@@ -703,7 +805,10 @@ namespace Game.Firebase
                 if (isBanned)
                 {
                     Debug.LogWarning("[AuthManager] This account is banned.");
-                    OnAuthError?.Invoke("Your account has been banned.");
+                    string banReason = snapshot.ContainsField("banReason") ? snapshot.GetValue<string>("banReason") : null;
+                    OnAuthError?.Invoke(string.IsNullOrEmpty(banReason)
+                        ? "Your account has been banned."
+                        : $"Your account has been banned. Reason: {banReason}");
                     SignOutInternal();
                     return;
                 }

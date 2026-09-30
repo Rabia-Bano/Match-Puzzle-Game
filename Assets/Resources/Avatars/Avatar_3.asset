@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: Avatar_3
   sprite: {fileID: -7840118230214706752, guid: 36c54c8f7e1066b4297c1cf0cb00af7d, type: 3}
+  displayName: Panguin
+  price: 500
+  sortOrder: 3
+  badgeText: 

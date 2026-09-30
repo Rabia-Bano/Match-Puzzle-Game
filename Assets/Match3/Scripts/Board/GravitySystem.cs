@@ -1,7 +1,7 @@
 // ============================================================
 //  GravitySystem.cs
-//  Reviewed — no duplication or bugs found, kept as-is (included
-//  here only so the whole Board/ folder is a complete drop-in set).
+//  UPDATED — Blank tiles: tiles fall THROUGH blank holes and land on
+//  the next playable cell below (Candy-Crush style shaped boards).
 //  This is now the ONLY gravity implementation BoardController's
 //  cascade loop uses.
 //
@@ -60,11 +60,15 @@ namespace Match3
 
             for (int x = 0; x < boardGrid.Width; x++)
             {
-                // writeY = lowest empty row index in this column
-                int writeY = 0;
+                // writeY = lowest empty PLAYABLE row index in this column.
+                // NEW — blank holes are skipped: tiles fall straight THROUGH a
+                // blank cell and land on the next playable cell below it.
+                int writeY = NextPlayable(x, 0);
 
                 for (int y = 0; y < boardGrid.Height; y++)
                 {
+                    if (boardGrid.IsBlank(x, y)) continue;   // a hole is never a tile source
+
                     Tile tile = boardGrid.GetTile(x, y);
                     if (tile == null) continue;
 
@@ -75,7 +79,7 @@ namespace Match3
                     // isHardTile is treated as immovable.)
                     if (tile.Data != null && tile.Data.isHardTile)
                     {
-                        writeY = y + 1;
+                        writeY = NextPlayable(x, y + 1);
                         continue;
                     }
 
@@ -100,16 +104,25 @@ namespace Match3
                             .OnComplete(() => captured.SetState(TileState.Normal));
                     }
 
-                    writeY++;
+                    writeY = NextPlayable(x, writeY + 1);
                 }
 
-                // If there are still empty rows at the top, column needs refilling
+                // If there are still empty playable rows at the top, column needs refilling
                 if (writeY < boardGrid.Height)
                     DirtyColumns.Add(x);
             }
 
             if (longestDuration > 0f)
                 yield return new WaitForSeconds(longestDuration + settlePadding);
+        }
+
+        /// <summary>NEW — first row >= fromY in column x that is NOT a blank hole
+        /// (returns Height if there is none).</summary>
+        private int NextPlayable(int x, int fromY)
+        {
+            int y = fromY;
+            while (y < boardGrid.Height && boardGrid.IsBlank(x, y)) y++;
+            return y;
         }
 
         // ── Validation ────────────────────────────────────────

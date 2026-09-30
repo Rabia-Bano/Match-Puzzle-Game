@@ -316,6 +316,12 @@ namespace Match3
                 else         profile.coins -= cost;
 
                 LocalSaveManager.SaveProfile(profile);
+
+                // FIX — GameManager.Coins is what ProfileManager copies back into the
+                // profile on every save; without this the spent coins silently came
+                // back on the next save. OnCoinsChanged makes GameManager adopt the
+                // new balance (GameManager.HandleCoinsChanged).
+                if (!useGems) GameEvents.OnCoinsChanged?.Invoke(profile.coins);
                 GrantItem(item);
                 return Task.FromResult(true);
             }

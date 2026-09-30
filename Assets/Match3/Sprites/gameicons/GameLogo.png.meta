@@ -5,6 +5,39 @@ TextureImporter:
   - first:
       213: 3822379315886523921
     second: GameLogo_0
+  - first:
+      213: -1146488530801002513
+    second: GameLogo_1
+  - first:
+      213: -7408072029991327865
+    second: GameLogo_2
+  - first:
+      213: 7277369421792613985
+    second: GameLogo_3
+  - first:
+      213: -2712676717998629552
+    second: GameLogo_4
+  - first:
+      213: 623249230409936151
+    second: GameLogo_5
+  - first:
+      213: -3115230929892105557
+    second: GameLogo_6
+  - first:
+      213: -6507634874698553645
+    second: GameLogo_7
+  - first:
+      213: -4283790677289926082
+    second: GameLogo_8
+  - first:
+      213: -2894837017436526505
+    second: GameLogo_9
+  - first:
+      213: -3753540971368207977
+    second: GameLogo_10
+  - first:
+      213: 8030189113689626370
+    second: GameLogo_11
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -46,7 +79,7 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 2
+  spriteMode: 1
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
@@ -129,10 +162,10 @@ TextureImporter:
       name: GameLogo_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 512
-        height: 512
+        x: 87
+        y: 282
+        width: 26
+        height: 25
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -147,11 +180,253 @@ TextureImporter:
       indices: 
       edges: []
       weights: []
+    - serializedVersion: 2
+      name: GameLogo_1
+      rect:
+        serializedVersion: 2
+        x: 140
+        y: 280
+        width: 11
+        height: 13
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fe7fb8e61cad610f0800000000000000
+      internalID: -1146488530801002513
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_2
+      rect:
+        serializedVersion: 2
+        x: 154
+        y: 282
+        width: 19
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7872cd50dbd313990800000000000000
+      internalID: -7408072029991327865
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_3
+      rect:
+        serializedVersion: 2
+        x: 209
+        y: 277
+        width: 20
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1661d359ee86ef460800000000000000
+      internalID: 7277369421792613985
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_4
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 44
+        width: 300
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 05d1839b5e2aa5ad0800000000000000
+      internalID: -2712676717998629552
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_5
+      rect:
+        serializedVersion: 2
+        x: 93
+        y: 258
+        width: 16
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 71dae197fd936a800800000000000000
+      internalID: 623249230409936151
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_6
+      rect:
+        serializedVersion: 2
+        x: 145
+        y: 263
+        width: 15
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ba2a87679f974c4d0800000000000000
+      internalID: -3115230929892105557
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_7
+      rect:
+        serializedVersion: 2
+        x: 86
+        y: 30
+        width: 12
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3d626a57f8c30b5a0800000000000000
+      internalID: -6507634874698553645
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_8
+      rect:
+        serializedVersion: 2
+        x: 100
+        y: 32
+        width: 20
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e320104531bec84c0800000000000000
+      internalID: -4283790677289926082
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_9
+      rect:
+        serializedVersion: 2
+        x: 196
+        y: 38
+        width: 17
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7586b05f11973d7d0800000000000000
+      internalID: -2894837017436526505
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_10
+      rect:
+        serializedVersion: 2
+        x: 92
+        y: 14
+        width: 14
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 79929b7af5eb8ebc0800000000000000
+      internalID: -3753540971368207977
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GameLogo_11
+      rect:
+        serializedVersion: 2
+        x: 171
+        y: 0
+        width: 30
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 207dda00476f07f60800000000000000
+      internalID: 8030189113689626370
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
     outline: []
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5e97eb03825dee720800000000000000
     internalID: 0
     vertices: []
     indices: 
@@ -162,6 +437,17 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       GameLogo_0: 3822379315886523921
+      GameLogo_1: -1146488530801002513
+      GameLogo_10: -3753540971368207977
+      GameLogo_11: 8030189113689626370
+      GameLogo_2: -7408072029991327865
+      GameLogo_3: 7277369421792613985
+      GameLogo_4: -2712676717998629552
+      GameLogo_5: 623249230409936151
+      GameLogo_6: -3115230929892105557
+      GameLogo_7: -6507634874698553645
+      GameLogo_8: -4283790677289926082
+      GameLogo_9: -2894837017436526505
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

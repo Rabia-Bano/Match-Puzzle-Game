@@ -34,3 +34,12 @@ MonoBehaviour:
   levelNodeCompletedColor: {r: 1, g: 1, b: 1, a: 1}
   gameBoardTopBarImage: {fileID: 3101737556292566227, guid: bdc7e22901f49f248836e3908abed453, type: 3}
   bossArenaHUDImage: {fileID: 9151570955757876623, guid: 1549aec3c7ead7345931ea64247beda9, type: 3}
+  ambientType: 2
+  ambientTint: {r: 0.86415094, g: 0.4240541, b: 0.14185114, a: 1}
+  ambientTint2: {r: 0.5187457, g: 0.93962264, b: 0.019501582, a: 1}
+  ambientCount: 50
+  ambientSpeed: 1
+  ambientWind: 0.2
+  ambientCustomSprite: {fileID: 0}
+  animateBackground: 1
+  backgroundMotionStrength: 0.54

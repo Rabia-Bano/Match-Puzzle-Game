@@ -1,9 +1,11 @@
+using System.Collections.Generic;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Game.Firebase;
 using Match3;
+using DG.Tweening;
 
 /// ---------------------------------------------------------------------
 /// UPDATED:
@@ -65,6 +67,39 @@ public class ProfilePanel : MonoBehaviour
     [SerializeField] private GameObject avatarPickerPopup;     // the whole popup root GameObject
     [SerializeField] private Transform  avatarGridContainer;   // empty GameObject with GridLayoutGroup, 3 columns
     [SerializeField] private GameObject avatarSlotPrefab;      // a Button+Image prefab, one per avatar
+
+    // -----------------------------------------------------------------
+    // NEW — AVATAR PURCHASE inside this popup (no Store, no confirm panel).
+    // Every LOCKED avatar gets a "coin + price" BUY button right under it.
+    // One tap on that button = coins cut + avatar unlocked + equipped.
+    // -----------------------------------------------------------------
+    [Header("Avatar Purchase (NEW)")]
+    [Tooltip("Coin icon drawn inside every Buy button (use the same coin sprite as the TopBar).")]
+    [SerializeField] private Sprite   avatarCoinSprite;
+    [Tooltip("Optional padlock drawn on the top-right corner of LOCKED avatars.")]
+    [SerializeField] private Sprite   avatarLockSprite;
+    [Tooltip("Optional background sprite for the Buy button (e.g. a rounded green/wooden button). " +
+             "Leave empty for a simple rounded dark pill.")]
+    [SerializeField] private Sprite   buyButtonSprite;
+    [Tooltip("Optional — your OWN Buy button prefab (Button + a child TMP text; optional child Image named \"CoinIcon\"). " +
+             "If empty, the button is created by code.")]
+    [SerializeField] private GameObject buyButtonPrefab;
+    [Tooltip("Size of the Buy button in pixels (width, height).")]
+    [SerializeField] private Vector2  buyButtonSize = new Vector2(120f, 42f);
+    [Tooltip("Gap between the bottom of the avatar and the top of the Buy button.")]
+    [SerializeField] private float    buyButtonGap = 6f;
+    [SerializeField] private Color    buyButtonColor  = new Color(0.15f, 0.55f, 0.2f, 1f);
+    [SerializeField] private Color    priceTextColor  = new Color(1f, 0.9f, 0.3f, 1f);
+    [Tooltip("Price colour when the player can't afford it yet.")]
+    [SerializeField] private Color    cantAffordColor = new Color(1f, 0.45f, 0.45f, 1f);
+
+    [Header("Avatar Popup Texts (optional)")]
+    [Tooltip("TMP text inside the popup showing the player's coins.")]
+    [SerializeField] private TMP_Text avatarPopupCoinsText;
+    [Tooltip("TMP text inside the popup for short messages (\"Fox unlocked!\", \"Not enough coins\"). Start it INACTIVE.")]
+    [SerializeField] private TMP_Text avatarPopupMessageText;
+
+    private Coroutine _avatarMsgRoutine;
 
     // -----------------------------------------------------------------
     // Guest Register popup — NOW built manually in the Unity Editor,
@@ -392,6 +427,9 @@ public class ProfilePanel : MonoBehaviour
 
     private void OnChangeAvatarClicked()
     {
+        PopulateAvatarGrid();   // refresh owned / locked / equipped state every time the picker opens
+        SetAvatarMessage("");
+        RefreshAvatarPopupCoins();
         if (avatarPickerPopup != null) avatarPickerPopup.SetActive(true);
     }
 
@@ -409,10 +447,12 @@ public class ProfilePanel : MonoBehaviour
     }
 
     // ── POPULATE AVATAR GRID ──────────────────────────────────
-    // Fills the Editor-built avatarGridContainer with one instance of
-    // avatarSlotPrefab per AvatarPresetData found under Resources/Avatars/.
-    // Everything else (popup layout, title, close button, divider, grid
-    // columns) is built by hand in the Unity Editor — this method only wires data.
+    // UPDATED — the Avatar Picker popup is now ALSO the avatar shop:
+    //   • FREE / OWNED avatar  → tap the avatar = equip (same as before)
+    //   • EQUIPPED avatar      → green outline
+    //   • LOCKED avatar        → greyed out (+ padlock) and a
+    //                            [coin 150] BUY button right under it.
+    //                            Tap the button = buy + equip, done.
     private void PopulateAvatarGrid()
     {
         if (avatarGridContainer == null || avatarSlotPrefab == null)
@@ -421,25 +461,212 @@ public class ProfilePanel : MonoBehaviour
             return;
         }
 
-        // Clear any leftover placeholder children left in the grid for editing convenience.
         for (int i = avatarGridContainer.childCount - 1; i >= 0; i--)
             Destroy(avatarGridContainer.GetChild(i).gameObject);
 
-        AvatarPresetData[] presets = Resources.LoadAll<AvatarPresetData>("Avatars");
-        Debug.Log($"[ProfilePanel] PopulateAvatarGrid: found {presets.Length} preset(s) in Resources/Avatars/.");
+        List<AvatarPresetData> presets = AvatarShopManager.GetAll();
+        int coins = AvatarShopManager.CurrentCoins;
+        Debug.Log($"[ProfilePanel] PopulateAvatarGrid: {presets.Count} avatar(s), player coins = {coins}.");
 
         foreach (AvatarPresetData preset in presets)
         {
-            if (preset == null || preset.sprite == null) continue;
-            string id = preset.id;
-
+            AvatarPresetData captured = preset;
             GameObject slot = Instantiate(avatarSlotPrefab, avatarGridContainer);
+
+            bool owned    = AvatarShopManager.IsOwned(preset);
+            bool equipped = AvatarShopManager.IsEquipped(preset);
+
             Image slotImg = slot.GetComponent<Image>();
-            if (slotImg != null) { slotImg.sprite = preset.sprite; slotImg.preserveAspect = true; }
+            if (slotImg != null)
+            {
+                slotImg.sprite = preset.sprite;
+                slotImg.preserveAspect = true;
+                slotImg.color = owned ? Color.white : new Color(0.5f, 0.5f, 0.5f, 1f);
+            }
+
+            if (equipped)
+            {
+                Outline outline = slot.GetComponent<Outline>();
+                if (outline == null) outline = slot.AddComponent<Outline>();
+                outline.effectColor    = new Color(0.2f, 0.85f, 0.3f, 1f);
+                outline.effectDistance = new Vector2(4f, -4f);
+            }
 
             Button slotBtn = slot.GetComponent<Button>();
-            if (slotBtn != null) slotBtn.onClick.AddListener(() => SelectPresetAvatar(id));
+            if (slotBtn != null)
+            {
+                slotBtn.onClick.RemoveAllListeners();
+                slotBtn.onClick.AddListener(() => OnAvatarSlotClicked(captured));
+            }
+
+            if (!owned)
+            {
+                if (avatarLockSprite != null) AddLockIcon(slot.transform);
+                AddBuyButton(slot.transform, captured, coins >= preset.price);
+            }
         }
+    }
+
+    /// <summary>Tapping the avatar picture itself.</summary>
+    private void OnAvatarSlotClicked(AvatarPresetData preset)
+    {
+        AudioManager.Instance?.PlaySFX("button_click");
+
+        if (AvatarShopManager.IsOwned(preset))
+            SelectPresetAvatar(preset.id);
+        else
+            SetAvatarMessage($"Tap the coin button under {preset.NameOrId} to buy it.");
+    }
+
+    /// <summary>Tapping the [coin 150] button under a locked avatar.</summary>
+    private void OnBuyButtonClicked(AvatarPresetData preset, Transform button)
+    {
+        AudioManager.Instance?.PlaySFX("button_click");
+
+        var result = AvatarShopManager.TryPurchase(preset);
+        if (result != AvatarShopManager.PurchaseResult.Success)
+        {
+            SetAvatarMessage(AvatarShopManager.MessageFor(result, preset));
+            if (button != null)
+            {
+                button.DOKill();
+                button.DOShakePosition(0.35f, new Vector3(10f, 0f, 0f), 20).SetUpdate(true);
+            }
+            return;
+        }
+
+        AvatarShopManager.Equip(preset);      // updates profile image, top bar icon, leaderboard
+        RefreshAvatarPopupCoins();
+        RefreshUI();                          // profile card coins text
+        PopulateAvatarGrid();                 // button disappears, green outline moves to the new avatar
+        SetAvatarMessage($"{preset.NameOrId} unlocked!");
+    }
+
+    private void AddLockIcon(Transform slot)
+    {
+        var lockGo = new GameObject("LockIcon", typeof(RectTransform), typeof(Image));
+        lockGo.transform.SetParent(slot, false);
+        var rt = (RectTransform)lockGo.transform;
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.sizeDelta = new Vector2(34f, 34f);
+        rt.anchoredPosition = new Vector2(4f, 4f);
+        var img = lockGo.GetComponent<Image>();
+        img.sprite = avatarLockSprite;
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+    }
+
+    /// <summary>
+    /// Creates the [coin + price] Buy button directly UNDER the avatar slot.
+    /// It hangs below the slot's rect, so give the GridContainer's Grid Layout
+    /// Group enough vertical Spacing (≈ button height + gap + 10).
+    /// </summary>
+    private void AddBuyButton(Transform slot, AvatarPresetData preset, bool canAfford)
+    {
+        GameObject btnGo;
+        TMP_Text   priceText;
+
+        if (buyButtonPrefab != null)
+        {
+            // ── Designer's own prefab ──
+            btnGo = Instantiate(buyButtonPrefab, slot, false);
+            priceText = btnGo.GetComponentInChildren<TMP_Text>(true);
+            Transform coinT = btnGo.transform.Find("CoinIcon");
+            if (coinT != null && avatarCoinSprite != null && coinT.TryGetComponent(out Image ci)) ci.sprite = avatarCoinSprite;
+        }
+        else
+        {
+            // ── Built by code: [ (coin) 150 ] ──
+            btnGo = new GameObject("BuyButton", typeof(RectTransform), typeof(Image), typeof(Button));
+            btnGo.transform.SetParent(slot, false);
+
+            var bg = btnGo.GetComponent<Image>();
+            if (buyButtonSprite != null)
+            {
+                bg.sprite = buyButtonSprite;
+                bg.type   = Image.Type.Sliced;
+                bg.color  = Color.white;
+            }
+            else
+            {
+                bg.color = buyButtonColor;
+            }
+
+            var hl = btnGo.AddComponent<HorizontalLayoutGroup>();
+            hl.childAlignment = TextAnchor.MiddleCenter;
+            hl.spacing = 6f;
+            hl.padding = new RectOffset(8, 8, 2, 2);
+            hl.childControlWidth = hl.childControlHeight = false;
+            hl.childForceExpandWidth = hl.childForceExpandHeight = false;
+
+            float h = buyButtonSize.y;
+            if (avatarCoinSprite != null)
+            {
+                var coin = new GameObject("CoinIcon", typeof(RectTransform), typeof(Image));
+                coin.transform.SetParent(btnGo.transform, false);
+                ((RectTransform)coin.transform).sizeDelta = new Vector2(h * 0.65f, h * 0.65f);
+                var cImg = coin.GetComponent<Image>();
+                cImg.sprite = avatarCoinSprite;
+                cImg.preserveAspect = true;
+                cImg.raycastTarget = false;
+            }
+
+            var txtGo = new GameObject("PriceText", typeof(RectTransform));
+            txtGo.transform.SetParent(btnGo.transform, false);
+            ((RectTransform)txtGo.transform).sizeDelta = new Vector2(buyButtonSize.x * 0.6f, h);
+            var tmp = txtGo.AddComponent<TextMeshProUGUI>();
+            tmp.fontSize  = h * 0.55f;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.raycastTarget = false;
+            priceText = tmp;
+        }
+
+        // Position: centred, just below the avatar
+        var rt = (RectTransform)btnGo.transform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
+        rt.pivot     = new Vector2(0.5f, 1f);
+        rt.sizeDelta = buyButtonSize;
+        rt.anchoredPosition = new Vector2(0f, -buyButtonGap);
+
+        if (priceText != null)
+        {
+            priceText.text  = preset.price.ToString("N0");
+            priceText.color = canAfford ? priceTextColor : cantAffordColor;
+        }
+
+        Button btn = btnGo.GetComponent<Button>();
+        if (btn != null)
+        {
+            btn.onClick.RemoveAllListeners();
+            btn.onClick.AddListener(() => OnBuyButtonClicked(preset, btnGo.transform));
+        }
+    }
+
+    private void RefreshAvatarPopupCoins()
+    {
+        if (avatarPopupCoinsText != null)
+            avatarPopupCoinsText.text = AvatarShopManager.CurrentCoins.ToString("N0");
+    }
+
+    private void SetAvatarMessage(string msg)
+    {
+        if (avatarPopupMessageText == null)
+        {
+            if (!string.IsNullOrEmpty(msg)) ShowError(msg);   // falls back to the panel's error text
+            return;
+        }
+        avatarPopupMessageText.text = msg;
+        avatarPopupMessageText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
+        if (_avatarMsgRoutine != null) StopCoroutine(_avatarMsgRoutine);
+        if (!string.IsNullOrEmpty(msg)) _avatarMsgRoutine = StartCoroutine(ClearAvatarMessageAfter(3f));
+    }
+
+    private IEnumerator ClearAvatarMessageAfter(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+        if (avatarPopupMessageText != null) avatarPopupMessageText.gameObject.SetActive(false);
     }
 
     // ── Display Name Edit ─────────────────────────────────────

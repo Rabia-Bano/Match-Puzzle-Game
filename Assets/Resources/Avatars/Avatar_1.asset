@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: Avatar_1
   sprite: {fileID: -8593363048089091735, guid: f3a5c381a3d445546b08d48f00ff3355, type: 3}
+  displayName: Panda
+  price: 500
+  sortOrder: 1
+  badgeText: 

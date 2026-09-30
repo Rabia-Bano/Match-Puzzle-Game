@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: Avatar_5
   sprite: {fileID: 2979186755827144330, guid: 005baa5e4bc7d864095bed9e05345d7b, type: 3}
+  displayName: Bear
+  price: 500
+  sortOrder: 5
+  badgeText: 

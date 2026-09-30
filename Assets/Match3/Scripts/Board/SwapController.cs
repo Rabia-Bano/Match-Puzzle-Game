@@ -220,9 +220,27 @@ namespace Match3
             if (matchFormed)
             {
                 boardRotation?.RegisterMove();
+
+                // FIX (Rabia's report — "last move completed the goal but the
+                // result screen showed Lose anyway"): boardController.
+                // ProcessTurn() used to be called AFTER OnMoveCompleted() here.
+                // ProcessTurn() marks boardController.IsBusy = true SYNCHRONOUSLY
+                // (its very first line, before any yield). But OnMoveCompleted()
+                // can — on the LAST move — SYNCHRONOUSLY fire MoveCounter.
+                // OnMovesExhausted, which starts LevelResultManager's lose-check
+                // coroutine right then and there. That coroutine's first step
+                // waits for boardController.IsBusy to go true → false — but since
+                // ProcessTurn() hadn't run yet, IsBusy was still false at that
+                // exact instant, so the wait exited immediately without actually
+                // waiting for this match to clear — and the lose-check then read
+                // goalTracker.AllGoalsComplete BEFORE this very match (the one
+                // that would have completed the goal) had even started resolving.
+                // Calling ProcessTurn() FIRST guarantees IsBusy is already true
+                // the moment OnMoveCompleted() (and any exhausted-move check it
+                // triggers) runs.
+                boardController.ProcessTurn();
                 levelManager?.OnMoveCompleted();
 
-                boardController.ProcessTurn();
                 yield return StartCoroutine(WaitForBoardController());
 
                 IsBusy = false;

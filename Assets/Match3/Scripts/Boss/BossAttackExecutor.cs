@@ -21,9 +21,13 @@ namespace Match3
     public class BossAttackExecutor : MonoBehaviour
     {
         [Header("References")]
-        [SerializeField] private BoardGrid    boardGrid;
-        [SerializeField] private MoveCounter  moveCounter;
-        [SerializeField] private JellyManager jellyManager;
+        [SerializeField] private BoardGrid      boardGrid;
+        [SerializeField] private MoveCounter    moveCounter;
+        [SerializeField] private JellyManager   jellyManager;
+        [Tooltip("NEW — needed so ThawBossFrozenTiles() can trigger a match re-check the moment " +
+                 "tiles unfreeze (fixes: 2 frozen same-colour tiles next to a 3rd same-colour tile " +
+                 "never auto-clearing when they unfroze). Assign the same BoardController the board uses.")]
+        [SerializeField] private BoardController boardController;
 
         [Header("Obstacle Tile Data")]
         [Tooltip("A TileData asset with isHardTile = true (a 'rock' blocker). Used by ExecuteAddObstacles().")]
@@ -49,6 +53,7 @@ namespace Match3
             if (!hardTileData) Debug.LogWarning("[BossAttackExecutor] hardTileData not assigned — ExecuteAddObstacles() will do nothing.", this);
             if (!dropStoneData) Debug.LogWarning("[BossAttackExecutor] dropStoneData not assigned — ExecuteStoneTiles() will do nothing.", this);
             if (!jellyManager) Debug.LogWarning("[BossAttackExecutor] jellyManager not assigned — ExecuteAddJelly() will do nothing.", this);
+            if (!boardController) Debug.LogWarning("[BossAttackExecutor] boardController not assigned — thawed tiles won't auto-match/clear even if unfreezing creates a valid match.", this);
         }
 
         // ─────────────────────────────────────────────────────
@@ -102,6 +107,8 @@ namespace Match3
         /// <summary>Unfreezes every tile this executor froze (that's still on the board and still Locked). Safe to call anytime — e.g. on boss defeat, to clean up immediately.</summary>
         public void ThawBossFrozenTiles()
         {
+            bool thawedAny = false;
+
             foreach (Tile t in _bossFrozenTiles)
             {
                 if (t == null) continue;
@@ -111,8 +118,17 @@ namespace Match3
                 t.SetState(TileState.Normal);
                 t.transform.DOKill();
                 t.transform.DOPunchScale(Vector3.one * 0.1f, feedbackDuration, 3, 0.5f);
+                thawedAny = true;
             }
             _bossFrozenTiles.Clear();
+
+            // FIX: unfreezing can suddenly line up 3+ same-colour tiles (e.g. 2
+            // frozen tiles sitting next to a normal tile of the same colour) —
+            // but match detection normally only runs after a swap or after
+            // gravity settles new tiles, and thawing goes through neither path.
+            // Without this, that match just sits there unmatched forever.
+            if (thawedAny)
+                boardController?.CheckForMatchesAfterExternalChange();
         }
 
         // ─────────────────────────────────────────────────────

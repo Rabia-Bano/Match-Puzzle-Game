@@ -48,26 +48,56 @@ namespace Match3
         // ─────────────────────────────────────────────────────
 
         /// <summary>
-        /// Reports goal progress + peels jelly for a NORMAL tile that a combo
-        /// blast is clearing. Callers must have already ruled out special /
-        /// hard / drop-stone tiles before calling this.
+        /// NEW (Rabia's rule, corrected): controls whether ClearNormalTileTracked()
+        /// below reports each cleared weakness-colour tile to
+        /// BossDamageEvents.OnSpecialTileCleared.
         ///
-        /// UPDATED (Rabia's request): a single special-tile blast (Striped,
-        /// Wrapped) should NEVER damage the boss anymore — only a Color Bomb's
-        /// blast should (and that's now reported separately as a fixed "5+"
-        /// hit via BossDamageEvents.OnColorBombBlast, NOT through here — see
-        /// ColorBombEffect.Activate()). So `reportBossDamage` defaults to
-        /// false; only pass true from a caller that explicitly wants the old
-        /// per-tile-colour Boss report behaviour.
+        /// FALSE (default) — a STANDALONE single special-tile blast (Striped or
+        /// Wrapped fired alone against a normal tile) never hurts the boss.
+        /// Color Bomb's standalone blast doesn't use this flag at all — it
+        /// always damages the boss through its own separate, dedicated
+        /// BossDamageEvents.OnColorBombBlast event (see ColorBombEffect.Activate()).
+        ///
+        /// TRUE — set by SpecialCombinations.cs right before it fires a
+        /// 2-special-tile combo (Striped+Striped, Wrapped+Striped,
+        /// Wrapped+Wrapped, Rainbow+Other), and reset back to false once that
+        /// combo finishes — this is a PROPERTY (not a method parameter)
+        /// specifically because BlastRow/BlastColumn/Pulse3x3/Activate() are
+        /// the SAME shared methods used by both a standalone single blast and
+        /// a combo — a property lets the caller (single activation vs combo)
+        /// toggle the behaviour without changing every method signature in
+        /// between.
         /// </summary>
-        protected void ClearNormalTileTracked(Tile t, List<Tile> cleared, bool reportBossDamage = false)
+        public bool ReportBossDamageOnClear { get; set; } = false;
+
+        /// <summary>
+        /// NEW — when true, the wave/pulse per-tile animation delay
+        /// (tileBlastDelay) inside WaveClearHorizontal/Vertical (StripedTileEffect)
+        /// and BurstClear (WrappedTileEffect) is skipped, so the whole row/column/
+        /// 3x3 area clears in the same frame instead of a left-to-right or
+        /// center-outward sweep. FALSE (default) for a standalone single blast
+        /// (keeps its normal sweep feel). SpecialCombinations sets this to TRUE
+        /// right before firing a 2-special-tile combo — Rabia's request: "jab do
+        /// special-tiles swap ho to ek daam se blast ho tiles" (whole combo clears
+        /// at once, same as the Rainbow+Rainbow board-clear already does) — and
+        /// resets it back to false once the combo finishes.
+        /// </summary>
+        public bool InstantBlast { get; set; } = false;
+
+        /// <summary>
+        /// Reports goal progress + peels jelly for a NORMAL tile that a blast
+        /// is clearing. Callers must have already ruled out special / hard /
+        /// drop-stone tiles before calling this. Whether this also damages the
+        /// boss depends on ReportBossDamageOnClear above.
+        /// </summary>
+        protected void ClearNormalTileTracked(Tile t, List<Tile> cleared)
         {
             levelManager?.OnTileCleared(t.Data);
 
             if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
                 levelManager?.OnJellyCleared();
 
-            if (reportBossDamage && t.Data != null)
+            if (ReportBossDamageOnClear && t.Data != null)
                 BossDamageEvents.OnSpecialTileCleared?.Invoke(t.Data.color);
 
             cleared.Add(t);

@@ -37,6 +37,11 @@ namespace Match3.Theme
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
+            // NEW — theme animations (snow / leaves / sand / stars ...) live on this
+            // same persistent object, so they play in EVERY scene automatically.
+            if (GetComponent<ThemeAmbientFX>() == null)
+                gameObject.AddComponent<ThemeAmbientFX>();
+
             // Warn early if the array is empty so Rabia doesn't debug a silent no-op later.
             if (themes == null || themes.Length == 0)
                 Debug.LogWarning("[ThemeManager] No ThemeData assigned in Inspector.");

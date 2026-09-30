@@ -29,6 +29,10 @@ public class LevelManager : MonoBehaviour
     public Match3.GoalTracker goalTracker;
     public Match3.MoveCounter moveCounter;
 
+    [Header("Timer (optional — NEW)")]
+    [Tooltip("Drag the LevelTimer component here. Only used when the level's LevelData.useTimer is ON.")]
+    public Match3.LevelTimer levelTimer;
+
     [Header("Obstacle Systems (optional — leave blank if unused)")]
     public Match3.JellyManager    jellyManager;
     public Match3.HardTileManager hardTileManager;
@@ -166,6 +170,30 @@ public class LevelManager : MonoBehaviour
         }
     }
 
+    /// <summary>NEW — warns at load time if a jelly / hard tile / stone was placed
+    /// on a blank cell (it will simply be skipped, but the level designer
+    /// should know).</summary>
+    private void ValidateBlankOverlaps()
+    {
+        if (levelData.blankPositions == null || levelData.blankPositions.Length == 0) return;
+
+        void Check(Vector2Int[] cells, string label)
+        {
+            if (cells == null) return;
+            foreach (var c in cells)
+                if (levelData.IsBlankCell(c.x, c.y))
+                    Debug.LogWarning($"[LevelManager] {label} at ({c.x},{c.y}) overlaps a BLANK cell — it will be skipped. " +
+                                     "Move it in the LevelData asset.", this);
+        }
+
+        Check(levelData.jellyPositions,    "Jelly");
+        Check(levelData.hardTilePositions, "Hard tile");
+        Check(levelData.stonePositions,    "Stone");
+
+        if (boardGrid != null && boardGrid.PlayableCellCount < 9)
+            Debug.LogWarning("[LevelManager] Fewer than 9 playable cells — this level may have no possible matches!", this);
+    }
+
     private void InitializeLevel()
     {
         // Goals
@@ -184,7 +212,18 @@ public class LevelManager : MonoBehaviour
 
         // Board
         if (boardGrid != null)
+        {
             boardGrid.InitializeBoard(levelData.width, levelData.height);
+
+            // NEW — blank holes must be applied BEFORE FillBoard(), so no gem
+            // (and later no obstacle) is ever spawned inside a hole.
+            boardGrid.SetBlankCells(levelData.blankPositions);
+            ValidateBlankOverlaps();
+        }
+
+        // NEW — timer (does nothing unless LevelData.useTimer is ON; it only
+        // starts counting when the player taps the goal panel's Start button).
+        levelTimer?.Initialize(levelData);
 
         // Tiles
         if (tileSpawner != null)

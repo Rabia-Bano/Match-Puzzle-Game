@@ -48,6 +48,8 @@ public class PlayerProfile
     public List<string> pets        = new List<string>();
     public List<string> unlockedPets = new List<string>();   // alias kept for compatibility
     public List<string> boosters    = new List<string>();
+    // NEW — ids of avatars bought in the Avatar Shop (free ones are never stored here)
+    public List<string> ownedAvatars = new List<string>();
 
     // ── Timestamps (stored as string for Firestore) ───────────
     public string joinDate    = DateTime.UtcNow.ToString("o");
@@ -113,6 +115,7 @@ public class PlayerProfile
             { "pets",             pets             },
             { "unlockedPets",     unlockedPets     },
             { "boosters",         boosters         },
+            { "ownedAvatars",     ownedAvatars     },
             { "joinDate",         joinDate         },
             { "lastUpdated",      DateTime.UtcNow.ToString("o") }
         };
@@ -145,6 +148,7 @@ public class PlayerProfile
         p.pets             = GetList(data, "pets");
         p.unlockedPets     = GetList(data, "unlockedPets");
         p.boosters         = GetList(data, "boosters");
+        p.ownedAvatars     = GetList(data, "ownedAvatars");
         p.joinDate         = Get(data, "joinDate");
         p.lastUpdated      = Get(data, "lastUpdated");
 

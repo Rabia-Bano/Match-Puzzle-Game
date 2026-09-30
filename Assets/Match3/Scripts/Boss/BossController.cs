@@ -276,19 +276,20 @@ namespace Match3
         }
 
         /// <summary>
-        /// NEW — Color Bomb's single blast (not the Rainbow+Rainbow combo)
-        /// ALWAYS damages the boss at the same tier as clearing 5+ weakness
-        /// tiles, regardless of which colour it actually targeted. Deliberately
-        /// bypasses the weakness-colour check entirely — this is Color Bomb's
-        /// own dedicated damage rule, separate from HandleSpecialTileCleared.
+        /// CORRECTED — Color Bomb's single blast (not the Rainbow+Rainbow combo)
+        /// only damages the boss when it clears the boss's own weakness colour —
+        /// same weakness rule as a normal match. When it does match, it's a flat
+        /// "5+ weakness tiles" tier hit (bossData.damagePercent5Plus — 5% by
+        /// default), regardless of exactly how many tiles of that colour existed.
         /// </summary>
-        private void HandleColorBombBlast()
+        private void HandleColorBombBlast(TileColor color)
         {
             if (!HasFightBegun || bossData == null || IsDefeated) return;
+            if (color != bossData.weaknessTileType) return;
 
             float percent = bossData.damagePercent5Plus;
             int amount = Mathf.Max(1, Mathf.CeilToInt(MaxHealth * (percent / 100f)));
-            Debug.Log($"[BossController] Color Bomb blast → treated as a 5+ weakness hit → {percent}% → {amount} dmg.");
+            Debug.Log($"[BossController] Color Bomb blast on weakness colour → {percent}% → {amount} dmg.");
             TakeDamage(amount);
         }
 

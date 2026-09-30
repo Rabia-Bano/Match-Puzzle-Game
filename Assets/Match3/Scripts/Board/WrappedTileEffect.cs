@@ -132,7 +132,8 @@ namespace Match3
             burst.Append(tile.transform.DOScale(0f,   0.1f).SetEase(Ease.InBack));
             burst.OnComplete(() => tile.transform.localScale = Vector3.one);
 
-            yield return new WaitForSeconds(tileBlastDelay * 0.5f);
+            if (!InstantBlast)
+                yield return new WaitForSeconds(tileBlastDelay * 0.5f);
         }
 
         // ─────────────────────────────────────────────────────

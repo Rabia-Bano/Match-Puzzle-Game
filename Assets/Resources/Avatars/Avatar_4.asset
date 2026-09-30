@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: Avatar_4
   sprite: {fileID: 2817778216939327335, guid: 6f41fadbcdf7f8045bdd5051ed764caa, type: 3}
+  displayName: Rebot
+  price: 500
+  sortOrder: 4
+  badgeText: 

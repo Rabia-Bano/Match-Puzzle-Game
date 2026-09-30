@@ -70,6 +70,9 @@ namespace Match3
 
         private void SpawnAt(int x, int y)
         {
+            // NEW — blank holes never get a tile.
+            if (boardGrid.IsBlank(x, y)) return;
+
             TileData chosen = PickSafeTile(x, y);
             if (chosen != null)
                 boardGrid.SpawnTile(x, y, chosen);

@@ -82,13 +82,14 @@ namespace Match3
 
             AddScoreForCleared(clearedTiles.Count);
 
-            // NEW (Rabia's request): a Color Bomb's single blast always hurts
-            // the boss at the "5+ weakness tiles" tier — regardless of which
-            // colour it actually cleared. Every other special tile's single
-            // blast does zero boss damage now (see SpecialTileEffect.
-            // ClearNormalTileTracked's reportBossDamage default).
+            // CORRECTED (Rabia's clarification): Color Bomb only damages the boss
+            // when it actually clears the boss's WEAKNESS colour — not any colour.
+            // When it does, it's a flat "5%"/5+ tier hit (bossData.damagePercent5Plus),
+            // same rule as clearing 5+ weakness tiles at once. Every other special
+            // tile's STANDALONE single blast still does zero boss damage — see
+            // SpecialTileEffect.ReportBossDamageOnClear (defaults false).
             if (targets.Count > 0)
-                BossDamageEvents.OnColorBombBlast?.Invoke();
+                BossDamageEvents.OnColorBombBlast?.Invoke(colorToClear);
         }
 
         // ─────────────────────────────────────────────────────

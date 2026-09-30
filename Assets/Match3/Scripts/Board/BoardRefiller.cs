@@ -50,9 +50,14 @@ namespace Match3
                 // until whatever's blocking it is cleared. Filling those cells
                 // anyway is what caused a tile to seemingly "appear out of
                 // nowhere" underneath a hard tile.
+                //
+                // NEW — blank holes are neither "occupied" nor "empty": the scan
+                // simply passes over them (new tiles drop THROUGH a hole), so a
+                // column whose top cell is blank still refills correctly.
                 var emptyRows = new List<int>();
                 for (int y = boardGrid.Height - 1; y >= 0; y--)
                 {
+                    if (boardGrid.IsBlank(col, y)) continue;
                     if (boardGrid.GetTile(col, y) != null) break;
                     emptyRows.Add(y);
                 }

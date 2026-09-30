@@ -85,19 +85,32 @@ namespace Match3
         /// cadence above (they used to share the same "id % 5" check). Only
         /// the boss block below changed; the pet block above is untouched, so
         /// regular level-play / pet unlocking behaves exactly as before.
+        ///
+        /// FIX (Rabia's report — "pet unlock popup shows every time, even
+        /// though the pet was already unlocked"): this used to flag
+        /// NewPetUnlocked/BossArenaUnlocked purely from "id % 5/6 == 0" with
+        /// no check for whether the unlock had already happened before — so
+        /// REPLAYING Level 5 (or 10, 15, 6, 12...) showed the "new pet" /
+        /// "new boss" popup every single time. `previousLevelsCompleted` is
+        /// the player's saved progress from BEFORE this completion (the
+        /// caller passes ProfileManager.Instance.Profile.levelsCompleted —
+        /// read before ProfileManager.OnLevelCompleted() bumps it) — an
+        /// unlock only fires when this is genuinely the FIRST time the
+        /// player has ever reached/passed that milestone level.
         /// </summary>
-        public static void CheckUnlocks()
+        public static void CheckUnlocks(int previousLevelsCompleted)
         {
             int id = CurrentLevelId;
+            bool isFirstTimePastThisLevel = previousLevelsCompleted < id;
 
-            if (id > 0 && id % 5 == 0)
+            if (isFirstTimePastThisLevel && id > 0 && id % 5 == 0)
             {
                 NewPetUnlocked   = true;
                 UnlockedPetIndex = id / 5;   // 1 = pet unlocked after Level 5, 2 = after Level 10, ...
                 Debug.Log($"[LevelSession] Pet unlock! Index={UnlockedPetIndex}");
             }
 
-            if (id > 0 && id % 6 == 0)
+            if (isFirstTimePastThisLevel && id > 0 && id % 6 == 0)
             {
                 BossArenaUnlocked = true;
                 UnlockedBossId    = id / 6;   // 1 = boss unlocked after Level 6, 2 = after Level 12, ...

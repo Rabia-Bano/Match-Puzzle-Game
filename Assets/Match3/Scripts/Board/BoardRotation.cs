@@ -1,55 +1,129 @@
 // ============================================================
-//  BoardRotation.cs
+//  BoardRotation.cs  —  UPDATED (square + NON-SQUARE boards)
 //
 //  Fires every N player moves (default 5).
-//  Rotates the LOGICAL grid array 90 degrees clockwise.
-//  Rotates all tile GameObjects in world space via DOTween.
-//  Updates every Tile's stored GridPosition after rotation.
 //
-//  This component only performs the rotation itself — it does NOT
-//  check for new matches afterwards. BoardController.TurnRoutine()
-//  calls RotateBoard90() and then re-runs its ResolveBoard() cascade
-//  loop, so any match the rotation creates is found and cleared the
-//  same way a normal swap-match would be.
+//  WHAT CHANGED:
+//    Pehle yeh sirf SQUARE board (width == height) par chalta tha —
+//    non-square board par rotation skip ho jati thi. Ab:
 //
-//  Clockwise 90-degree matrix transform:
-//    newGrid[x][y] = oldGrid[y][W-1-x]
+//    • 90° rotation on a W x H board produces an H x W board.
+//      (e.g. 6 columns x 8 rows  ->  8 columns x 6 rows)
+//      BoardGrid.ApplyRotatedLayout() swaps Width/Height, recomputes
+//      the world origin and smoothly re-fits the camera.
+//    • 180° rotation keeps the same dimensions.
+//    • Blank cells (holes), jelly, hard tiles, stones, frozen tiles
+//      all rotate WITH the board — one shared mapping function
+//      (BoardRotationMath) is used for tiles, blank mask and jelly,
+//      so they can never go out of sync.
+//    • FIX: the old logical mapping  new(x,y)=old(y,W-1-x)  was actually
+//      COUNTER-clockwise while the pivot animation turned CLOCKWISE, so
+//      with usePivotRotation=true tiles visibly "jumped" at the end.
+//      Logic and animation now always turn the same direction.
+//    • FIX: any Locked tile (hard tile, dropdown stone, boss-frozen tile)
+//      keeps its Locked state after rotation — previously only hard tiles
+//      were protected, so stones silently became swappable.
+//
+//  This component only performs the rotation itself — BoardController
+//  .TurnRoutine() calls RotateBoard90() and then re-runs ResolveBoard(),
+//  so any match the rotation creates is resolved normally.
 //
 //  Attach to: BoardRotation (empty GameObject)
-//  Wire:      boardGrid
+//  Wire:      boardGrid, (optional) jellyManager
 // ============================================================
 
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
 
 namespace Match3
 {
+    /// <summary>How the board turns each time a rotation triggers.</summary>
+    public enum BoardRotationStyle
+    {
+        Clockwise90        = 0,
+        CounterClockwise90 = 1,
+        Rotate180          = 2,
+        RandomEachTime     = 3    // picks 90° CW / 90° CCW / 180° at random
+    }
+
+    /// <summary>
+    /// Pure math shared by BoardRotation and JellyManager so every layer of the
+    /// board (tiles, blank mask, jelly) rotates with the EXACT same mapping.
+    /// quarterTurnsCW: 1 = 90° clockwise, 2 = 180°, 3 = 90° counter-clockwise.
+    /// Coordinates: x = column (left→right), y = row (bottom→top).
+    /// </summary>
+    public static class BoardRotationMath
+    {
+        public static void NewSize(int oldW, int oldH, int quarterTurnsCW, out int newW, out int newH)
+        {
+            bool swap = (quarterTurnsCW & 1) == 1;
+            newW = swap ? oldH : oldW;
+            newH = swap ? oldW : oldH;
+        }
+
+        public static Vector2Int Map(int x, int y, int oldW, int oldH, int quarterTurnsCW)
+        {
+            switch (((quarterTurnsCW % 4) + 4) % 4)
+            {
+                case 1:  return new Vector2Int(y, oldW - 1 - x);              // 90° CW
+                case 2:  return new Vector2Int(oldW - 1 - x, oldH - 1 - y);   // 180°
+                case 3:  return new Vector2Int(oldH - 1 - y, x);              // 90° CCW
+                default: return new Vector2Int(x, y);
+            }
+        }
+
+        /// <summary>Rotates any 2-D array with the shared mapping.</summary>
+        public static T[,] Rotate<T>(T[,] source, int quarterTurnsCW)
+        {
+            if (source == null) return null;
+            int w = source.GetLength(0), h = source.GetLength(1);
+            NewSize(w, h, quarterTurnsCW, out int nw, out int nh);
+
+            var result = new T[nw, nh];
+            for (int x = 0; x < w; x++)
+            for (int y = 0; y < h; y++)
+            {
+                Vector2Int n = Map(x, y, w, h, quarterTurnsCW);
+                result[n.x, n.y] = source[x, y];
+            }
+            return result;
+        }
+    }
+
     public class BoardRotation : MonoBehaviour
     {
         // ── Inspector ─────────────────────────────────────────
 
         [Header("References")]
         [SerializeField] private BoardGrid boardGrid;
-        [Tooltip("Optional — if a level uses jelly, wire this so the jelly layer rotates WITH the board (otherwise it stays pinned to its old cell while tiles rotate away from it).")]
+        [Tooltip("Optional — if a level uses jelly, wire this so the jelly layer rotates WITH the board.")]
         [SerializeField] private JellyManager jellyManager;
 
         [Header("Rotation Settings")]
         [Tooltip("How many player moves between each board rotation.")]
         [SerializeField] private int movesPerRotation = 5;
 
-        [Tooltip("DOTween duration for the full 90-degree rotation animation.")]
-        [SerializeField] private float rotationDuration = 0.4f;
+        [Tooltip("Direction/amount of each rotation. Works for square AND non-square boards.")]
+        [SerializeField] private BoardRotationStyle rotationStyle = BoardRotationStyle.Clockwise90;
+
+        [Tooltip("If true, a NON-square board only ever rotates 180° (keeps its shape, camera never zooms). " +
+                 "If false (default), non-square boards rotate 90° too and the board changes shape (6x8 -> 8x6).")]
+        [SerializeField] private bool nonSquareUse180Only = false;
+
+        [Tooltip("Duration of the rotation animation (seconds).")]
+        [SerializeField] private float rotationDuration = 0.45f;
 
         [Tooltip("Ease curve for the rotation animation.")]
         [SerializeField] private Ease rotationEase = Ease.InOutQuad;
 
-        [Tooltip("If true, the board pivot GameObject rotates visually.\n" +
-                 "If false, each tile tweens to its new world position individually.")]
-        [SerializeField] private bool usePivotRotation = true;
+        [Tooltip("If true, the board pivot GameObject rotates visually (tiles must be its children).\n" +
+                 "If false (recommended), each tile swings along an arc to its new world position.")]
+        [SerializeField] private bool usePivotRotation = false;
 
-        [Tooltip("The parent Transform that tiles are children of (for pivot rotation).\n" +
-                 "If null, falls back to per-tile position tween.")]
+        [Tooltip("Parent Transform that tiles are children of (only used when usePivotRotation = true). " +
+                 "Must sit exactly at the board centre (same position as BoardGrid).")]
         [SerializeField] private Transform boardPivot;
 
         // ── Events ────────────────────────────────────────────
@@ -57,7 +131,7 @@ namespace Match3
         /// <summary>Fires before the rotation animation starts. Int = rotation count.</summary>
         public System.Action<int> OnBeforeRotation;
 
-        /// <summary>Fires after rotation + grid update complete (matches have NOT been resolved yet).</summary>
+        /// <summary>Fires after rotation + grid update complete (matches NOT resolved yet).</summary>
         public System.Action<int> OnAfterRotation;
 
         // ── Private state ─────────────────────────────────────
@@ -66,81 +140,59 @@ namespace Match3
         private int _rotationCount;
 
         // ─────────────────────────────────────────────────────
-        //  PUBLIC API
+        //  PUBLIC API (same names as before — SwapController / LevelHUD / BoardController use these)
         // ─────────────────────────────────────────────────────
 
-        /// <summary>Call this once per successful player move (SwapController does this).</summary>
         public void RegisterMove() => _moveCount++;
 
-        /// <summary>True if this move should trigger a rotation. BoardController checks this after each turn.</summary>
         public bool ShouldRotateThisTurn() =>
-            _moveCount > 0 && _moveCount % movesPerRotation == 0;
+            movesPerRotation > 0 && _moveCount > 0 && _moveCount % movesPerRotation == 0;
 
-        /// <summary>How many moves have been made so far.</summary>
         public int MoveCount => _moveCount;
 
-        /// <summary>Moves remaining until the next rotation (handy for a UI hint).</summary>
         public int MovesUntilRotation =>
             movesPerRotation - (_moveCount % movesPerRotation);
 
-        // ─────────────────────────────────────────────────────
-        //  ROTATE BOARD 90 DEGREES CLOCKWISE
-        // ─────────────────────────────────────────────────────
-
         /// <summary>
-        /// Full rotation coroutine:
-        ///   1. Fire OnBeforeRotation
-        ///   2. Animate tiles (pivot or per-tile)
-        ///   3. Rotate logical grid array clockwise
-        ///   4. Snap tiles to exact new world positions
-        ///   5. Fire OnAfterRotation
+        /// Old method name kept so BoardController needs no change. It now performs
+        /// whatever rotationStyle says (90° CW / 90° CCW / 180°), on square AND
+        /// non-square boards.
         /// </summary>
         public IEnumerator RotateBoard90()
         {
-            // FIX: RotateGridClockwise()'s math — new(x,y) = old(y, W-1-x) — is
-            // only valid for a SQUARE board. LevelData.cs allows width and height
-            // to be configured independently (e.g. 6x8), and nothing anywhere
-            // enforced them being equal for a level that also uses the rotation
-            // feature. On a non-square board this indexed straight out of the
-            // Grid array's bounds and threw an IndexOutOfRangeException the
-            // moment a rotation triggered (crashing that level outright). Since
-            // a true rectangular 90° rotation would need to resize the board
-            // itself (layout, camera framing, etc. all assume fixed dimensions),
-            // the safe fix here is to skip rotation entirely for non-square
-            // boards rather than crash — log it loudly so it's caught at design
-            // time instead of discovered mid-playtest.
-            if (boardGrid.Width != boardGrid.Height)
-            {
-                Debug.LogError($"[BoardRotation] Board is {boardGrid.Width}x{boardGrid.Height} " +
-                                "(non-square) — the rotation feature only supports square boards. " +
-                                "Skipping this rotation. Either make this level's LevelData " +
-                                "width == height, or don't wire BoardRotation for this level.", this);
-                yield break;
-            }
+            if (boardGrid == null || boardGrid.Grid == null) yield break;
+
+            int turns = PickQuarterTurns();
+            int oldW = boardGrid.Width;
+            int oldH = boardGrid.Height;
+            BoardRotationMath.NewSize(oldW, oldH, turns, out int newW, out int newH);
 
             _rotationCount++;
             OnBeforeRotation?.Invoke(_rotationCount);
-            Debug.Log($"[BoardRotation] Rotation #{_rotationCount} starting...");
+            Debug.Log($"[BoardRotation] Rotation #{_rotationCount}: {turns * 90}° clockwise " +
+                      $"({oldW}x{oldH} -> {newW}x{newH})");
 
+            // 1. Animate
             if (usePivotRotation && boardPivot != null)
             {
-                boardPivot.DORotate(
-                    new Vector3(0f, 0f, boardPivot.eulerAngles.z - 90f),
-                    rotationDuration,
-                    RotateMode.Fast)
-                    .SetEase(rotationEase);
-
+                boardPivot.DORotate(new Vector3(0f, 0f, boardPivot.eulerAngles.z - 90f * turns),
+                                    rotationDuration, RotateMode.FastBeyond360)
+                          .SetEase(rotationEase);
                 yield return new WaitForSeconds(rotationDuration);
-
-                // Reset pivot rotation so future rotations don't compound angle offsets.
                 boardPivot.rotation = Quaternion.identity;
             }
             else
             {
-                yield return StartCoroutine(AnimatePerTile());
+                yield return StartCoroutine(AnimatePerTile(turns, oldW, oldH, newW, newH));
             }
 
-            RotateGridClockwise();
+            // 2. Rotate every logical layer with the SAME mapping
+            Tile[,] rotatedTiles = BoardRotationMath.Rotate(boardGrid.Grid, turns);
+            bool[,] rotatedBlank = BoardRotationMath.Rotate(boardGrid.BlankMask, turns);
+            boardGrid.ApplyRotatedLayout(rotatedTiles, rotatedBlank);
+            jellyManager?.RotateLayout(turns);
+
+            // 3. Snap tiles exactly onto the new layout
             SnapTilesToGrid();
 
             OnAfterRotation?.Invoke(_rotationCount);
@@ -148,56 +200,65 @@ namespace Match3
         }
 
         // ─────────────────────────────────────────────────────
-        //  LOGICAL GRID ROTATION  (clockwise 90 degrees)
-        // ─────────────────────────────────────────────────────
 
-        private void RotateGridClockwise()
+        private int PickQuarterTurns()
         {
-            int W = boardGrid.Width;
-            int H = boardGrid.Height;
+            bool square = boardGrid.Width == boardGrid.Height;
+            if (!square && nonSquareUse180Only) return 2;
 
-            Tile[,] rotated = new Tile[W, H];
-
-            for (int x = 0; x < W; x++)
-            for (int y = 0; y < H; y++)
-                rotated[x, y] = boardGrid.Grid[y, W - 1 - x];   // clockwise: new(x,y) = old(y, W-1-x)
-
-            for (int x = 0; x < W; x++)
-            for (int y = 0; y < H; y++)
-                boardGrid.SetTile(x, y, rotated[x, y]);         // also syncs each Tile's GridX/GridY
-
-            jellyManager?.RotateClockwise(W, H);
+            switch (rotationStyle)
+            {
+                case BoardRotationStyle.CounterClockwise90: return 3;
+                case BoardRotationStyle.Rotate180:          return 2;
+                case BoardRotationStyle.RandomEachTime:     return Random.Range(1, 4);   // 1, 2 or 3
+                default:                                    return 1;
+            }
         }
-
-        // ─────────────────────────────────────────────────────
-        //  ANIMATION METHODS
-        // ─────────────────────────────────────────────────────
 
         /// <summary>
-        /// Per-tile animation: each tile tweens to its new world position
-        /// AFTER the logical rotation. Used when no pivot object is available.
+        /// Each tile swings around the board centre along a circular arc and lands on
+        /// its cell in the NEW layout (which may have swapped width/height).
         /// </summary>
-        private IEnumerator AnimatePerTile()
+        private IEnumerator AnimatePerTile(int turns, int oldW, int oldH, int newW, int newH)
         {
-            int W = boardGrid.Width;
+            Vector3 centre     = boardGrid.transform.position;
+            float   totalAngle = -90f * turns;           // negative z = clockwise in Unity
+            Quaternion fullRot = Quaternion.Euler(0f, 0f, totalAngle);
 
-            var moves = new System.Collections.Generic.List<(Tile tile, Vector3 target)>();
+            var moves = new List<(Tile tile, Vector3 start, Vector3 correction)>();
 
-            for (int x = 0; x < W; x++)
-            for (int y = 0; y < boardGrid.Height; y++)
+            for (int x = 0; x < oldW; x++)
+            for (int y = 0; y < oldH; y++)
             {
-                Tile tile = boardGrid.Grid[y, W - 1 - x];   // same mapping as RotateGridClockwise
+                Tile tile = boardGrid.Grid[x, y];
                 if (tile == null) continue;
-                moves.Add((tile, boardGrid.GridToWorld(x, y)));
+
+                Vector2Int n     = BoardRotationMath.Map(x, y, oldW, oldH, turns);
+                Vector3    start = tile.transform.position;
+                Vector3    end   = boardGrid.GridToWorldForSize(n.x, n.y, newW, newH);
+                Vector3    arcEnd = centre + fullRot * (start - centre);
+                // correction is ~zero for a centred board; kept so the tile ALWAYS
+                // lands exactly on its target even if the pivot isn't perfectly centred.
+                moves.Add((tile, start, end - arcEnd));
             }
 
-            foreach (var (tile, target) in moves)
-                tile.transform.DOMove(target, rotationDuration).SetEase(rotationEase);
+            float elapsed = 0f;
+            while (elapsed < rotationDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = DOVirtual.EasedValue(0f, 1f, Mathf.Clamp01(elapsed / rotationDuration), rotationEase);
+                Quaternion rot = Quaternion.Euler(0f, 0f, totalAngle * t);
 
-            yield return new WaitForSeconds(rotationDuration + 0.05f);
+                foreach (var (tile, start, correction) in moves)
+                {
+                    if (tile == null) continue;
+                    tile.transform.position = centre + rot * (start - centre) + correction * t;
+                }
+                yield return null;
+            }
         }
 
-        /// <summary>After logical rotation, snap every tile's transform to its exact world position.</summary>
+        /// <summary>After the logical rotation, snap every tile to its exact world position.</summary>
         private void SnapTilesToGrid()
         {
             for (int x = 0; x < boardGrid.Width; x++)
@@ -207,17 +268,11 @@ namespace Match3
                 if (tile == null) continue;
                 tile.transform.position = boardGrid.GridToWorld(x, y);
 
-                // Don't clobber a hard tile's Locked state — that's the ONLY
-                // thing keeping it un-swappable and un-matchable. This used
-                // to unconditionally force every tile (hard tiles included)
-                // back to Normal after every rotation, which silently
-                // un-locked hard tiles: they became swappable, and once
-                // swapped, a normal tile ended up sitting where the hard
-                // tile used to be (looking like the hard tile "changed
-                // colour"). Only reset the "was mid fall/swap animation"
-                // state back to Normal for everything else.
+                // Keep ANY locked tile locked (hard tile, dropdown stone, boss-frozen
+                // tile). Only tiles that were mid fall/swap go back to Normal.
                 bool isHardTile = tile.Data != null && tile.Data.isHardTile;
-                if (!isHardTile)
+                bool isStone    = tile.Data != null && tile.Data.isDropStone;
+                if (!isHardTile && !isStone && tile.State != TileState.Locked)
                     tile.SetState(TileState.Normal);
             }
         }

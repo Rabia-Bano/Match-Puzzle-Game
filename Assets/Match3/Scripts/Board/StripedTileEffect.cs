@@ -128,7 +128,8 @@ namespace Match3
                 boardGrid.RemoveTile(t.GridX, t.GridY);
                 t.SetState(TileState.Matched);
 
-                yield return new WaitForSeconds(tileBlastDelay);
+                if (!InstantBlast)
+                    yield return new WaitForSeconds(tileBlastDelay);
             }
 
             foreach (Tile t in tiles)
@@ -170,7 +171,8 @@ namespace Match3
                 boardGrid.RemoveTile(t.GridX, t.GridY);
                 t.SetState(TileState.Matched);
 
-                yield return new WaitForSeconds(tileBlastDelay);
+                if (!InstantBlast)
+                    yield return new WaitForSeconds(tileBlastDelay);
             }
 
             foreach (Tile t in tiles)

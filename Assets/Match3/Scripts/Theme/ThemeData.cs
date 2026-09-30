@@ -2,6 +2,21 @@ using UnityEngine;
 
 namespace Match3.Theme
 {
+    /// <summary>NEW — the animated ambient effect drawn over every scene for a theme.</summary>
+    public enum ThemeAmbientType
+    {
+        None      = 0,
+        Snow      = 1,   // Ice World
+        Leaves    = 2,   // Forest World
+        Sand      = 3,   // Desert World (wind-blown sand + dust puffs)
+        Stars     = 4,   // Space World (twinkling stars + shooting stars)
+        Bubbles   = 5,   // Ocean / Water world
+        Embers    = 6,   // Volcano / Lava world
+        Petals    = 7,   // Candy / Spring world
+        Rain      = 8,   // Jungle / Storm world
+        Fireflies = 9    // Night / Magic world
+    }
+
     /// <summary>
     /// One asset = one theme (e.g. "Ice World", "Forest World", "Desert World").
     /// Create via: Assets > Create > Match3 > Theme Data
@@ -63,5 +78,37 @@ namespace Match3.Theme
         [Header("BossGameBoard HUD")]
         [Tooltip("BossArenaHUD panel image, themed the same way as GameBoard TopBar (gameBoardTopBarImage below).")]
         public Sprite bossArenaHUDImage;
+
+        // ── NEW — Theme animation ─────────────────────────────
+        [Header("Ambient Animation (NEW — plays in EVERY scene)")]
+        [Tooltip("Ice = Snow, Forest = Leaves, Desert = Sand, Space = Stars ... None = off.")]
+        public ThemeAmbientType ambientType = ThemeAmbientType.None;
+
+        [Tooltip("Colour of the particles (white snow, green/orange leaves, sandy yellow ...).")]
+        public Color ambientTint = Color.white;
+
+        [Tooltip("Optional second colour — each particle picks a random colour between Tint and this. " +
+                 "Great for autumn leaves (green → orange) or embers (yellow → red).")]
+        public Color ambientTint2 = Color.white;
+
+        [Tooltip("How many particles on screen at once (mobile-friendly: 20–60).")]
+        [Range(0, 150)] public int ambientCount = 40;
+
+        [Tooltip("Speed multiplier for the whole effect.")]
+        [Range(0.2f, 3f)] public float ambientSpeed = 1f;
+
+        [Tooltip("Sideways wind. Negative = blows left, positive = blows right.")]
+        [Range(-1f, 1f)] public float ambientWind = 0f;
+
+        [Tooltip("Optional — your own particle sprite (e.g. a drawn snowflake from Canva). " +
+                 "Leave empty to use the built-in generated shape.")]
+        public Sprite ambientCustomSprite;
+
+        [Header("Background Animation (NEW)")]
+        [Tooltip("Slow zoom / drift on scene backgrounds that have a ThemeBackgroundAnimator component.")]
+        public bool animateBackground = true;
+
+        [Tooltip("0 = still, 1 = strong. Recommended 0.3–0.5.")]
+        [Range(0f, 1f)] public float backgroundMotionStrength = 0.4f;
     }
 }

@@ -29,6 +29,15 @@
 //    tarah pehle board ke MUKAMMAL settle (boardController.IsBusy ==
 //    false — combos/cascades included) hone ka wait karta hai, phir
 //    goals check karta hai.
+//
+//  UPDATE (Timer + Player Activity):
+//    • levelTimer — optional. When the level uses a timer, the clock
+//      starts on the Start button, stops on win/lose, and Time Up →
+//      "Time's Up!" lose panel (unless the goals were completed by the
+//      final cascade — then it's still a WIN).
+//    • PlayerActivityTracker — records level start / win / lose so the
+//      admin panel can see players who quit or replay a level again
+//      and again.
 // ============================================================
 
 using System.Collections;
@@ -50,6 +59,8 @@ namespace Match3
         [SerializeField] private LevelManager    levelManager;
         [SerializeField] private InputHandler    inputHandler;
         [SerializeField] private BoardController boardController;  // NEW — used to wait for the board to fully settle before showing results
+        [Tooltip("NEW — optional. Drag the LevelTimer here (same object you dragged into LevelManager.levelTimer).")]
+        [SerializeField] private LevelTimer      levelTimer;
 
         [Header("Config")]
         [SerializeField] private int coinsPerStar = 25;
@@ -59,6 +70,8 @@ namespace Match3
         [SerializeField] private GameObject startPanel;
         [SerializeField] private TMP_Text   startLevelTitle;    // "Level 1"
         [SerializeField] private TMP_Text   startMovesText;     // "Moves: 30"
+        [Tooltip("NEW — optional. Shows \"Time: 1:30\" on the start panel for timed levels; hidden otherwise.")]
+        [SerializeField] private TMP_Text   startTimeText;
         [SerializeField] private Transform  startGoalsContainer;
         [SerializeField] private GameObject goalRowPrefab;
         [SerializeField] private Button     startButton;
@@ -125,6 +138,7 @@ namespace Match3
         // ─── Private ──────────────────────────────────────────
         private bool _resultShown = false;
         private int  _currentLevelId;
+        private bool _loseByTimer = false;   // NEW — which lose reason to show
 
         // ─────────────────────────────────────────────────────
         // AWAKE
@@ -177,6 +191,7 @@ namespace Match3
 
             goalTracker?.OnAllGoalsComplete.AddListener(OnWin);
             moveCounter?.OnMovesExhausted .AddListener(OnMovesExhausted);
+            levelTimer?.OnTimeUp          .AddListener(OnTimeUp);   // NEW
 
             startButton?     .onClick.RemoveAllListeners();
             closeButton?     .onClick.RemoveAllListeners();
@@ -211,6 +226,7 @@ namespace Match3
             LevelManager.OnLevelInitialized -= OnLevelReady;
             goalTracker?.OnAllGoalsComplete.RemoveListener(OnWin);
             moveCounter?.OnMovesExhausted .RemoveListener(OnMovesExhausted);
+            levelTimer?.OnTimeUp          .RemoveListener(OnTimeUp);   // NEW
         }
 
         // ─────────────────────────────────────────────────────
@@ -248,6 +264,14 @@ namespace Match3
                     ?? LevelSession.CurrentLevel?.moveLimit
                     ?? 30;
                 startMovesText.text = $"Moves: {moves}";
+            }
+
+            // NEW — timer line on the start panel (timed levels only)
+            if (startTimeText != null)
+            {
+                bool timed = levelTimer != null && levelTimer.IsEnabledForLevel;
+                startTimeText.gameObject.SetActive(timed);
+                if (timed) startTimeText.text = $"Time: {levelTimer.FormattedRemaining}";
             }
 
             // Goal rows — wrapped in try-catch so panel shows
@@ -353,6 +377,19 @@ namespace Match3
                     inputHandler?.SetInputEnabled(true);
                     Debug.Log("[LevelResultManager] Gameplay started!");
 
+                    // NEW (Rabia's request) — the moment gameplay genuinely begins,
+                    // flag it as "in progress" so LivesManager can dock a life if the
+                    // app gets killed from the OS's task switcher before the level
+                    // ever finishes. Cleared in OnWin()/ShowLoseRoutine()/GoToMap()
+                    // below — see LivesManager.MarkLevelInProgress()'s own comment.
+                    LivesManager.Instance?.MarkLevelInProgress();
+
+                    // NEW — timer starts only now (never while the goal panel is open)
+                    levelTimer?.StartTimer();
+
+                    // NEW — admin panel analytics: one more attempt of this level
+                    PlayerActivityTracker.Instance?.RecordLevelStart(_currentLevelId);
+
                     // NEW — Rabia's request: obstacle tutorial cards must not
                     // appear until the player has seen the goal panel AND
                     // tapped Start on it. Previously LevelManager queued these
@@ -371,6 +408,15 @@ namespace Match3
         {
             if (_resultShown) return;
             _resultShown = true;
+
+            levelTimer?.StopTimer();                                           // NEW
+            PlayerActivityTracker.Instance?.RecordLevelResult(_currentLevelId, PlayerActivityTracker.Result.Win);   // NEW
+
+            // NEW (Rabia's request) — level is definitively over, clear the
+            // "in progress" flag so an app-kill AFTER this point never costs a
+            // life. See LivesManager.MarkLevelInProgress()'s comment.
+            LivesManager.Instance?.ClearLevelInProgress();
+
             AudioManager.Instance?.PlaySFX("level_win");
             JuiceManager.Instance?.FlashScreen(Color.white, 0.2f);
             TileVisualController.PlayEffect(winCelebrationPrefab, TileVisualController.ScreenCenterWorldPoint(), Color.white);
@@ -398,7 +444,14 @@ namespace Match3
             int coins     = stars * coinsPerStar;
 
             LevelSession.CurrentScore = score;
-            LevelSession.CheckUnlocks();
+
+            // FIX: pass the player's saved progress FROM BEFORE this level
+            // completion — read now, before ProfileManager.OnLevelCompleted()
+            // below bumps Profile.levelsCompleted — so CheckUnlocks() can tell
+            // a genuine first-time unlock apart from a replay of an already-
+            // cleared milestone level.
+            int previousLevelsCompleted = ProfileManager.Instance?.Profile?.levelsCompleted ?? 0;
+            LevelSession.CheckUnlocks(previousLevelsCompleted);
 
             // NEW — catch a theme change the instant it happens. ProfileManager.
             // OnLevelCompleted() below calls SyncTheme() synchronously, which (if
@@ -427,6 +480,19 @@ namespace Match3
             // land on the same level completion; every one of them gets its own
             // notice, shown in this order).
             BuildUnlockQueue(themeJustChanged, newTheme);
+
+            // FIX (Rabia's report): the win panel's Next/Replay/Map buttons used
+            // to become clickable the instant the panel appeared — but the unlock
+            // popup only shows later (after the star reveal + a short delay). A
+            // fast tap on "Next" fired GoToNextLevel() before the popup ever had
+            // a chance to appear, so the player never saw it (even though the
+            // unlock itself had already happened in LevelSession.CheckUnlocks()
+            // above). Now: if this level has any unlock notice queued, the three
+            // win-panel buttons are locked the moment the panel appears, and only
+            // re-enabled once every queued notice has been shown AND dismissed —
+            // see ShowNextUnlockNotice()/HideUnlockPopup() below.
+            bool hasUnlocksToShow = unlockPopup != null && _unlockQueue.Count > 0;
+            SetWinButtonsInteractable(!hasUnlocksToShow);
 
             // NEW — local save already updated by ProfileManager above; ab background
             // mein Firestore par bhi push kar do. Fire-and-forget: `_ =` isliye taake
@@ -513,6 +579,19 @@ namespace Match3
         private void OnMovesExhausted()
         {
             if (_resultShown) return;
+            levelTimer?.StopTimer();   // NEW — no point counting down with 0 moves
+            _loseByTimer = false;
+            StartCoroutine(CheckLoseDeferred());
+        }
+
+        /// <summary>NEW — LevelTimer reached 0. Same flow as running out of moves:
+        /// wait for the board to settle, then goals complete → win, else → lose.</summary>
+        private void OnTimeUp()
+        {
+            if (_resultShown) return;
+            inputHandler?.SetInputEnabled(false);   // no new swaps after the buzzer
+            _loseByTimer = true;
+            AudioManager.Instance?.PlaySFX("time_up");
             StartCoroutine(CheckLoseDeferred());
         }
 
@@ -542,6 +621,16 @@ namespace Match3
         {
             inputHandler?.SetInputEnabled(false);
 
+            // NEW (Rabia's request) — level is definitively over, clear the
+            // "in progress" flag first — this lose already costs its own life
+            // right below, so we don't want a LATER app-kill this session to
+            // double-charge for a level that's already finished.
+            LivesManager.Instance?.ClearLevelInProgress();
+
+            // NEW — admin panel analytics
+            PlayerActivityTracker.Instance?.RecordLevelResult(_currentLevelId,
+                _loseByTimer ? PlayerActivityTracker.Result.LoseTime : PlayerActivityTracker.Result.LoseMoves);
+
             // Regular-level loss costs 1 life. This is the ONLY place LoseLife()
             // is called — Boss Arena losses go through BossResultManager instead,
             // which never touches LivesManager, so boss fights never cost a life.
@@ -552,7 +641,7 @@ namespace Match3
             yield return new WaitForSeconds(panelShowDelay);
 
             int score = levelManager?.Score ?? LevelSession.CurrentScore;
-            if (loseTitleText != null) loseTitleText.text = "Out of Moves!";
+            if (loseTitleText != null) loseTitleText.text = _loseByTimer ? "Time's Up!" : "Out of Moves!";
             if (loseScoreText != null) loseScoreText.text = $"Score: {score:N0}";
 
             SafeShow(losePanel);
@@ -635,7 +724,8 @@ namespace Match3
         }
 
         /// <summary>Called by unlockOkButton. Hides the current notice, then — once
-        /// the hide animation finishes — shows the next queued one, if any.</summary>
+        /// the hide animation finishes — shows the next queued one, if any; once
+        /// the LAST one has been dismissed, unlocks the win panel's buttons.</summary>
         private void HideUnlockPopup()
         {
             if (unlockPopup == null) return;
@@ -647,7 +737,19 @@ namespace Match3
                     unlockPopup.SetActive(false);
                     if (_unlockQueue.Count > 0)
                         ShowNextUnlockNotice();
+                    else
+                        SetWinButtonsInteractable(true);   // every unlock notice seen — safe to navigate now
                 });
+        }
+
+        /// <summary>NEW — locks/unlocks the win panel's Next/Replay/Map buttons.
+        /// Used to force the player to see every queued unlock notice before they
+        /// can leave the win panel — see ShowWinRoutine()/HideUnlockPopup().</summary>
+        private void SetWinButtonsInteractable(bool interactable)
+        {
+            if (nextLevelButton != null) nextLevelButton.interactable = interactable;
+            if (winReplayButton != null) winReplayButton.interactable = interactable;
+            if (winMapButton    != null) winMapButton.interactable    = interactable;
         }
 
         // ─────────────────────────────────────────────────────

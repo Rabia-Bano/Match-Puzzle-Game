@@ -54,6 +54,8 @@ public static class ConflictResolver
             displayName = string.IsNullOrEmpty(newer.displayName) ? older.displayName : newer.displayName,
             email       = string.IsNullOrEmpty(newer.email)       ? older.email       : newer.email,
             avatarUrl   = string.IsNullOrEmpty(newer.avatarUrl)   ? older.avatarUrl   : newer.avatarUrl,
+            // FIX — avatarId was never merged, so a chosen preset avatar could vanish after a sync conflict
+            avatarId    = string.IsNullOrEmpty(newer.avatarId)    ? older.avatarId    : newer.avatarId,
             joinDate    = string.IsNullOrEmpty(newer.joinDate)    ? older.joinDate    : newer.joinDate,
 
             soundEnabled     = newer.soundEnabled,
@@ -95,6 +97,9 @@ public static class ConflictResolver
         // (List<string> mein har booster id utni dafa repeat hoti hai jitni uski quantity hai,
         //  jaise ["hammer","hammer","shuffle"] = 2 hammer + 1 shuffle)
         merged.boosters = MergeBoosterCounts(local.boosters, cloud.boosters);
+
+        // NEW — purchased avatars are never lost: union of both sides
+        merged.ownedAvatars = UnionDistinct(local.ownedAvatars, cloud.ownedAvatars);
 
         merged.lastUpdated = DateTime.UtcNow.ToString("o");
         return merged;

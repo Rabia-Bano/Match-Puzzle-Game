@@ -18,7 +18,7 @@ MonoBehaviour:
   sprite: {fileID: 2186602288099788976, guid: e40304d9197733a4da19637effaaf619, type: 3}
   description: 
   skillType: 2
-  skillName: Energy Surge
+  skillName: Increase 5 Moves
   skillDescription: 
   chargeRequired: 100
   unlockAfterLevel: 5

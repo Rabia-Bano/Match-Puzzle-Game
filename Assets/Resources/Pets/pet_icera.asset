@@ -18,7 +18,7 @@ MonoBehaviour:
   sprite: {fileID: -405034052533233598, guid: ec55b3ad37dccac4b8df3593579c5fd6, type: 3}
   description: 
   skillType: 0
-  skillName: Frost Triple Blast
+  skillName: Blast 3 Rows
   skillDescription: 
   chargeRequired: 100
   unlockAfterLevel: 0

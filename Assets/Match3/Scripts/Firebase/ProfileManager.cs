@@ -287,6 +287,15 @@ namespace Game.Firebase
         {
             if (Profile == null || string.IsNullOrEmpty(avatarId)) return;
 
+            // NEW — Avatar Shop: a paid avatar can only be equipped once bought.
+            var preset = Resources.Load<Match3.AvatarPresetData>("Avatars/" + avatarId);
+            if (preset != null && !Match3.AvatarShopManager.IsOwned(preset))
+            {
+                Debug.LogWarning($"[ProfileManager] Avatar '{avatarId}' is not owned yet — buy it in the Avatar Shop first.");
+                OnProfileError?.Invoke("Buy this avatar first!");
+                return;
+            }
+
             Profile.avatarId = avatarId;
             // Clear any old uploaded-photo URL so it doesn't come back after a
             // future profile reload (preset and uploaded-photo are mutually exclusive).

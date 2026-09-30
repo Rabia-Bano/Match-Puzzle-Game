@@ -71,6 +71,26 @@ public class LivesManager : MonoBehaviour
     private const string PREF_LIVES         = "player_lives";
     private const string PREF_NEXT_LIFE_UTC = "player_next_life_utc";   // ISO-8601 string, empty = not regenerating
 
+    // NEW (Rabia's report — "app got killed from the recent-apps list while
+    // mid-level, but no life was lost"): a regular level's LOSE screen already
+    // costs a life (see LevelResultManager.ShowLoseRoutine()) — but that code
+    // only runs if the app is still ALIVE to run it. If the player backgrounds
+    // the app mid-level and then kills it from the OS's task switcher, Unity
+    // never gets a chance to run any of that — the process is just gone. This
+    // flag is how we catch that case anyway, without needing OnApplicationPause
+    // at all: LevelResultManager.OnStartClicked() sets it true the moment a
+    // level truly starts, and clears it the moment that level ends ANY way
+    // (win, lose, or the player deliberately exits to map). Both of those
+    // writes call PlayerPrefs.Save() immediately (not the usual batched write)
+    // specifically so they survive being killed a split-second later. Because
+    // this DontDestroyOnLoad singleton's Awake() only ever runs once per actual
+    // COLD START of the app (never again just from backgrounding/foregrounding
+    // within the same session), finding this flag still TRUE the next time
+    // Awake() runs can only mean one thing: last session ended with a level
+    // in progress that never got a chance to finish or be exited properly —
+    // i.e. exactly the kill-while-playing case.
+    private const string PREF_LEVEL_IN_PROGRESS = "level_in_progress_flag";
+
     private DateTime _nextLifeUtc;
     private bool     _hasNextLifeTime;
     private float    _tickAccumulator;
@@ -88,6 +108,7 @@ public class LivesManager : MonoBehaviour
 
         LoadLocal();
         CatchUpRegen();   // grants any lives earned while the app was closed
+        CheckForAbandonedLevelPenalty();   // NEW — see PREF_LEVEL_IN_PROGRESS comment above
 
         Debug.Log($"[LivesManager] Initialized — {CurrentLives}/{maxLives} lives. " +
                    (_hasNextLifeTime ? $"Next life in {SecondsUntilNextLife:0}s." : "Full — not regenerating."));
@@ -160,6 +181,47 @@ public class LivesManager : MonoBehaviour
 
     /// <summary>Force-refreshes any newly-enabled listener (e.g. TopBarHUD.OnEnable()).</summary>
     public void RaiseCurrentState() => OnLivesChanged?.Invoke(CurrentLives, maxLives);
+
+    // ─────────────────────────────────────────────────────────
+    // ABANDONED-LEVEL PENALTY (app killed mid-level — see PREF_LEVEL_IN_PROGRESS)
+    // ─────────────────────────────────────────────────────────
+
+    /// <summary>Call the moment a REGULAR level's gameplay actually begins
+    /// (LevelResultManager.OnStartClicked() — NOT Boss Arena, which never
+    /// touches lives at all). Persisted immediately so it survives a kill.</summary>
+    public void MarkLevelInProgress()
+    {
+        PlayerPrefs.SetInt(PREF_LEVEL_IN_PROGRESS, 1);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>Call the moment a level ends ANY way — win, lose, or the
+    /// player deliberately exits to the map. Persisted immediately for the
+    /// same reason as MarkLevelInProgress().</summary>
+    public void ClearLevelInProgress()
+    {
+        PlayerPrefs.SetInt(PREF_LEVEL_IN_PROGRESS, 0);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>
+    /// Runs once, at app cold-start. If a level was left "in progress" from
+    /// the PREVIOUS run of the app — never cleared by a win, a lose, or a
+    /// deliberate exit to map — the only way that could happen is the app got
+    /// killed while that level was still being played. Costs exactly one life,
+    /// same as running out of moves normally would have.
+    /// </summary>
+    private void CheckForAbandonedLevelPenalty()
+    {
+        if (PlayerPrefs.GetInt(PREF_LEVEL_IN_PROGRESS, 0) != 1) return;
+
+        PlayerPrefs.SetInt(PREF_LEVEL_IN_PROGRESS, 0);
+        PlayerPrefs.Save();
+
+        Debug.Log("[LivesManager] A level was still in progress when the app last closed " +
+                   "(killed mid-level) — deducting 1 life, same as a normal loss.");
+        LoseLife();
+    }
 
     // ─────────────────────────────────────────────────────────
     // REGEN LOGIC

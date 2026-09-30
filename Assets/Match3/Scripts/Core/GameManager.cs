@@ -174,7 +174,14 @@ public class GameManager : MonoBehaviour
         Debug.Log("[GameManager] Boss defeated (analytics/logging only — no auto-navigation).");
     }
 
-    private void HandleReturnToMap()   => ChangeState(GameState.Map);
+    private void HandleReturnToMap()
+    {
+        // NEW (Rabia's request) — a deliberate exit to map mid-level is NOT
+        // an "abandoned via kill" case, so it must never cost a life either.
+        // No-op if nothing was marked (e.g. called from a non-gameplay screen).
+        LivesManager.Instance?.ClearLevelInProgress();
+        ChangeState(GameState.Map);
+    }
 
     private void HandlePause()
     {

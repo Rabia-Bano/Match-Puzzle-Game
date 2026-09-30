@@ -98,6 +98,39 @@ namespace Match3
 
         public bool HasMatches() => matchFinder.FindAllMatches().Count > 0;
 
+        /// <summary>
+        /// NEW — Boss Arena freeze/thaw fix: call this after an external system
+        /// changes a tile's STATE (not tile count) in a way that could suddenly
+        /// create a valid match. Normal match detection only ever runs after a
+        /// player swap or after gravity settles newly-dropped tiles — thawing a
+        /// frozen tile goes through NEITHER path, so 2 frozen same-colour tiles
+        /// sitting next to a 3rd same-colour tile never got checked the moment
+        /// they unfroze, even though 3-in-a-row was now sitting right there.
+        /// See BossAttackExecutor.ThawBossFrozenTiles().
+        ///
+        /// Waits for the board to be fully idle first (never interrupts a swap
+        /// or an in-progress cascade), then runs one normal ResolveBoard() pass —
+        /// no gravity/refill needed since nothing was added or removed, only
+        /// unlocked.
+        /// </summary>
+        public void CheckForMatchesAfterExternalChange()
+        {
+            StartCoroutine(ResolveAfterExternalChangeRoutine());
+        }
+
+        private IEnumerator ResolveAfterExternalChangeRoutine()
+        {
+            while (IsBusy) yield return null;
+
+            _turnBusy = true;
+            inputHandler.SetInputEnabled(false);
+
+            yield return StartCoroutine(ResolveBoard());
+
+            _turnBusy = false;
+            inputHandler.SetInputEnabled(true);
+        }
+
         // ─────────────────────────────────────────────────────
         //  MAIN TURN FLOW
         // ─────────────────────────────────────────────────────
@@ -208,7 +241,7 @@ namespace Match3
         {
             for (int x = 0; x < boardGrid.Width; x++)
             for (int y = 0; y < boardGrid.Height; y++)
-                if (boardGrid.GetTile(x, y) == null) return true;
+                if (boardGrid.IsPlayable(x, y) && boardGrid.GetTile(x, y) == null) return true;   // NEW — blank holes are never "empty"
             return false;
         }
 

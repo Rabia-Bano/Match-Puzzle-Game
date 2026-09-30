@@ -35,12 +35,10 @@ namespace Match3
         /// <summary>
         /// NEW — fired exactly once per Color Bomb blast (single activation,
         /// NOT the Rainbow+Rainbow combo — that clears the whole board through
-        /// a different path). Rabia's request: Color Bomb should ALWAYS damage
-        /// the boss at the same tier as a "5+ weakness tiles" hit, regardless
-        /// of which colour it actually targeted — every other special tile's
-        /// single blast (Striped, Wrapped) does zero boss damage now. See
-        /// BossController.HandleColorBombBlast().
+        /// a different path), passing the colour it actually cleared.
+        /// BossController only damages the boss if that colour matches this
+        /// boss's weakness colour — see BossController.HandleColorBombBlast().
         /// </summary>
-        public static System.Action OnColorBombBlast;
+        public static System.Action<TileColor> OnColorBombBlast;
     }
 }

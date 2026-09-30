@@ -268,6 +268,21 @@ namespace Match3
                 if (t != null && t.Data != null && t.Data.color == color) list.Add(t);
             }
             yield return StartCoroutine(ClearList(list));
+
+            // FIX (Rabia's report — "color bomb swapped with weakness tile, boss
+            // HP didn't change at all"): THIS is the method that actually runs
+            // for a standalone Color Bomb blast — both a lone tap (FireSingle's
+            // Rainbow case above) and a swap with a normal tile (SwapRoutine's
+            // Rainbow branch above) both call ClearAllOfColor() right here.
+            // ColorBombEffect.cs's own copy of this same event-fire is ONLY
+            // reached through SpecialCombinations.cs (2-special-tile combos) —
+            // it was never in this file, so standalone Color Bomb activation
+            // never reported anything to the boss at all. Same rule as
+            // ColorBombEffect.Activate(): only damages the boss when `color`
+            // is this boss's own weakness colour (checked inside
+            // BossController.HandleColorBombBlast()) — a flat "5+" tier hit.
+            if (list.Count > 0)
+                BossDamageEvents.OnColorBombBlast?.Invoke(color);
         }
 
         private IEnumerator ClearEntireBoard()

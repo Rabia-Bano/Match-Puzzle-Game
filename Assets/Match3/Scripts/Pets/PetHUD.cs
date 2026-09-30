@@ -16,6 +16,7 @@
 //    - SkillButtonGlow   (GameObject, optional) — pulsing glow shown only when charged
 // ============================================================
 
+using System.Collections;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -42,6 +43,18 @@ namespace Match3
         [Header("Skill Effect")]      
         [SerializeField] private ParticleSystem skillBurstPrefab;
 
+        [Header("Not-Charged Tooltip (NEW — Rabia's request)")]
+        [Tooltip("Small message popup shown when the player taps the skill button while " +
+                 "the pet isn't charged yet — tells them how to charge it. Works in BOTH " +
+                 "gameplay scenes (regular level + Boss Arena) since both reuse this same " +
+                 "PetHUD component. Leave notChargedTooltip blank to skip this feature.")]
+        [SerializeField] private GameObject      notChargedTooltip;
+        [SerializeField] private TextMeshProUGUI notChargedTooltipText;
+        [SerializeField] private string          notChargedMessage = "Swap tile to boost pet's energy!";
+        [SerializeField] private float           notChargedTooltipDuration = 5f;
+
+        private Coroutine _tooltipRoutine;
+
         // NOTE: this used to live in OnEnable()/OnDisable(), but Unity does not
         // guarantee Awake() has run on OTHER objects before OnEnable() runs on
         // this one — so PetHUD.OnEnable() could fire before PetManager.Awake()
@@ -55,6 +68,11 @@ namespace Match3
         {
             petManager = PetManager.GetOrCreateInstance();
 
+            if (skillButton == null)
+                Debug.LogError("[PetHUD] skillButton is NOT assigned in the Inspector — tapping the " +
+                                "pet does nothing at all (no shake, no tooltip, no skill use). Assign " +
+                                "the Button that sits over the pet portrait/icon.", this);
+
             petManager.OnChargeChanged += HandleChargeChanged;
             petManager.OnPetReady      += HandlePetReady;
             petManager.OnPetChanged    += HandlePetChanged;
@@ -62,6 +80,13 @@ namespace Match3
             _subscribed = true;
 
             skillButton?.onClick.AddListener(HandleSkillButtonTapped);
+
+            if (notChargedTooltip != null) notChargedTooltip.SetActive(false);   // NEW — start hidden
+            else Debug.LogWarning("[PetHUD] notChargedTooltip is NOT assigned in the Inspector — " +
+                                   "tapping the skill button while the pet isn't charged will shake " +
+                                   "the button but show no message. Create a small popup GameObject " +
+                                   "(with a TMP_Text child) under this PetHUD and assign both fields " +
+                                   "under 'Not-Charged Tooltip' in the Inspector to enable this.", this);
 
             HandlePetChanged();
             HandleChargeChanged(petManager.ChargeProgress,
@@ -123,6 +148,10 @@ namespace Match3
 
         private void HandlePetReady()
         {
+            // NEW — the pet just became charged, so the "not charged yet"
+            // tooltip (if it happened to still be showing) is now moot.
+            HideNotChargedTooltip();
+
             if (skillButtonGlow != null)
                 skillButtonGlow.SetActive(true);
 
@@ -153,6 +182,7 @@ namespace Match3
             if (petManager == null || !petManager.IsCharged)
             {
                 skillButton?.transform.DOShakePosition(0.3f, 5f, 10);
+                ShowNotChargedTooltip();   // NEW (Rabia's request)
                 return;
             }
 
@@ -162,10 +192,67 @@ namespace Match3
             if (chargeBarFill   != null) chargeBarFill.fillAmount = 0f;
         }
 
+        /// <summary>
+        /// NEW (Rabia's request) — shown for notChargedTooltipDuration seconds
+        /// when the player taps the skill button while the pet isn't charged
+        /// yet. Tapping again while it's already showing just restarts the
+        /// 5-second timer instead of stacking multiple hide calls.
+        /// </summary>
+        private void ShowNotChargedTooltip()
+        {
+            if (notChargedTooltip == null) return;
+
+            if (notChargedTooltipText != null)
+                notChargedTooltipText.text = notChargedMessage;
+
+            notChargedTooltip.SetActive(true);
+            notChargedTooltip.transform.DOKill();
+            notChargedTooltip.transform.localScale = Vector3.zero;
+            notChargedTooltip.transform.DOScale(Vector3.one, 0.2f).SetEase(Ease.OutBack);
+
+            if (_tooltipRoutine != null) StopCoroutine(_tooltipRoutine);
+            _tooltipRoutine = StartCoroutine(HideTooltipAfterDelay());
+        }
+
+        private IEnumerator HideTooltipAfterDelay()
+        {
+            yield return new WaitForSeconds(notChargedTooltipDuration);
+            HideNotChargedTooltip();
+        }
+
+        private void HideNotChargedTooltip()
+        {
+            if (notChargedTooltip == null || !notChargedTooltip.activeSelf) return;
+
+            notChargedTooltip.transform.DOKill();
+            notChargedTooltip.transform
+                .DOScale(Vector3.zero, 0.15f)
+                .SetEase(Ease.InBack)
+                .OnComplete(() => notChargedTooltip.SetActive(false));
+
+            if (_tooltipRoutine != null)
+            {
+                StopCoroutine(_tooltipRoutine);
+                _tooltipRoutine = null;
+            }
+        }
+
+        /// <summary>
+        /// FIX (Rabia's report — "not-charged tooltip never shows, no warning
+        /// either"): this used to also require petManager.IsCharged, which set
+        /// skillButton.interactable = false whenever the pet wasn't charged.
+        /// A Unity Button with interactable = false NEVER fires onClick at
+        /// all — so HandleSkillButtonTapped() (the shake + the tooltip) never
+        /// even ran while uncharged, exactly the one moment the tooltip is
+        /// supposed to appear. IsCharged is still checked INSIDE
+        /// HandleSkillButtonTapped() itself, so the skill still can't be used
+        /// early — only IsBusy (skill animation currently playing) still
+        /// blocks the tap here, to prevent spamming mid-animation.
+        /// </summary>
         private void RefreshSkillButtonInteractable()
         {
             if (skillButton == null || petManager == null) return;
-            skillButton.interactable = petManager.IsCharged && !petManager.IsBusy;
+            skillButton.interactable = !petManager.IsBusy;
         }
     }
 }

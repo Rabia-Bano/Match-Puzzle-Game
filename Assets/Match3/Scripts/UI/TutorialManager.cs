@@ -88,6 +88,9 @@ namespace Match3
         }
 
         // ── Public API ────────────────────────────────────────
+        /// <summary>NEW — true while a tutorial card is on screen (LevelTimer pauses during this).</summary>
+        public bool IsShowing => _showing;
+
         public bool HasSeen(string key) => PlayerPrefs.GetInt(GetPrefPrefix() + key, 0) == 1;
 
         public void RequestTutorial(string key, Vector3? worldPos = null)

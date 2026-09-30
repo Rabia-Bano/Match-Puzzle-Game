@@ -56,6 +56,11 @@ namespace Match3
             foreach (Vector2Int pos in levelData.jellyPositions)
             {
                 if (!grid.IsInBounds(pos.x, pos.y)) continue;
+                if (grid.IsBlank(pos.x, pos.y))   // NEW — jelly can never sit on a blank hole
+                {
+                    Debug.LogWarning($"[JellyManager] Jelly at ({pos.x},{pos.y}) skipped — that cell is BLANK.");
+                    continue;
+                }
                 _jellyLevel[pos.x, pos.y] = Mathf.Max(1, levelData.jellyLayers);
                 SpawnOverlay(pos.x, pos.y);
             }
@@ -94,6 +99,7 @@ namespace Match3
             }
 
             if (!boardGrid.IsInBounds(x, y)) return;
+            if (boardGrid.IsBlank(x, y)) return;  // NEW — never onto a blank hole
             if (_jellyLevel[x, y] > 0) return; // already jellied — caller picks another cell
 
             _jellyLevel[x, y] = Mathf.Max(1, layers);
@@ -228,6 +234,7 @@ namespace Match3
             {
                 int nx = x + d.x, ny = y + d.y;
                 if (!boardGrid.IsInBounds(nx, ny)) continue;
+                if (boardGrid.IsBlank(nx, ny)) continue;                 // NEW — jelly never wanders onto a blank hole
                 if (_jellyLevel[nx, ny] > 0) continue;                 // already has jelly
 
                 Tile t = boardGrid.GetTile(nx, ny);
@@ -262,33 +269,23 @@ namespace Match3
         // ── Board rotation support ──────────────────────────────
 
         /// <summary>
-        /// Rotates the jelly layer 90° clockwise using the EXACT same transform
-        /// BoardRotation.RotateGridClockwise() applies to the tile grid:
-        /// new(x,y) = old(y, W-1-x). Called by BoardRotation right after it
-        /// rotates the tiles, so a jelly layer "jumps" to stay under whichever
-        /// tile now occupies its rotated cell — instead of staying pinned to
-        /// its old world position while the tile above it rotates away.
+        /// UPDATED — rotates the jelly layer with the EXACT same mapping BoardRotation
+        /// uses for tiles and blank cells (BoardRotationMath), so jelly always stays
+        /// under the tile that now occupies its rotated cell. Works for square and
+        /// non-square boards (a 6x8 jelly array becomes 8x6 after a 90° turn).
+        /// quarterTurnsCW: 1 = 90° CW, 2 = 180°, 3 = 90° CCW.
+        /// Call AFTER BoardGrid.ApplyRotatedLayout() so GridToWorld uses the new layout.
         /// </summary>
-        public void RotateClockwise(int width, int height)
+        public void RotateLayout(int quarterTurnsCW)
         {
-            if (_jellyLevel == null) return;
+            if (_jellyLevel == null || boardGrid == null) return;
 
-            var rotatedLevels   = new int[width, height];
-            var rotatedOverlays = new GameObject[width, height];
+            _jellyLevel = BoardRotationMath.Rotate(_jellyLevel, quarterTurnsCW);
+            _overlays   = BoardRotationMath.Rotate(_overlays,   quarterTurnsCW);
 
-            for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-            {
-                rotatedLevels[x, y]   = _jellyLevel[y, width - 1 - x];
-                rotatedOverlays[x, y] = _overlays[y, width - 1 - x];
-            }
-
-            _jellyLevel = rotatedLevels;
-            _overlays   = rotatedOverlays;
-
-            // Snap every surviving overlay to its new world position.
-            for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
+            int w = _jellyLevel.GetLength(0), h = _jellyLevel.GetLength(1);
+            for (int x = 0; x < w; x++)
+            for (int y = 0; y < h; y++)
             {
                 if (_overlays[x, y] == null) continue;
                 Vector3 pos = boardGrid.GridToWorld(x, y);
@@ -296,5 +293,8 @@ namespace Match3
                 _overlays[x, y].transform.position = pos;
             }
         }
+
+        /// <summary>Old API kept for compatibility — same as RotateLayout(1).</summary>
+        public void RotateClockwise(int width, int height) => RotateLayout(1);
     }
 }

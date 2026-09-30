@@ -61,7 +61,13 @@ namespace Match3
 
             for (int x = 0; x < boardGrid.Width; x++)
             {
-                Tile t = boardGrid.GetTile(x, 0);
+                // NEW — with blank holes the "bottom" of a column is its LOWEST
+                // PLAYABLE cell, not always row 0 (a stone can never fall into a hole).
+                int bottomY = 0;
+                while (bottomY < boardGrid.Height && boardGrid.IsBlank(x, bottomY)) bottomY++;
+                if (bottomY >= boardGrid.Height) continue;
+
+                Tile t = boardGrid.GetTile(x, bottomY);
                 if (t != null && t.Data != null && t.Data.isDropStone)
                     result.Add(t);
             }

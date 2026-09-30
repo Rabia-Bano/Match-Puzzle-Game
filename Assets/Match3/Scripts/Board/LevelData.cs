@@ -2,6 +2,14 @@
 //  LevelData.cs  —  Phase 5 Update
 //  Now uses GoalData[] assets instead of inline GoalData structs.
 //  Create via: Assets > Create > Match3 > Level Data
+//
+//  UPDATE:
+//    • blankPositions  — cells that are HOLES in the board (no gem,
+//      no obstacle, no jelly, nothing can move into them). Use the
+//      visual grid painter (LevelDataEditor.cs) to click cells on/off.
+//    • useTimer / timeLimitSeconds — optional countdown for REGULAR
+//      levels. Time up = level lost even if moves are left. Boss Arena
+//      never uses this (it has no LevelData).
 // ============================================================
 
 using UnityEngine;
@@ -18,8 +26,24 @@ namespace Match3
         [Range(4, 12)] public int width  = 8;
         [Range(4, 12)] public int height = 8;
 
+        [Header("Blank Cells (holes in the board)")]
+        [Tooltip("Grid cells (x,y — 0-indexed, y=0 is the BOTTOM row) that are completely empty holes. " +
+                 "No gem spawns there, no obstacle/jelly can ever move there, the player can't swap into " +
+                 "them, and falling tiles pass straight THROUGH them. Tip: use the grid painter in the " +
+                 "Inspector instead of typing coordinates.")]
+        public Vector2Int[] blankPositions;
+
         [Header("Rules")]
         [Range(5, 200)] public int moveLimit = 30;
+
+        [Header("Timer (regular levels only)")]
+        [Tooltip("Turn ON to give this level a countdown timer IN ADDITION to the move limit. " +
+                 "If the timer reaches 0 before the goals are complete, the level is LOST — even if moves are left.")]
+        public bool useTimer = false;
+        [Tooltip("Seconds on the clock when the player taps Start (e.g. 90 = 1:30).")]
+        [Range(10, 600)] public int timeLimitSeconds = 90;
+        [Tooltip("When this many seconds (or fewer) remain, the timer turns red and starts pulsing / ticking.")]
+        [Range(3, 60)] public int timerWarningSeconds = 10;
 
         [Header("Goals — assign GoalData assets")]
         [Tooltip("All goals must be complete to win. Create GoalData assets via Create > Match3 > Goal Data.")]
@@ -56,6 +80,15 @@ namespace Match3
         public int scoreTar3 = 2000;
 
         // ── Helpers ────────────────────────────────────────────
+
+        /// <summary>NEW — true if (x,y) is listed in blankPositions.</summary>
+        public bool IsBlankCell(int x, int y)
+        {
+            if (blankPositions == null) return false;
+            foreach (var p in blankPositions)
+                if (p.x == x && p.y == y) return true;
+            return false;
+        }
 
         public bool AllGoalsComplete()
         {

@@ -102,6 +102,14 @@ namespace Match3
             }
             else
             {
+                // NEW — admin panel analytics: this player QUIT the level mid-way.
+                Game.Firebase.PlayerActivityTracker.Instance?.RecordLevelQuit(LevelSession.CurrentLevelId, "exitButton");
+
+                // FIX — the "level in progress" flag was never cleared on Exit, so if the
+                // app was later killed from the Map, the NEXT launch charged a SECOND life
+                // for the same already-paid exit. Clear it here (this exit already costs 1).
+                LivesManager.Instance?.ClearLevelInProgress();
+
                 // Regular level exit — costs a life, back to the Map.
                 LivesManager.Instance?.LoseLife();
                 GameManager.Instance?.ChangeState(GameState.Map);

@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: Avatar_2
   sprite: {fileID: 7725314035466326156, guid: 83890b0a4987ba442bf8879010bb798d, type: 3}
+  displayName: Fox
+  price: 500
+  sortOrder: 2
+  badgeText: 
