@@ -3,11 +3,10 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    // Attach to: LoginCanvas (Login scene)
     public class LoginThemeApplier : MonoBehaviour, IThemeApplier
     {
-        [SerializeField] private Image background;     // LoginCanvas/Background -> BG1
-        [SerializeField] private Image authContainer;   // LoginCanvas/AuthContainer -> F2
+        [SerializeField] private Image background;
+        [SerializeField] private Image authContainer;
 
         public void Apply(ThemeData theme)
         {

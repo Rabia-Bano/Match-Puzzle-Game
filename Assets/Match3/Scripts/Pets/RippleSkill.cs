@@ -1,12 +1,3 @@
-// ============================================================
-//  RippleSkill.cs  —  Ripple's power
-//  Converts 5 random (non-special) tiles to whichever colour the
-//  current CollectTile goal still needs. Falls back to doing
-//  nothing if there's no incomplete CollectTile goal on this level
-//  (e.g. a pure score/jelly level) — safer than guessing a colour
-//  that doesn't help the player.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
@@ -39,7 +30,7 @@ namespace Match3
             {
                 Tile t = grid.GetTile(x, y);
                 if (t == null || t.Data == null || t.Data.isSpecial) continue;
-                if (t.Data.color == targetColor) continue;   // already the right colour
+                if (t.Data.color == targetColor) continue;
                 candidates.Add(t);
             }
 

@@ -1,18 +1,3 @@
-// ============================================================
-//  GameHUD.cs  —  Updated: GameManager → LevelManager
-//
-//  gameManager.OnScoreChanged → levelManager.OnScoreChanged
-//  gameManager.Score          → levelManager.Score
-//
-//  UPDATE (Pet system swap): the old PetSystem-based "PET PANEL"
-//  block (petHPBarFill / petHPText / petAvatarImage / petHPBarPanel /
-//  petSystem field + OnPetHPChanged/RefreshPetHP) has been removed.
-//  That whole panel is now its own component — PetHUD.cs — driven by
-//  PetManager's charge events instead of PetSystem's HP events. Put
-//  PetHUD.cs on its own panel GameObject in the same Canvas and wire
-//  it up separately; GameHUD no longer needs to know pets exist.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -45,7 +30,7 @@ namespace Match3
         [Header("━━ DATA SOURCES ━━")]
         [SerializeField] private GoalTracker  goalTracker;
         [SerializeField] private MoveCounter  moveCounter;
-        [SerializeField] private LevelManager levelManager;  // ← was GameManager
+        [SerializeField] private LevelManager levelManager;
 
         [Header("━━ SCORE BAR ━━")]
         [SerializeField] private int scoreBarMaxValue = 2000;
@@ -64,7 +49,7 @@ namespace Match3
 
             if (levelManager != null)
             {
-                levelManager.OnScoreChanged.AddListener(OnScoreChanged);  // ← was gameManager
+                levelManager.OnScoreChanged.AddListener(OnScoreChanged);
                 OnScoreChanged(0);
             }
 
@@ -74,19 +59,12 @@ namespace Match3
                 goalTracker.OnGoalCompleted.AddListener(OnGoalCompleted);
                 StartCoroutine(BuildGoalIconsDeferred());
             }
-
-            //settingsButton?.onClick.AddListener(OnSettingsClicked);
         }
 
         private void OnMovesChanged(int remaining)
         {
             if (moveNumberText == null) return;
             moveNumberText.text  = remaining.ToString();
-            // FIX: was only ever SET to red inside OnLowMoves() below and never
-            // reset back — so once a level triggered the low-moves warning,
-            // the text stayed red forever after (through boosters adding moves,
-            // and into the next level), since nothing recalculated the colour
-            // on a normal moves-changed update. Recalculate it fresh every time.
             moveNumberText.color = remaining <= 5 ? lowMoveColor : normalMoveColor;
             moveNumberText.transform.DOKill();
             moveNumberText.transform.localScale = Vector3.one;
@@ -144,7 +122,5 @@ namespace Match3
         {
             if (index >= 0 && index < boosterSlots.Length) boosterSlots[index].Refresh();
         }
-
-        //private void OnSettingsClicked() => Debug.Log("[GameHUD] Settings clicked.");
     }
 }

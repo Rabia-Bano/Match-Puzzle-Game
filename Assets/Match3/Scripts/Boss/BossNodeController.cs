@@ -1,26 +1,3 @@
-// ============================================================
-//  BossNodeController.cs  —  MonoBehaviour on BossNode Prefab
-//  (the inline Boss marker that appears ON THE MAIN MAP PATH every
-//  N levels — NOT the same as BossLevelNode, which is the numbered
-//  circle inside the separate BossArenaScene selection list)
-//
-//  Attach to: BossNode prefab (root GameObject), instantiated by
-//  MapManager.SpawnBossNode()
-//  Purpose:
-//    • Shows Boss portrait + "BOSS" label
-//    • Locked with chain visual until prerequisite level complete
-//    • On tap → launches that boss's fight DIRECTLY (skips the
-//      BossArenaScene list) via BossLevelLoader
-//
-//  CORRECTED (previous version mistakenly sent the player to
-//  GameState.BossArena / "BossArenaScene" — that scene is actually
-//  the boss SELECTION LIST, not the fight. Tapping this inline map
-//  marker should jump straight into the fight itself, the same way
-//  it always intended to. Now routes through GameState.BossGameplay
-//  / "BossGameBoardScene" via the shared BossLevelLoader helper —
-//  see BossArenaListManager.cs / BossLevelLoader.cs / the setup guide.)
-// ============================================================
-
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -28,10 +5,6 @@ using UnityEngine.UI;
 
 public class BossNodeController : MonoBehaviour
 {
-    // ─────────────────────────────────────────────────────────
-    // Inspector Fields
-    // ─────────────────────────────────────────────────────────
-
     [Header("UI References")]
     [Tooltip("Boss portrait Image")]
     public Image bossPortrait;
@@ -65,38 +38,22 @@ public class BossNodeController : MonoBehaviour
              "BossArenaListManager — the board layout is shared across every boss.")]
     public Match3.LevelData bossBoardLevelData;
 
-    // ─────────────────────────────────────────────────────────
-    // Private State
-    // ─────────────────────────────────────────────────────────
-
     private int  _bossId;
-    private int  _unlockedAfterLevel;   // regular level that must be complete
+    private int  _unlockedAfterLevel;
     private bool _isUnlocked;
     private Tween _pulseTween;
 
-    // ─────────────────────────────────────────────────────────
-    // PUBLIC API
-    // ─────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Called by MapManager right after Instantiate.
-    /// </summary>
-    /// <param name="bossId">1, 2, 3 …</param>
-    /// <param name="unlockedAfterLevel">Must complete this level first</param>
-    /// <param name="isUnlocked">True if prerequisite level is completed</param>
     public void Setup(int bossId, int unlockedAfterLevel, bool isUnlocked)
     {
         _bossId            = bossId;
         _unlockedAfterLevel = unlockedAfterLevel;
         _isUnlocked        = isUnlocked;
 
-        // Label
         if (bossLabel != null)
             bossLabel.text = "BOSS";
         if (bossNumberText != null)
             bossNumberText.text = bossId.ToString();
 
-        // Portrait
         if (bossPortrait != null && bossPortraits != null)
         {
             int idx = Mathf.Clamp(bossId - 1, 0, bossPortraits.Length - 1);
@@ -104,21 +61,16 @@ public class BossNodeController : MonoBehaviour
                 bossPortrait.sprite = bossPortraits[idx];
         }
 
-        // Visual state
         SafeSetActive(chainOverlay, !isUnlocked);
         SafeSetActive(glowEffect,    isUnlocked);
 
-        // NEW — "Unlocks after Level N" label while locked, exactly like
-        // PetCollectionSlot shows "Unlocks after Level X" for a locked pet.
         if (lockedLabel != null) lockedLabel.gameObject.SetActive(!isUnlocked);
         if (lockedLabel != null)
             lockedLabel.text = $"Unlocks after Level {unlockedAfterLevel}";
 
-        // Pulse when unlocked
         KillPulse();
         if (isUnlocked) StartPulse();
 
-        // Button
         if (nodeButton != null)
         {
             nodeButton.onClick.RemoveAllListeners();
@@ -126,10 +78,6 @@ public class BossNodeController : MonoBehaviour
             nodeButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
         }
     }
-
-    // ─────────────────────────────────────────────────────────
-    // TAP HANDLER
-    // ─────────────────────────────────────────────────────────
 
     private void HandleTap()
     {
@@ -142,15 +90,8 @@ public class BossNodeController : MonoBehaviour
 
         Debug.Log($"[BossNode] Boss {_bossId} tapped on Map → launching fight directly.");
 
-        // Jumps straight into the fight — bypasses the BossArenaScene
-        // selection list entirely, since the player already picked this
-        // specific boss by tapping its marker on the path.
         BossLevelLoader.LoadBoss(_bossId, bossBoardLevelData);
     }
-
-    // ─────────────────────────────────────────────────────────
-    // ANIMATIONS
-    // ─────────────────────────────────────────────────────────
 
     private void StartPulse()
     {
@@ -171,10 +112,6 @@ public class BossNodeController : MonoBehaviour
     }
 
     private void OnDestroy() => KillPulse();
-
-    // ─────────────────────────────────────────────────────────
-    // UTILITY
-    // ─────────────────────────────────────────────────────────
 
     private static void SafeSetActive(GameObject go, bool active)
     {

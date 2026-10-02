@@ -1,32 +1,3 @@
-// ============================================================
-//  StoreManager.cs  —  Singleton MonoBehaviour (DontDestroyOnLoad)
-//  Attach to: "FirebaseManagers" GameObject in PreloaderScene — the
-//             SAME object as FirebaseInitializer, AuthManager, ProfileManager,
-//             CloudSyncManager, LeaderboardManager, NetworkChecker.
-//  Call: Initialize() from FirebaseInitializer.OnFirebaseReady (Inspector
-//        UnityEvent), same as the other managers.
-//  Access: Match3.StoreManager.Instance
-//
-//  CURRENT BOOSTER SET (coins only — no gems, no "coming soon" items):
-//    hammer, row_bomb, column_bomb, shuffle_2tiles, shuffle_board
-//  All five are active/purchasable from day one. See BoosterManager.cs
-//  (Board folder) for the gameplay implementation of each.
-//
-//  Responsibilities:
-//    1) Loads the store catalog from Firestore `store_catalog/` so prices
-//       and items can change without an app update (falls back to a
-//       built-in default catalog if offline or Firestore is empty/blocked).
-//    2) Initializes Unity IAP (IStoreListener) — kept in place for future
-//       real-money items even though the current catalog is coins-only.
-//    3) BuyWithCoins() is the active purchase path right now. BuyWithGems()
-//       and PurchaseBooster() (IAP) stay implemented and ready to use the
-//       moment you add a gem-priced or IAP item to the catalog — they're
-//       simply unused while every catalog item is coin-priced.
-//    4) Grants boosters through LocalSaveManager's existing quantity-based
-//       booster inventory (SaveBoosterInventory/LoadBoosterInventory) —
-//       the SAME storage BoosterManager.cs (gameplay) reads from.
-// ============================================================
-
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -47,16 +18,11 @@ namespace Match3
         [Tooltip("Set true for verbose debug logs while wiring this up.")]
         [SerializeField] private bool logVerbose = true;
 
-        // ── Events (StorePanel / UI subscribe to these) ─────────────
         public event Action<List<StoreItem>> OnCatalogLoaded;
         public event Action<string>          OnCatalogLoadFailed;
 
-        /// <summary>Fires after ANY successful grant (IAP, gems, or coins path).
-        /// Passes the item and the player's new owned-count for boosters.</summary>
         public event Action<StoreItem, int> OnItemGranted;
 
-        /// <summary>Fires on any failed purchase attempt (IAP failure, insufficient
-        /// coins, etc.) with a short human-readable reason for a toast/popup.</summary>
         public event Action<string> OnPurchaseFailedFeedback;
 
         public bool IsIapInitialized { get; private set; }
@@ -69,7 +35,7 @@ namespace Match3
         private IExtensionProvider _extensionProvider;
 
         private readonly List<StoreItem> _catalog = new();
-        private readonly HashSet<string> _purchaseInFlight = new(); // guards double-taps
+        private readonly HashSet<string> _purchaseInFlight = new();
 
         private void Awake()
         {
@@ -78,7 +44,6 @@ namespace Match3
             DontDestroyOnLoad(gameObject);
         }
 
-        /// <summary>Call this from FirebaseInitializer.OnFirebaseReady (Inspector).</summary>
         public void Initialize()
         {
             if (!FirebaseInitializer.IsReady)
@@ -91,14 +56,6 @@ namespace Match3
             if (logVerbose) Debug.Log("[StoreManager] Ready.");
         }
 
-        // ============================================================
-        //  CATALOG — Firestore fetch with offline-safe fallback
-        // ============================================================
-
-        /// <summary>Fetches store_catalog/ from Firestore. On failure or empty
-        /// result, falls back to a built-in default catalog so the Store screen
-        /// is never blank. Call from StorePanel.OnEnable() —
-        /// `_ = StoreManager.Instance.LoadCatalogFromFirestoreAsync();`</summary>
         public async Task LoadCatalogFromFirestoreAsync()
         {
             _catalog.Clear();
@@ -144,9 +101,6 @@ namespace Match3
             }
         }
 
-        /// <summary>Hardcoded fallback catalog — the 5 active, coin-priced
-        /// boosters. Edit freely, or add matching docs to Firestore's
-        /// store_catalog/ collection so prices can change without an app update.</summary>
         private List<StoreItem> BuildDefaultCatalog()
         {
             return new List<StoreItem>
@@ -159,16 +113,9 @@ namespace Match3
             };
         }
 
-        // ============================================================
-        //  UNITY IAP — IStoreListener
-        //  (kept in place for future real-money items; current catalog
-        //  has no iapProductId set on any item, so this simply won't
-        //  initialize Unity IAP until you add one — see RegisterIapProductsFromCatalog)
-        // ============================================================
-
         private void RegisterIapProductsFromCatalog()
         {
-            if (IsIapInitialized) return; // Unity IAP only initializes once per session
+            if (IsIapInitialized) return;
 
             var builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance());
             bool anyIapProduct = false;
@@ -203,16 +150,12 @@ namespace Match3
             OnPurchaseFailedFeedback?.Invoke("Store is unavailable right now.");
         }
 
-        // Newer Unity IAP versions call this overload with an extra message —
-        // implement both so this compiles regardless of your installed IAP version.
         public void OnInitializeFailed(InitializationFailureReason error, string message)
         {
             Debug.LogError($"[StoreManager] Unity IAP init failed: {error} — {message}");
             OnPurchaseFailedFeedback?.Invoke("Store is unavailable right now.");
         }
 
-        /// <summary>Real-money purchase entry point — unused while the catalog
-        /// is coins-only, kept ready for when you add an IAP item.</summary>
         public Task PurchaseBooster(string sku)
         {
             if (!IsIapInitialized || _storeController == null)
@@ -231,7 +174,7 @@ namespace Match3
             }
 
             _storeController.InitiatePurchase(product);
-            return Task.CompletedTask; // result arrives async via ProcessPurchase()/OnPurchaseFailed()
+            return Task.CompletedTask;
         }
 
         public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs args)
@@ -264,19 +207,11 @@ namespace Match3
             _ => "Purchase failed — please try again."
         };
 
-        // ============================================================
-        //  GEM / COIN PURCHASE PATHS
-        //  BuyWithCoins() is the active path for the current catalog.
-        //  BuyWithGems() stays implemented for when a gem-priced item exists.
-        // ============================================================
-
         public async Task<bool> BuyWithGems(string itemId, int gemCost)
         {
             return await BuySoftCurrency(itemId, gemCost, useGems: true);
         }
 
-        /// <summary>Buys a store item using coins — the active purchase path
-        /// for all 5 current boosters.</summary>
         public async Task<bool> BuyWithCoins(string itemId, int coinCost)
         {
             return await BuySoftCurrency(itemId, coinCost, useGems: false);
@@ -285,7 +220,7 @@ namespace Match3
         private Task<bool> BuySoftCurrency(string itemId, int cost, bool useGems)
         {
             if (_purchaseInFlight.Contains(itemId))
-                return Task.FromResult(false); // ignore double-tap while a purchase is mid-flight
+                return Task.FromResult(false);
 
             StoreItem item = _catalog.Find(i => i.id == itemId);
             if (item == null)
@@ -317,10 +252,6 @@ namespace Match3
 
                 LocalSaveManager.SaveProfile(profile);
 
-                // FIX — GameManager.Coins is what ProfileManager copies back into the
-                // profile on every save; without this the spent coins silently came
-                // back on the next save. OnCoinsChanged makes GameManager adopt the
-                // new balance (GameManager.HandleCoinsChanged).
                 if (!useGems) GameEvents.OnCoinsChanged?.Invoke(profile.coins);
                 GrantItem(item);
                 return Task.FromResult(true);
@@ -331,12 +262,6 @@ namespace Match3
             }
         }
 
-        // ============================================================
-        //  GRANT — single path every purchase method funnels into
-        // ============================================================
-
-        /// <summary>Applies the item's payout to the player's profile/inventory
-        /// and triggers a background cloud sync.</summary>
         public void GrantItem(StoreItem item)
         {
             PlayerProfile profile = LocalSaveManager.GetOrLoadProfile() ?? new PlayerProfile();
@@ -350,7 +275,7 @@ namespace Match3
                     inventory.TryGetValue(item.id, out int current);
                     newBoosterCount = current + item.quantity;
                     inventory[item.id] = newBoosterCount;
-                    LocalSaveManager.SaveBoosterInventory(inventory); // also mirrors into profile.boosters + saves profile
+                    LocalSaveManager.SaveBoosterInventory(inventory);
                     break;
                 }
                 case StoreItemType.GemPack:
@@ -369,9 +294,6 @@ namespace Match3
                     break;
             }
 
-            // Fire-and-forget cloud push — reuses CloudSyncManager's existing
-            // "push local profile" pipeline (same one LevelResultManager uses
-            // after a level win). UI never blocks on this.
             _ = CloudSyncManager.Instance?.SyncAfterLevelAsync();
 
             OnItemGranted?.Invoke(item, newBoosterCount);

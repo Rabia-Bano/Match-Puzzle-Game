@@ -1,27 +1,3 @@
-// ============================================================
-//  BossArenaListManager.cs  —  MonoBehaviour
-//
-//  Populates the "Puzzle Boss Arena" list panel (the mockup screen)
-//  inside BossArenaScene with one BossLevelNode per boss. Mirrors
-//  MapManager.cs's ProfileManager-wait + Build pattern, just simpler
-//  (a flat horizontal/grid list instead of a scrolling path).
-//
-//  UPDATED unlock rule: boss N unlocks once the player has completed
-//  regular Level (N * bossEveryNLevels) — e.g. Boss 1 after Level 6,
-//  Boss 2 after Level 12, etc. This MUST match MapManager's inline
-//  BossNodeController (the marker on the main path) and
-//  LevelSession.CheckUnlocks() — all three used to disagree (this
-//  file was unlocking Boss 1 always, then Boss N after Boss N-1 was
-//  DEFEATED — completely different rule, which is why boss fights
-//  were unlocking way too early). "Defeated" state (the replay badge)
-//  is still read from PlayerProfile.highestBossDefeated — only the
-//  LOCK/UNLOCK gate itself changed.
-//
-//  Attach to: "BossArenaListManager" GameObject in BossArenaScene
-//  (a sibling of UIManager / ProfilePanel).
-//  Wire up: bossNodePrefab, listContent, totalBosses.
-// ============================================================
-
 using System.Collections.Generic;
 using Game.Firebase;
 using UnityEngine;
@@ -108,14 +84,12 @@ public class BossArenaListManager : MonoBehaviour
             BossLevelNode node = go.GetComponent<BossLevelNode>();
             if (node == null) continue;
 
-            // THE FIX — level-based gate (was: unlocked once the previous boss
-            // was defeated, ignoring regular level progress entirely).
             int afterLevel = id * bossEveryNLevels;
             bool isUnlocked = profile != null && profile.GetStars(afterLevel) > 0;
 
             BossLevelNode.NodeState state;
             if (id <= highestDefeated)
-                state = BossLevelNode.NodeState.Defeated;   // already beaten — replayable, still requires the level gate too
+                state = BossLevelNode.NodeState.Defeated;
             else if (isUnlocked)
                 state = BossLevelNode.NodeState.Unlocked;
             else

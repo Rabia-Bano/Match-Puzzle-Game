@@ -1,21 +1,3 @@
-// ============================================================
-//  PetHUD.cs  —  MonoBehaviour
-//
-//  The pet panel visible during gameplay: portrait, animated
-//  charge/battery bar, skill button.
-//
-//  Attach to: "PetHUD" panel GameObject under your gameplay Canvas
-//  (this REPLACES the old "PET PANEL" fields inside GameHUD.cs —
-//  see the setup notes for what to remove there).
-//
-//  Prefab / hierarchy needed under this GameObject:
-//    - PetPortrait      (Image)              — pet sprite
-//    - ChargeBarFill     (Image, Type=Filled, Fill Method=Horizontal)
-//    - ChargeText        (TextMeshProUGUI)    — optional "70%" label
-//    - SkillButton       (Button)             — tap to use skill
-//    - SkillButtonGlow   (GameObject, optional) — pulsing glow shown only when charged
-// ============================================================
-
 using System.Collections;
 using DG.Tweening;
 using TMPro;
@@ -40,7 +22,7 @@ namespace Match3
         [Header("Animation")]
         [SerializeField] private float barTweenDuration = 0.25f;
 
-        [Header("Skill Effect")]      
+        [Header("Skill Effect")]
         [SerializeField] private ParticleSystem skillBurstPrefab;
 
         [Header("Not-Charged Tooltip (NEW — Rabia's request)")]
@@ -55,13 +37,6 @@ namespace Match3
 
         private Coroutine _tooltipRoutine;
 
-        // NOTE: this used to live in OnEnable()/OnDisable(), but Unity does not
-        // guarantee Awake() has run on OTHER objects before OnEnable() runs on
-        // this one — so PetHUD.OnEnable() could fire before PetManager.Awake()
-        // sets Instance, depending on hierarchy order, giving a false
-        // "No PetManager.Instance found" error. Start() IS guaranteed to run
-        // only after every object's Awake() has completed, so we do the lookup
-        // and subscription there instead.
         private bool _subscribed;
 
         private void Start()
@@ -81,7 +56,7 @@ namespace Match3
 
             skillButton?.onClick.AddListener(HandleSkillButtonTapped);
 
-            if (notChargedTooltip != null) notChargedTooltip.SetActive(false);   // NEW — start hidden
+            if (notChargedTooltip != null) notChargedTooltip.SetActive(false);
             else Debug.LogWarning("[PetHUD] notChargedTooltip is NOT assigned in the Inspector — " +
                                    "tapping the skill button while the pet isn't charged will shake " +
                                    "the button but show no message. Create a small popup GameObject " +
@@ -111,8 +86,6 @@ namespace Match3
             skillButton?.onClick.RemoveListener(HandleSkillButtonTapped);
         }
 
-        // ── Handlers ──────────────────────────────────────────
-
         private void HandlePetChanged()
         {
             if (petManager.EquippedPet == null) return;
@@ -121,10 +94,6 @@ namespace Match3
             {
                 petPortrait.sprite = petManager.EquippedPet.sprite;
 
-                // FIX: switching pets while a punch-scale tween is mid-flight (e.g.
-                // player changes equipped pet, or a new level rebinds) used to leave
-                // whatever scale the old tween was interrupted at. Kill + hard reset
-                // here too, same as HandlePetReady below.
                 petPortrait.transform.DOKill();
                 petPortrait.transform.localScale = Vector3.one;
             }
@@ -148,8 +117,6 @@ namespace Match3
 
         private void HandlePetReady()
         {
-            // NEW — the pet just became charged, so the "not charged yet"
-            // tooltip (if it happened to still be showing) is now moot.
             HideNotChargedTooltip();
 
             if (skillButtonGlow != null)
@@ -157,31 +124,16 @@ namespace Match3
 
             if (petPortrait != null)
             {
-                // FIX (icon-keeps-growing bug): DOPunchScale animates AWAY from
-                // and back to whatever localScale is AT THE MOMENT it starts. If
-                // this handler ever fires again before the previous punch fully
-                // finished returning to 1 (or if it fires unexpectedly often),
-                // each new punch stacks on top of a slightly-off scale instead of
-                // the intended 1,1,1 — and over repeated fires that drift adds up
-                // to a permanently oversized icon. Killing any in-flight tween and
-                // hard-resetting to Vector3.one first guarantees every punch
-                // starts from — and fully returns to — the same baseline, no
-                // matter how many times or how quickly this fires.
                 petPortrait.transform.DOKill();
                 petPortrait.transform.localScale = Vector3.one;
                 petPortrait.transform
                     .DOPunchScale(Vector3.one * 0.2f, 0.4f, 6, 0.6f)
-                    // Extra safety net: guarantees the icon lands EXACTLY at (1,1,1)
-                    // once the punch finishes normally, regardless of float rounding.
                     .OnComplete(() => petPortrait.transform.localScale = Vector3.one);
             }
         }
 
         private void HandleSkillButtonTapped()
         {
-            // FIX — a booster is selected and waiting for its target tile: the pet
-            // can't be used until the player taps a tile or presses Cancel on the
-            // BoosterTargetingBanner. Charge is NOT lost.
             if (BoosterManager.Instance != null && BoosterManager.Instance.IsTargeting)
             {
                 skillButton?.transform.DOShakePosition(0.3f, 5f, 10);
@@ -191,7 +143,7 @@ namespace Match3
             if (petManager == null || !petManager.IsCharged)
             {
                 skillButton?.transform.DOShakePosition(0.3f, 5f, 10);
-                ShowNotChargedTooltip();   // NEW (Rabia's request)
+                ShowNotChargedTooltip();
                 return;
             }
 
@@ -201,12 +153,6 @@ namespace Match3
             if (chargeBarFill   != null) chargeBarFill.fillAmount = 0f;
         }
 
-        /// <summary>
-        /// NEW (Rabia's request) — shown for notChargedTooltipDuration seconds
-        /// when the player taps the skill button while the pet isn't charged
-        /// yet. Tapping again while it's already showing just restarts the
-        /// 5-second timer instead of stacking multiple hide calls.
-        /// </summary>
         private void ShowNotChargedTooltip()
         {
             if (notChargedTooltip == null) return;
@@ -246,18 +192,6 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// FIX (Rabia's report — "not-charged tooltip never shows, no warning
-        /// either"): this used to also require petManager.IsCharged, which set
-        /// skillButton.interactable = false whenever the pet wasn't charged.
-        /// A Unity Button with interactable = false NEVER fires onClick at
-        /// all — so HandleSkillButtonTapped() (the shake + the tooltip) never
-        /// even ran while uncharged, exactly the one moment the tooltip is
-        /// supposed to appear. IsCharged is still checked INSIDE
-        /// HandleSkillButtonTapped() itself, so the skill still can't be used
-        /// early — only IsBusy (skill animation currently playing) still
-        /// blocks the tap here, to prevent spamming mid-animation.
-        /// </summary>
         private void RefreshSkillButtonInteractable()
         {
             if (skillButton == null || petManager == null) return;

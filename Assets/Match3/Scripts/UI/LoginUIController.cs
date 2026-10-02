@@ -5,39 +5,13 @@ using TMPro;
 
 namespace Game.Firebase
 {
-    /// <summary>
-    /// Connects the Login/Register screen UI elements to AuthManager.
-    /// Attach this to a GameObject in your LoginScene UI Canvas
-    /// (e.g. on the "AuthContainer" root object) and assign the
-    /// references in the Inspector.
-    ///
-    /// NOTE: Uses TextMeshPro (TMP_InputField / TMP_Text) because
-    /// Unity 6's default UI > Input Field / UI > Text creates TMP
-    /// components, not the legacy UnityEngine.UI versions.
-    ///
-    /// ---------------------------------------------------------------
-    /// UPDATED:
-    ///  - New "Email Verification" panel section: shown after a
-    ///    successful Register(), or after Login() finds an account
-    ///    whose email isn't verified yet. Has Resend + Continue + Back
-    ///    buttons. Wire the panel + buttons in the Inspector the same
-    ///    way loginPanel/registerPanel are wired.
-    ///  - SetLoading(true) now starts a watchdog coroutine that force-
-    ///    clears the loading state after LOADING_TIMEOUT_SECONDS if no
-    ///    AuthManager event ever arrives (e.g. a dropped connection or
-    ///    an unexpected exception). Previously, if no OnAuthError /
-    ///    OnLoginSuccess / OnRegisterSuccess ever fired, the buttons
-    ///    stayed disabled and the spinner kept spinning forever — which
-    ///    is what looked like the game "pausing" on a login error.
-    /// ---------------------------------------------------------------
-    /// </summary>
     public class LoginUIController : MonoBehaviour
     {
         [Header("Login Panel Fields")]
         public TMP_InputField loginEmailInput;
         public TMP_InputField loginPasswordInput;
         public Button loginButton;
-        public Button guestButton;          // "Play as Guest"
+        public Button guestButton;
 
         [Header("Register Panel Fields")]
         public TMP_InputField registerUsernameInput;
@@ -76,8 +50,8 @@ namespace Game.Firebase
         public TMP_Text forgotMessageText;
 
         [Header("Shared UI")]
-        public TMP_Text errorMessageText;       // Shows validation/auth errors
-        public GameObject loadingIndicator;     // Optional spinner shown during auth calls
+        public TMP_Text errorMessageText;
+        public GameObject loadingIndicator;
 
         [Header("Panel Switching")]
         public GameObject loginPanel;
@@ -92,33 +66,6 @@ namespace Game.Firebase
 
         private Coroutine _loadingWatchdog;
 
-        // -----------------------------------------------------------
-        // NEW — Fix for "Resend Email makes the game pause":
-        //
-        // There is NO code anywhere in this project (AuthManager,
-        // GameManager, GameState) that puts GameState into Paused because
-        // of an auth call — that link simply does not exist in the
-        // scripts. What you're actually seeing is a genuine Unity/Android
-        // lifecycle event: SendEmailVerificationAsync() is a sensitive
-        // Firebase Auth operation, and on some devices Google Play
-        // Services shows a brief native security check (or the OS itself
-        // offers to switch you to your Mail app) — either of those takes
-        // focus away from the game for a moment. Unity calls
-        // OnApplicationFocus(false) when that happens and
-        // OnApplicationFocus(true) when you come back — during that gap
-        // NOTHING in Unity runs (no Update, no coroutines), so whatever
-        // was on screen looks "frozen"/"paused" the instant focus returns,
-        // even though it isn't GameState.Paused.
-        //
-        // This is expected OS behaviour, not a bug to "turn off" — but the
-        // two handlers below make sure coming back from it is always
-        // smooth: (1) they log it so you can confirm this is what's
-        // happening (check Logcat/Console for "regained focus"), and
-        // (2) if the verification panel is open when focus returns, they
-        // silently re-check verification status — so if you verified your
-        // email while you were away, the game continues automatically
-        // instead of waiting for another tap on "Continue".
-        // -----------------------------------------------------------
         private bool _lostFocusWhileVerifying = false;
 
         private void OnApplicationFocus(bool hasFocus)
@@ -139,8 +86,6 @@ namespace Game.Firebase
             {
                 _lostFocusWhileVerifying = false;
 
-                // Safety net: if a watchdog/loading state got left stuck by
-                // the focus change, clear it before silently re-checking.
                 StopWatchdog();
                 SetLoading(false);
 
@@ -154,8 +99,6 @@ namespace Game.Firebase
 
         private void Start()
         {
-            // RemoveAllListeners first — prevents duplicate registration
-            // if Start() is called more than once (scene reload edge case)
             if (loginButton != null)
             {
                 loginButton.onClick.RemoveAllListeners();
@@ -191,7 +134,6 @@ namespace Game.Firebase
                 verificationResendButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
             }
 
-            // FORGOT PASSWORD buttons
             if (forgotPasswordOpenButton != null)
             {
                 forgotPasswordOpenButton.onClick.RemoveAllListeners();
@@ -216,7 +158,6 @@ namespace Game.Firebase
             if (forgotPasswordPanel != null)
                 forgotPasswordPanel.SetActive(false);
 
-            // Email keyboard on mobile for every email field
             EmailFieldUtility.ConfigureAsEmailField(loginEmailInput);
             EmailFieldUtility.ConfigureAsEmailField(registerEmailInput);
             EmailFieldUtility.ConfigureAsEmailField(forgotEmailInput);
@@ -237,7 +178,6 @@ namespace Game.Firebase
             if (verificationResendConfirmText != null)
                 verificationResendConfirmText.gameObject.SetActive(false);
 
-            // Subscribe to AuthManager events (can also be wired in Inspector instead)
             if (AuthManager.Instance != null)
             {
                 AuthManager.Instance.OnLoginSuccess.AddListener(OnLoginSuccess);
@@ -249,14 +189,6 @@ namespace Game.Firebase
                 AuthManager.Instance.OnPasswordResetEmailSent.AddListener(OnPasswordResetEmailSent);
             }
 
-            // NEW — "stay logged in across app restarts": Firebase already
-            // persists the session on-device on its own; this is what actually
-            // makes use of that instead of always forcing a fresh manual login.
-            // If a previous session exists, show the loading spinner over the
-            // Login form for a moment while it's checked — the three possible
-            // outcomes (auto-login, show verification panel, or show a banned/
-            // error message) all arrive through the exact same events wired
-            // just above, so nothing else needs to change.
             if (AuthManager.IsLoggedIn)
             {
                 SetLoading(true);
@@ -279,10 +211,6 @@ namespace Game.Firebase
 
             StopWatchdog();
         }
-
-        // -----------------------------------------------------------
-        // Panel Switching (wire to LoginTabButton / RegisterTabButton OnClick)
-        // -----------------------------------------------------------
 
         public void ShowLoginPanel()
         {
@@ -320,8 +248,6 @@ namespace Game.Firebase
             ClearError();
         }
 
-        /// <summary>FORGOT PASSWORD — opens the panel and pre-fills the email
-        /// from the Login field if the player already typed it.</summary>
         public void ShowForgotPasswordPanel()
         {
             if (loginPanel != null) loginPanel.SetActive(false);
@@ -337,10 +263,6 @@ namespace Game.Firebase
             ClearError();
         }
 
-        // -----------------------------------------------------------
-        // Button Handlers
-        // -----------------------------------------------------------
-
         public void OnLoginButtonClicked()
         {
             SetLoading(true);
@@ -354,7 +276,6 @@ namespace Game.Firebase
 
         public void OnGuestButtonClicked()
         {
-            // Guard against double-click (was causing 2 guest UIDs)
             if (guestButton != null && !guestButton.interactable) return;
             SetLoading(true);
             ClearError();
@@ -406,22 +327,15 @@ namespace Game.Firebase
         {
             StopWatchdog();
             SetLoading(false);
-            AuthManager.Instance.Logout();   // signs out + fires OnPlayerLoggedOut -> GameManager returns to Login state
+            AuthManager.Instance.Logout();
             ShowLoginPanel();
         }
-
-        // -----------------------------------------------------------
-        // AuthManager Event Callbacks
-        // -----------------------------------------------------------
 
         private void OnLoginSuccess()
         {
             StopWatchdog();
             SetLoading(false);
             Debug.Log("[LoginUIController] Login success -> GameManager will load Map.");
-            // GameManager.HandlePlayerLoggedIn() fires on GameEvents.OnPlayerLoggedIn
-            // and calls ChangeState(Map) -> SceneLoader loads MapScene automatically.
-            // AuthManager already fired GameEvents.OnPlayerLoggedIn before calling this.
         }
 
         private void OnRegisterSuccess()
@@ -429,7 +343,6 @@ namespace Game.Firebase
             StopWatchdog();
             SetLoading(false);
             Debug.Log("[LoginUIController] Registration success -> GameManager will load Map.");
-            // Same as OnLoginSuccess — GameEvents.OnPlayerLoggedIn already fired.
         }
 
         private void OnVerificationRequired(string email)
@@ -450,11 +363,6 @@ namespace Game.Firebase
             }
         }
 
-        /// <summary>NEW — the previously-missing "unstuck" path: a persisted
-        /// session existed but couldn't be refreshed (e.g. no internet on cold
-        /// launch). Quietly stop loading and show the normal Login form — no
-        /// error message, since nothing is actually broken, the player just
-        /// needs to log in manually this time.</summary>
         private void OnPasswordResetEmailSent(string email)
         {
             StopWatchdog();
@@ -482,17 +390,11 @@ namespace Game.Firebase
             if (errorMessageText != null)
                 errorMessageText.text = message;
 
-            // If the Forgot Password panel is open, show the error there too
-            // (errorMessageText usually sits on the Login panel, which is hidden).
             if (forgotPasswordPanel != null && forgotPasswordPanel.activeSelf && forgotMessageText != null)
                 forgotMessageText.text = message;
 
             Debug.LogWarning($"[LoginUIController] Auth error: {message}");
         }
-
-        // -----------------------------------------------------------
-        // Helpers
-        // -----------------------------------------------------------
 
         private void ClearError()
         {
@@ -520,10 +422,6 @@ namespace Game.Firebase
             if (forgotSendButton != null)
                 forgotSendButton.interactable = !isLoading;
 
-            // NEW — watchdog: if isLoading turns on, start a timer that force-clears
-            // it if AuthManager never calls back. This is the safety net for issue #2 —
-            // no matter what edge case causes a callback to be dropped, the UI can
-            // never stay stuck in a "frozen" state again.
             StopWatchdog();
             if (isLoading)
                 _loadingWatchdog = StartCoroutine(LoadingWatchdogRoutine());

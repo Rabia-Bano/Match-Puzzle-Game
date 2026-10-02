@@ -1,27 +1,7 @@
-// ============================================================
-//  PetData.cs  —  ScriptableObject
-//  Create via: Assets > Create > Match3 > Pet Data
-//
-//  One PetData asset = one collectible pet companion.
-//  Save these under: Assets/Resources/Pets/  (PetManager and
-//  PetCollection both load pets from that exact folder via
-//  Resources.Load / Resources.LoadAll — see setup notes).
-//
-//  Unlock rule (per current design):
-//    • The very first pet (index 0) is unlocked from Level 1,
-//      before the player has played anything.
-//    • Every pet after that unlocks after completing every
-//      5th level (after Level 5, Level 10, Level 15 ...).
-//    • unlockAfterLevel = 0 means "always unlocked".
-// ============================================================
-
 using UnityEngine;
 
 namespace Match3
 {
-    // ── Enums ────────────────────────────────────────────────
-
-    /// <summary>Collection rarity — purely cosmetic (border colour, sort order in UI).</summary>
     public enum PetRarity
     {
         Common = 0,
@@ -29,19 +9,13 @@ namespace Match3
         Epic   = 2
     }
 
-    /// <summary>
-    /// Which PetSkill implementation this pet uses. PetManager maps this
-    /// enum to a concrete PetSkill instance (see PetManager.CreateSkillInstance).
-    /// </summary>
     public enum PetSkillType
     {
-        Icera  = 0,   // clears 3 random rows
-        Luna   = 1,   // shuffles all non-special tiles on board, twice
-        Sparky = 2,   // adds bonus moves
-        Ripple = 3    // converts a few random tiles to a goal-relevant colour
+        Icera  = 0,
+        Luna   = 1,
+        Sparky = 2,
+        Ripple = 3
     }
-
-    // ── ScriptableObject ──────────────────────────────────────
 
     [CreateAssetMenu(fileName = "PetData_New", menuName = "Match3/Pet Data", order = 6)]
     public class PetData : ScriptableObject

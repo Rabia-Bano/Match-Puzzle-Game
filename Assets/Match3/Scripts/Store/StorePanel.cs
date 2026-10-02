@@ -1,10 +1,3 @@
-// ============================================================
-//  StorePanel.cs  —  MonoBehaviour
-//  Attach to: "StorePanel" GameObject inside StoreScene's UICanvas
-//  (positioned ABOVE BottomBarPanel in the Hierarchy so its Raycast
-//  Target doesn't block bottom-nav clicks — see setup guide).
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,8 +11,8 @@ namespace Match3
         [SerializeField] private TMP_Text coinsText;
 
         [Header("Grid")]
-        [SerializeField] private RectTransform contentContainer;  // ScrollRect -> Viewport -> Content (Vertical Layout Group)
-        [SerializeField] private GameObject    cardPrefab;        // needs StoreItemCard component
+        [SerializeField] private RectTransform contentContainer;
+        [SerializeField] private GameObject    cardPrefab;
 
         [Header("States")]
         [SerializeField] private GameObject loadingIndicator;
@@ -63,10 +56,6 @@ namespace Match3
             }
         }
 
-        // ============================================================
-        //  HEADER (coins)
-        // ============================================================
-
         private void HandleProfileChanged(PlayerProfile profile) => RefreshHeader(profile);
 
         private void RefreshHeader() => RefreshHeader(LocalSaveManager.GetOrLoadProfile());
@@ -75,15 +64,8 @@ namespace Match3
         {
             if (coinsText != null) coinsText.text = (profile?.coins ?? 0).ToString("N0");
 
-            // Booster inventory counts can change (purchase, or a booster used
-            // mid-level) — refresh owned-count badges on every profile change
-            // since LocalSaveManager.SaveBoosterInventory() fires this same event.
             RefreshOwnedCounts();
         }
-
-        // ============================================================
-        //  CATALOG / LIST
-        // ============================================================
 
         private void HandleCatalogLoaded(List<StoreItem> items)
         {
@@ -96,9 +78,6 @@ namespace Match3
                 return;
             }
 
-            // Simple full-rebuild — catalog is small (5 boosters) and only
-            // reloads when the panel opens, so this is cheap and avoids
-            // stale-card bugs from partial diffing.
             foreach (var kv in _cardsById)
                 if (kv.Value != null) Destroy(kv.Value.gameObject);
             _cardsById.Clear();
@@ -125,8 +104,6 @@ namespace Match3
         private void HandleCatalogLoadFailed(string message)
         {
             Debug.LogWarning($"[StorePanel] Catalog load issue: {message}");
-            // Not fatal — StoreManager already falls back to the default
-            // catalog and still fires OnCatalogLoaded, so the list still populates.
         }
 
         private void HandleItemGranted(StoreItem item, int newOwnedCount)
@@ -138,8 +115,6 @@ namespace Match3
         private void HandlePurchaseFailedFeedback(string message)
         {
             Debug.Log($"[StorePanel] Purchase feedback: {message}");
-            // TODO: wire to your toast/popup system. Left as a log so this
-            // compiles cleanly without assuming a specific toast component.
         }
 
         private void RefreshOwnedCounts()

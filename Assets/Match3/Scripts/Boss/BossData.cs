@@ -1,47 +1,8 @@
-// ============================================================
-//  BossData.cs  —  ScriptableObject
-//  Create via: Assets > Create > Match3 > Boss Data
-//
-//  One BossData asset = one Boss Arena fight. Save assets under
-//  Assets/Resources/Bosses/ as "boss_1", "boss_2" ... — BossController
-//  Resources.Load<BossData>($"Bosses/boss_{id}") the same way
-//  PetManager loads PetData.
-//
-//  weaknessTileType: the ONE tile colour that damages this boss.
-//  Matching any other colour still clears normally but does NOT
-//  hurt the boss.
-//
-//  UPDATED: boss fights no longer reward pets — reward is coins +
-//  a FIXED set of boosters (see BossBoosterReward / boosterRewards below).
-//  Pets stay a level-play-only reward (LevelSession's every-5th-level
-//  cadence), untouched by this file.
-//
-//  FIX (was granting the wrong boosters entirely): this used to be a
-//  weighted-random single pick from the OLD/legacy BoosterType enum
-//  (Hammer/Crystal/Beam/Refresh — defined in Board/BoosterSlotUI.cs),
-//  and BossResultManager granted it through ProfileManager.AddBooster(),
-//  which only writes to PlayerProfile.boosters (a flat List<string>).
-//  Nothing in actual gameplay reads that list — the real, working booster
-//  inventory that StoreManager/BoosterManager/InventoryBoosterSlot all use
-//  is LocalSaveManager.LoadBoosterInventory()/SaveBoosterInventory(), keyed
-//  by the string ids in BoosterManager.cs (hammer/row_bomb/column_bomb/
-//  shuffle_2tiles/shuffle_board). So boss rewards were being written to a
-//  dead-end list the player could never actually use.
-//
-//  Now: boosterRewards is a plain list you set per boss in the Inspector —
-//  the player gets EVERY entry in full (not a random pick), and
-//  BossResultManager grants them through LocalSaveManager, the SAME path
-//  the Store uses. Example for boss_1 (Level 1): Hammer x1, RowBomb x1,
-//  ColumnBomb x1, Shuffle2Tiles x1, ShuffleBoard x1.
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Match3
 {
-    /// <summary>One booster payout in a boss's fixed victory reward list.
-    /// The player receives ALL entries in this list on win — not a random pick.</summary>
     [System.Serializable]
     public class BossBoosterReward
     {

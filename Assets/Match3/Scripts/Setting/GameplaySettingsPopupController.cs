@@ -1,25 +1,3 @@
-// ============================================================
-//  GameplaySettingsPopupController.cs  —  MonoBehaviour
-//
-//  The in-gameplay Settings popup (opened from the gear icon that
-//  already exists on GameHUD.cs and needs adding to BossArenaHUD.cs).
-//  Shows Music / Sound / Vibration toggles (reusing SettingsUIController
-//  — put that script on the SAME popup panel, it doesn't care what
-//  scene it's in) PLUS an Exit button whose behaviour depends on which
-//  scene this popup lives in:
-//
-//    GameBoardScene (regular level)   → isBossArena = false (Inspector)
-//        Exit tapped → LivesManager.LoseLife() → GameManager.ChangeState(Map)
-//
-//    BossGameBoardScene (boss fight)  → isBossArena = true (Inspector)
-//        Exit tapped → NO life lost → GameManager.ChangeState(BossArena)
-//        (BossArena = the boss SELECTION list scene, per GameState.cs)
-//
-//  Attach to: the popup panel's PARENT (or the popup panel itself —
-//  either works, see setup guide). One instance per scene; only the
-//  isBossArena checkbox differs between the two scenes' copies.
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -63,8 +41,6 @@ namespace Match3
             closeButton?.onClick.RemoveListener(ClosePopup);
             exitButton?.onClick.RemoveListener(HandleExit);
 
-            // Safety: if this popup is destroyed (scene unload) while open,
-            // make sure we don't leave the game permanently frozen.
             if (_isOpen) Time.timeScale = 1f;
         }
 
@@ -74,11 +50,7 @@ namespace Match3
             AudioManager.Instance?.PlaySFX("button_click");
             popupRoot.SetActive(true);
             _isOpen = true;
-            Time.timeScale = 0f;   // freeze gameplay (board tweens use DOTween's
-                                    // own unscaled-time option by default in most
-                                    // setups, but stopping player input/board
-                                    // logic via timeScale is the simplest, safest
-                                    // freeze for a pause popup)
+            Time.timeScale = 0f;
         }
 
         private void ClosePopup()
@@ -93,24 +65,18 @@ namespace Match3
         private void HandleExit()
         {
             AudioManager.Instance?.PlaySFX("button_click");
-            Time.timeScale = 1f;   // always restore before leaving the scene
+            Time.timeScale = 1f;
 
             if (isBossArena)
             {
-                // Boss fight exit — no life lost, back to the boss SELECTION list.
                 GameManager.Instance?.ChangeState(GameState.BossArena);
             }
             else
             {
-                // NEW — admin panel analytics: this player QUIT the level mid-way.
                 Game.Firebase.PlayerActivityTracker.Instance?.RecordLevelQuit(LevelSession.CurrentLevelId, "exitButton");
 
-                // FIX — the "level in progress" flag was never cleared on Exit, so if the
-                // app was later killed from the Map, the NEXT launch charged a SECOND life
-                // for the same already-paid exit. Clear it here (this exit already costs 1).
                 LivesManager.Instance?.ClearLevelInProgress();
 
-                // Regular level exit — costs a life, back to the Map.
                 LivesManager.Instance?.LoseLife();
                 GameManager.Instance?.ChangeState(GameState.Map);
             }

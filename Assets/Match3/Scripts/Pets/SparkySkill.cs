@@ -1,13 +1,3 @@
-// ============================================================
-//  SparkySkill.cs  —  Sparky's power
-//  Adds 5 bonus moves to the current level.
-//
-//  Uses MoveCounter.AddBonusMoves() (raises TotalMoves too) instead of
-//  AddMoves(), because AddMoves() clamps to the level's starting
-//  TotalMoves — the bonus would silently do nothing if the player still
-//  has full moves left. AddBonusMoves() always applies.
-// ============================================================
-
 using System.Collections;
 using UnityEngine;
 

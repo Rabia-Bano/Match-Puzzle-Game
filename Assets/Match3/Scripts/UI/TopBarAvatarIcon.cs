@@ -1,20 +1,3 @@
-// ============================================================
-//  TopBarAvatarIcon.cs  —  MonoBehaviour
-//
-//  Keeps the top-right Profile Icon (the button that opens
-//  ProfilePanel) in sync with the player's chosen avatar
-//  (preset avatarId OR uploaded avatarUrl photo). Without this,
-//  the icon just stays on its static default sprite forever —
-//  it was never wired to ProfileManager at all.
-//
-//  Attach to: the Profile Icon GameObject itself (the one with
-//  the Button that already calls ProfilePanel.Show() from the
-//  Inspector) in EVERY scene that shows this icon — Map, BossArena,
-//  Store, Leaderboard, Setting, PetCompanion, etc. It's a
-//  per-scene component just like TopBarPillThemeBinder /
-//  NavBarThemeBinder.
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.UI;
 using Game.Firebase;
@@ -42,11 +25,6 @@ public class TopBarAvatarIcon : MonoBehaviour
             ProfileManager.Instance.OnAvatarLoaded.RemoveListener(SetAvatar);
     }
 
-    /// <summary>Covers the case where the avatar was already resolved
-    /// BEFORE this icon's scene loaded (e.g. player already logged in and
-    /// picked a preset back on the Map scene, then opened Store scene —
-    /// this icon needs to show the right avatar immediately, not wait for
-    /// the next OnAvatarLoaded fire).</summary>
     private void ApplyCurrentAvatarImmediately()
     {
         PlayerProfile profile = ProfileManager.Instance?.CurrentProfile;
@@ -64,11 +42,8 @@ public class TopBarAvatarIcon : MonoBehaviour
         }
         else if (string.IsNullOrEmpty(profile.avatarUrl))
         {
-            // No preset, no uploaded photo — show default.
             SetAvatar(defaultAvatarSprite);
         }
-        // else: avatarUrl is set but not yet downloaded in THIS scene —
-        // OnAvatarLoaded will fire and update it once the download finishes.
     }
 
     private void SetAvatar(Sprite sprite)

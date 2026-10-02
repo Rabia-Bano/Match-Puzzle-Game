@@ -1,10 +1,3 @@
-// ============================================================
-//  LeaderboardRow.cs  —  MonoBehaviour
-//  Attach to: the "LeaderboardRow" prefab (one row inside the
-//  ScrollRect's Content). See setup guide for the exact child
-//  hierarchy this expects.
-// ============================================================
-
 using System.Collections;
 using DG.Tweening;
 using TMPro;
@@ -18,7 +11,7 @@ namespace Match3
     {
         [Header("Rank")]
         [SerializeField] private TMP_Text rankText;
-        [SerializeField] private Image    rankMedalIcon;   // optional gold/silver/bronze icon
+        [SerializeField] private Image    rankMedalIcon;
         [SerializeField] private Sprite   goldSprite;
         [SerializeField] private Sprite   silverSprite;
         [SerializeField] private Sprite   bronzeSprite;
@@ -36,11 +29,6 @@ namespace Match3
 
         private Coroutine _avatarLoadRoutine;
 
-        /// <summary>
-        /// Populates this row. prevRank should be the rank this same uid had
-        /// on the previous update (pass the same value as newRank on first spawn
-        /// so it doesn't animate on initial population).
-        /// </summary>
         public void Setup(LeaderboardEntry entry, bool isCurrentPlayer, int prevRank)
         {
             Data = entry;
@@ -57,8 +45,6 @@ namespace Match3
 
                 if (!string.IsNullOrEmpty(entry.avatarId))
                 {
-                    // Preset avatar — same resolution ProfileManager/ProfilePanel use.
-                    // Local + instant, no network needed, and takes priority over avatarUrl.
                     var preset = Resources.Load<AvatarPresetData>("Avatars/" + entry.avatarId);
                     if (preset != null && preset.sprite != null)
                         avatarImage.sprite = preset.sprite;
@@ -94,9 +80,6 @@ namespace Match3
             }
         }
 
-        /// <summary>Slides the rank number up (moved up the board, green flash)
-        /// or down (dropped, red flash) using DOTween — matches the DOTween
-        /// convention already used across the board/pet systems.</summary>
         private void AnimateRankChange(int prevRank, int newRank)
         {
             if (rankText == null) return;

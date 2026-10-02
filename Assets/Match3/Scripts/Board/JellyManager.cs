@@ -1,21 +1,3 @@
-// ============================================================
-//  JellyManager.cs  —  MonoBehaviour
-//
-//  Owns the jelly LAYER that sits underneath tiles — this is
-//  separate from whatever tile currently occupies that cell. The
-//  tile above still matches and clears completely normally; every
-//  time a NORMAL tile clears while sitting on a jelly cell, one
-//  layer of jelly peels off. When a cell's jelly count hits 0, the
-//  cell is "clean" (goal is only about clearing the jelly, not the
-//  tile — the tile itself keeps refilling normally forever).
-//
-//  Attach to: an empty "JellyManager" GameObject in the GameBoard
-//  scene (sibling of BoardController / BoardGrid).
-//  Wire up: boardGrid, jellyOverlayPrefab, jellyLayerSprites[].
-//  Wire into: LevelManager.jellyManager AND BoardController.jellyManager
-//  (same object, both fields point at it).
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
@@ -40,9 +22,6 @@ namespace Match3
         private GameObject[,] _overlays;
         private readonly HashSet<Vector2Int> _touchedThisTurn = new();
 
-        // ── Setup ─────────────────────────────────────────────
-
-        /// <summary>Sets up jelly cells for a fresh level. Call from LevelManager.InitializeLevel(), AFTER BoardGrid.InitializeBoard().</summary>
         public void Setup(LevelData levelData, BoardGrid grid)
         {
             boardGrid = grid;
@@ -56,7 +35,7 @@ namespace Match3
             foreach (Vector2Int pos in levelData.jellyPositions)
             {
                 if (!grid.IsInBounds(pos.x, pos.y)) continue;
-                if (grid.IsBlank(pos.x, pos.y))   // NEW — jelly can never sit on a blank hole
+                if (grid.IsBlank(pos.x, pos.y))
                 {
                     Debug.LogWarning($"[JellyManager] Jelly at ({pos.x},{pos.y}) skipped — that cell is BLANK.");
                     continue;
@@ -66,12 +45,6 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// NEW — Boss Arena entry point. No LevelData involved: the board starts
-        /// with zero jelly, and BossAttackExecutor.ExecuteAddJelly() drops jelly
-        /// onto the board over time as one of the boss's attacks. Call once,
-        /// right after BoardGrid.InitializeBoard(), instead of Setup().
-        /// </summary>
         public void SetupEmpty(BoardGrid grid)
         {
             boardGrid = grid;
@@ -80,17 +53,10 @@ namespace Match3
             _overlays   = new GameObject[grid.Width, grid.Height];
         }
 
-        /// <summary>
-        /// NEW — drops `layers` of jelly onto a single cell at runtime (a boss
-        /// attack, not a level-start layout). No-ops if that cell already has
-        /// jelly — caller should pick a different cell in that case.
-        /// </summary>
         public void AddJellyAt(int x, int y, int layers)
         {
-            if (boardGrid == null) return; // JellyManager's own boardGrid field must be wired in the Inspector
+            if (boardGrid == null) return;
 
-            // Lazy self-init: if nobody explicitly called Setup()/SetupEmpty() yet
-            // (or the board was resized since), allocate fresh empty arrays now.
             if (_jellyLevel == null ||
                 _jellyLevel.GetLength(0) != boardGrid.Width ||
                 _jellyLevel.GetLength(1) != boardGrid.Height)
@@ -99,8 +65,8 @@ namespace Match3
             }
 
             if (!boardGrid.IsInBounds(x, y)) return;
-            if (boardGrid.IsBlank(x, y)) return;  // NEW — never onto a blank hole
-            if (_jellyLevel[x, y] > 0) return; // already jellied — caller picks another cell
+            if (boardGrid.IsBlank(x, y)) return;
+            if (_jellyLevel[x, y] > 0) return;
 
             _jellyLevel[x, y] = Mathf.Max(1, layers);
             SpawnOverlay(x, y);
@@ -108,20 +74,9 @@ namespace Match3
                 _overlays[x, y].transform.DOPunchScale(Vector3.one * 0.25f, 0.3f, 4, 0.6f);
         }
 
-        // ── Queries ───────────────────────────────────────────
-
-        /// <summary>True if this cell currently has 1+ jelly layers remaining.</summary>
         public bool HasJelly(int x, int y) =>
             _jellyLevel != null && boardGrid != null && boardGrid.IsInBounds(x, y) && _jellyLevel[x, y] > 0;
 
-        // ── Mutation ──────────────────────────────────────────
-
-        /// <summary>
-        /// Called by BoardController.ClearTiles() every time a NORMAL (non-special,
-        /// non-obstacle) tile clears at (x,y). Peels one jelly layer off that
-        /// cell, if any. Returns true if a layer was actually removed — the
-        /// caller uses that to report progress to GoalTracker.OnJellyCleared().
-        /// </summary>
         public bool DecrementAt(int x, int y)
         {
             if (!HasJelly(x, y)) return false;
@@ -138,14 +93,12 @@ namespace Match3
             return true;
         }
 
-        // ── Visuals ───────────────────────────────────────────
-
         private void SpawnOverlay(int x, int y)
         {
             if (jellyOverlayPrefab == null) return;
 
             Vector3 pos = boardGrid.GridToWorld(x, y);
-            pos.z += 0.1f; // sit slightly behind the tile
+            pos.z += 0.1f;
 
             GameObject go = Instantiate(jellyOverlayPrefab, pos, Quaternion.identity, transform);
             _overlays[x, y] = go;
@@ -183,18 +136,8 @@ namespace Match3
                 if (go != null) Destroy(go);
         }
 
-        // ── Wandering jelly (moves if not cleared this turn) ────
-
-        /// <summary>Call at the START of every player turn, before any clearing happens.</summary>
         public void BeginTurn() => _touchedThisTurn.Clear();
 
-        /// <summary>
-        /// Call at the END of every player turn (after all matches/cascades/
-        /// rotation have fully settled). Any jelly cell that did NOT get a
-        /// layer peeled off this turn "creeps" onto a random adjacent cell
-        /// that currently has a tile and no jelly of its own — so a jelly
-        /// the player keeps ignoring doesn't just sit still forever.
-        /// </summary>
         public void WanderUnclearedJelly()
         {
             if (_jellyLevel == null || boardGrid == null) return;
@@ -206,19 +149,11 @@ namespace Match3
 
             foreach (Vector2Int cell in jellyCells)
             {
-                // FIX: a jelly cell whose tile just cleared THIS turn was always
-                // skipped here (the "it was cleared this turn, leave it" case
-                // below) — but if that cell sits below a hard tile/blocker in
-                // its column, BoardRefiller intentionally never refills it
-                // (trapped-cell design), so the tile above it is gone for good.
-                // Without this check the jelly was left rendering over a blank
-                // cell forever. If there's currently no tile here, the jelly
-                // MUST relocate regardless of whether it was touched this turn.
                 bool hasTileHere = boardGrid.GetTile(cell.x, cell.y) != null;
-                if (hasTileHere && _touchedThisTurn.Contains(cell)) continue; // cleared normally this turn — leave it
+                if (hasTileHere && _touchedThisTurn.Contains(cell)) continue;
 
                 List<Vector2Int> candidates = GetAdjacentJellyFreeCells(cell.x, cell.y);
-                if (candidates.Count == 0) continue; // nowhere to go — stays put (still stuck, but at least not silently ignored — see HasStrandedJelly below)
+                if (candidates.Count == 0) continue;
 
                 Vector2Int dest = candidates[Random.Range(0, candidates.Count)];
                 MoveJelly(cell, dest);
@@ -234,12 +169,12 @@ namespace Match3
             {
                 int nx = x + d.x, ny = y + d.y;
                 if (!boardGrid.IsInBounds(nx, ny)) continue;
-                if (boardGrid.IsBlank(nx, ny)) continue;                 // NEW — jelly never wanders onto a blank hole
-                if (_jellyLevel[nx, ny] > 0) continue;                 // already has jelly
+                if (boardGrid.IsBlank(nx, ny)) continue;
+                if (_jellyLevel[nx, ny] > 0) continue;
 
                 Tile t = boardGrid.GetTile(nx, ny);
-                if (t == null) continue;                               // nothing to sit under
-                if (t.Data != null && t.Data.isHardTile) continue;      // don't hide jelly under a hard tile
+                if (t == null) continue;
+                if (t.Data != null && t.Data.isHardTile) continue;
 
                 result.Add(new Vector2Int(nx, ny));
             }
@@ -250,7 +185,7 @@ namespace Match3
         {
             int level = _jellyLevel[from.x, from.y];
             _jellyLevel[from.x, from.y] = 0;
-            RemoveOverlaySnap(from.x, from.y);   // instant removal, no fade — it's relocating, not clearing
+            RemoveOverlaySnap(from.x, from.y);
 
             _jellyLevel[to.x, to.y] = level;
             SpawnOverlay(to.x, to.y);
@@ -266,16 +201,6 @@ namespace Match3
             Destroy(go);
         }
 
-        // ── Board rotation support ──────────────────────────────
-
-        /// <summary>
-        /// UPDATED — rotates the jelly layer with the EXACT same mapping BoardRotation
-        /// uses for tiles and blank cells (BoardRotationMath), so jelly always stays
-        /// under the tile that now occupies its rotated cell. Works for square and
-        /// non-square boards (a 6x8 jelly array becomes 8x6 after a 90° turn).
-        /// quarterTurnsCW: 1 = 90° CW, 2 = 180°, 3 = 90° CCW.
-        /// Call AFTER BoardGrid.ApplyRotatedLayout() so GridToWorld uses the new layout.
-        /// </summary>
         public void RotateLayout(int quarterTurnsCW)
         {
             if (_jellyLevel == null || boardGrid == null) return;
@@ -294,7 +219,6 @@ namespace Match3
             }
         }
 
-        /// <summary>Old API kept for compatibility — same as RotateLayout(1).</summary>
         public void RotateClockwise(int width, int height) => RotateLayout(1);
     }
 }

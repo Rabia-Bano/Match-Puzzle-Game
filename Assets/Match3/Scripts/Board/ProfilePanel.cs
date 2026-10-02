@@ -7,25 +7,6 @@ using Game.Firebase;
 using Match3;
 using DG.Tweening;
 
-/// ---------------------------------------------------------------------
-/// UPDATED:
-///  1) GuestRegisterPopup is no longer built at runtime with code
-///     (BuildGuestRegisterPopup() + the MakeGO/AddLabel/AddInput/AddBtn/
-///     Stretch helpers have all been removed). It now follows the exact
-///     same pattern as avatarPickerPopup: build the whole popup by hand
-///     in the Unity Editor as a child of panelRoot, and assign every
-///     piece to the [SerializeField] references below. See the setup
-///     guide in chat for the exact hierarchy to build.
-///  2) NEW — Guest Email Verification panel: after UpgradeGuestAccount()
-///     succeeds, AuthManager no longer fires OnRegisterSuccess right
-///     away — it fires OnVerificationRequired(email) instead (same as
-///     the main Register() flow). This panel shows that "check your
-///     inbox" step, with Resend + Continue + Later buttons, also built
-///     by hand in the Editor.
-///  3) NEW — SetLoading(true) now starts a watchdog coroutine (same
-///     fix as LoginUIController) so the loading overlay / disabled
-///     buttons can never stay stuck if a callback never arrives.
-/// ---------------------------------------------------------------------
 public class ProfilePanel : MonoBehaviour
 {
     [Header("Panel Root")]
@@ -62,17 +43,11 @@ public class ProfilePanel : MonoBehaviour
 
     [HideInInspector] public Button closeButton;
 
-    // Avatar picker popup — built manually in the Unity Editor, code only wires it.
     [Header("Avatar Picker (built in Editor)")]
-    [SerializeField] private GameObject avatarPickerPopup;     // the whole popup root GameObject
-    [SerializeField] private Transform  avatarGridContainer;   // empty GameObject with GridLayoutGroup, 3 columns
-    [SerializeField] private GameObject avatarSlotPrefab;      // a Button+Image prefab, one per avatar
+    [SerializeField] private GameObject avatarPickerPopup;
+    [SerializeField] private Transform  avatarGridContainer;
+    [SerializeField] private GameObject avatarSlotPrefab;
 
-    // -----------------------------------------------------------------
-    // NEW — AVATAR PURCHASE inside this popup (no Store, no confirm panel).
-    // Every LOCKED avatar gets a "coin + price" BUY button right under it.
-    // One tap on that button = coins cut + avatar unlocked + equipped.
-    // -----------------------------------------------------------------
     [Header("Avatar Purchase (NEW)")]
     [Tooltip("Coin icon drawn inside every Buy button (use the same coin sprite as the TopBar).")]
     [SerializeField] private Sprite   avatarCoinSprite;
@@ -101,31 +76,23 @@ public class ProfilePanel : MonoBehaviour
 
     private Coroutine _avatarMsgRoutine;
 
-    // -----------------------------------------------------------------
-    // Guest Register popup — NOW built manually in the Unity Editor,
-    // exactly like avatarPickerPopup above. Code only wires these refs.
-    // -----------------------------------------------------------------
     [Header("Guest Register Popup (built in Editor)")]
-    [SerializeField] private GameObject     guestRegisterPopup;   // the whole popup root GameObject
+    [SerializeField] private GameObject     guestRegisterPopup;
     [SerializeField] private TMP_InputField regUsernameInput;
     [SerializeField] private TMP_InputField regEmailInput;
     [SerializeField] private TMP_InputField regPasswordInput;
     [SerializeField] private TMP_InputField regConfirmInput;
     [SerializeField] private TMP_Text       regErrorText;
     [SerializeField] private Button         regCancelButton;
-    [SerializeField] private Button         regSubmitButton;      // "Create Account"
+    [SerializeField] private Button         regSubmitButton;
 
-    // -----------------------------------------------------------------
-    // NEW — Guest email verification popup, also built in the Editor.
-    // Shown after regSubmitButton succeeds (AuthManager.OnVerificationRequired).
-    // -----------------------------------------------------------------
     [Header("Guest Verification Popup (built in Editor, NEW)")]
     [SerializeField] private GameObject guestVerificationPanel;
     [SerializeField] private TMP_Text   guestVerificationEmailText;
-    [SerializeField] private Button     guestVerificationContinueButton;  // "I've verified, Continue"
-    [SerializeField] private Button     guestVerificationResendButton;    // "Resend Email"
+    [SerializeField] private Button     guestVerificationContinueButton;
+    [SerializeField] private Button     guestVerificationResendButton;
     [SerializeField] private TMP_Text   guestVerificationResendConfirmText;
-    [SerializeField] private Button     guestVerificationLaterButton;     // "Later" — keep playing, verify later
+    [SerializeField] private Button     guestVerificationLaterButton;
     [Tooltip("NEW — BUG FIX: verification errors ('not verified yet', resend failed, etc.) used to be routed to regErrorText, which lives inside GuestRegisterPopup — a GameObject that is already INACTIVE while this panel is showing, so the message was set correctly in code but never actually visible on screen. This is a dedicated error text living inside VerificationPanel itself so it is always visible when needed. Add a TMP_Text here (red, initially inactive) as a child of VerificationPanel.")]
     [SerializeField] private TMP_Text   guestVerificationErrorText;
 
@@ -137,9 +104,7 @@ public class ProfilePanel : MonoBehaviour
     private bool      _isSavingName      = false;
     private Coroutine _hideErrorCoroutine;
     private Coroutine _loadingWatchdog;
-    private bool      _lostFocusWhileVerifying = false;   // NEW — see OnApplicationFocus below
-
-    // ── Lifecycle ─────────────────────────────────────────────
+    private bool      _lostFocusWhileVerifying = false;
 
     private void Start()
     {
@@ -151,11 +116,9 @@ public class ProfilePanel : MonoBehaviour
         logoutButton?.onClick.AddListener(OnLogoutClicked);
         registerButton?.onClick.AddListener(OnRegisterClicked);
 
-        // Guest register popup buttons (Editor-built — code only wires clicks)
         regCancelButton?.onClick.AddListener(OnRegisterCancelClicked);
         regSubmitButton?.onClick.AddListener(OnRegisterSubmit);
 
-        // Guest verification popup buttons (NEW)
         guestVerificationContinueButton?.onClick.AddListener(OnGuestVerificationContinueClicked);
         guestVerificationResendButton?.onClick.AddListener(OnGuestVerificationResendClicked);
         guestVerificationLaterButton?.onClick.AddListener(OnGuestVerificationLaterClicked);
@@ -180,19 +143,12 @@ public class ProfilePanel : MonoBehaviour
             AuthManager.Instance.OnVerificationRequired.AddListener(OnGuestVerificationRequired);
             AuthManager.Instance.OnVerificationEmailResent.AddListener(OnGuestVerificationEmailResent);
 
-            // NEW — single persistent subscription for the whole guest-upgrade
-            // flow's errors (both "submit register form" errors AND "check
-            // verification" errors land here). Replaces the old per-click
-            // AddListener/RemoveListener pattern, which was fragile and (along
-            // with routing everything to regErrorText — see the BUG FIX note
-            // on guestVerificationErrorText above) was why verification errors
-            // never actually showed on screen.
             AuthManager.Instance.OnAuthError.AddListener(OnGuestFlowError);
         }
 
         SetEditMode(false);
         HideError();
-        SetLoading(false);  // Always start with loading OFF
+        SetLoading(false);
 
         if (ProfileManager.Instance != null && ProfileManager.Instance.IsProfileLoaded)
             RefreshUI();
@@ -218,19 +174,15 @@ public class ProfilePanel : MonoBehaviour
         StopWatchdog();
     }
 
-    // ── Show / Hide ───────────────────────────────────────────
-
     public void Show()
     {
         if (panelRoot != null) panelRoot.SetActive(true);
-        SetLoading(false);   // ALWAYS off when opening
+        SetLoading(false);
         HideError();
         if (guestRegisterPopup     != null) guestRegisterPopup.SetActive(false);
         if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
         if (avatarPickerPopup      != null) avatarPickerPopup.SetActive(false);
 
-        // Refresh immediately, then again after 1 second
-        // in case profile was still loading from Firebase
         RefreshUI();
         StartCoroutine(DelayedRefresh());
     }
@@ -247,11 +199,9 @@ public class ProfilePanel : MonoBehaviour
         if (guestRegisterPopup     != null) guestRegisterPopup.SetActive(false);
         if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
         if (avatarPickerPopup      != null) avatarPickerPopup.SetActive(false);
-        SetLoading(false);   // Always turn off loading when hiding
+        SetLoading(false);
         if (panelRoot != null) panelRoot.SetActive(false);
     }
-
-    // ── Refresh UI ────────────────────────────────────────────
 
     public void RefreshUI()
     {
@@ -259,14 +209,8 @@ public class ProfilePanel : MonoBehaviour
 
         PlayerProfile p = ProfileManager.Instance?.CurrentProfile;
         bool isGuest = AuthManager.IsGuest;
-        // NEW — FIX: once LinkWithCredentialAsync succeeds, Firebase's IsAnonymous
-        // flips to false immediately — BEFORE the email is verified — so isGuest
-        // alone would already show the "member" UI (Logout button) right after
-        // tapping "Later", even though nothing has been verified yet. This extra
-        // check keeps the UI in its "still needs to verify" state until it's real.
         bool pendingVerification = AuthManager.IsPendingEmailVerification;
 
-        // ── Display Name ──
         if (displayNameText != null)
         {
             if (isGuest)
@@ -279,13 +223,11 @@ public class ProfilePanel : MonoBehaviour
             }
             else
             {
-                // Fallback: use Firebase Auth displayName
                 string authName = AuthManager.CurrentUser?.DisplayName;
                 displayNameText.text = !string.IsNullOrEmpty(authName) ? authName : "Player";
             }
         }
 
-        // ── Email ──
         if (emailText != null)
         {
             if (isGuest)
@@ -297,10 +239,6 @@ public class ProfilePanel : MonoBehaviour
             }
         }
 
-        // ── Avatar ──
-        // Only fall back to the default sprite when there's NEITHER a preset
-        // avatarId NOR an uploaded avatarUrl — otherwise a chosen preset would
-        // get silently reset back to the default every time RefreshUI() runs.
         bool hasAnyAvatar = p != null && (!string.IsNullOrEmpty(p.avatarId) || !string.IsNullOrEmpty(p.avatarUrl));
         if (avatarImage != null)
         {
@@ -310,35 +248,22 @@ public class ProfilePanel : MonoBehaviour
             }
             else if (!string.IsNullOrEmpty(p.avatarId))
             {
-                // Resolve directly instead of relying only on the OnAvatarLoaded
-                // event — that event fires once at app/profile-load time, which
-                // usually happens BEFORE this panel is ever opened (it starts
-                // inactive), so the event gets missed the first time around.
                 var preset = Resources.Load<AvatarPresetData>("Avatars/" + p.avatarId);
                 if (preset != null && preset.sprite != null)
                     avatarImage.sprite = preset.sprite;
             }
-            // else: avatarUrl-based uploaded photo — arrives via OnAvatarLoaded once downloaded.
         }
 
-        // ── Stats (safe if profile null) ──
         if (levelText           != null) levelText.text           = (p?.level ?? 1).ToString();
         if (totalScoreText      != null) totalScoreText.text      = (p?.totalScore ?? 0).ToString("N0");
         if (coinsText           != null) coinsText.text           = (p?.coins ?? 0).ToString("N0");
         if (levelsCompletedText != null) levelsCompletedText.text = (p?.levelsCompleted ?? 0).ToString();
         if (petsCountText       != null) petsCountText.text       = (p?.pets?.Count ?? 0).ToString();
 
-        // ── Button visibility ──
-        // NEW — FIX: "showRegisterUI" now also covers the pending-verification
-        // state, not just isGuest, so the Logout button doesn't appear (and
-        // Save-Account/Register doesn't disappear) the instant linking succeeds
-        // but before the email is actually verified.
         bool showRegisterUI = isGuest || pendingVerification;
         if (logoutButton   != null) logoutButton.gameObject.SetActive(!showRegisterUI);
         if (registerButton != null) registerButton.gameObject.SetActive(showRegisterUI);
 
-        // Preset avatars are local-only (no Storage upload, no account needed),
-        // so unlike the old photo-upload flow, Guests CAN change their avatar too.
         if (changeAvatarButton != null) changeAvatarButton.interactable = true;
         if (editNameButton     != null) editNameButton.gameObject.SetActive(!showRegisterUI);
 
@@ -350,9 +275,6 @@ public class ProfilePanel : MonoBehaviour
         if (petsContainer == null) return;
         foreach (Transform child in petsContainer) Destroy(child.gameObject);
 
-        // Real pet definitions (sprite + name) instead of unicode glyphs —
-        // the old ★ character wasn't in the TMP font asset AND its color
-        // was never set (defaulted to white-on-white = invisible).
         PetData[] allPets = Resources.LoadAll<PetData>("Pets");
         System.Array.Sort(allPets, (a, b) => a.unlockAfterLevel.CompareTo(b.unlockAfterLevel));
 
@@ -388,8 +310,6 @@ public class ProfilePanel : MonoBehaviour
                 }
                 else
                 {
-                    // Fallback if sprite isn't assigned yet — ASCII letter,
-                    // color EXPLICITLY set so it's actually visible.
                     TMP_Text icon = new GameObject("Icon").AddComponent<TextMeshProUGUI>();
                     icon.transform.SetParent(slot.transform, false);
                     RectTransform iconRT = icon.GetComponent<RectTransform>();
@@ -417,7 +337,6 @@ public class ProfilePanel : MonoBehaviour
             }
         }
     }
-    // ── Avatar ────────────────────────────────────────────────
 
     public void SetAvatarSprite(Sprite sprite)
     {
@@ -427,14 +346,12 @@ public class ProfilePanel : MonoBehaviour
 
     private void OnChangeAvatarClicked()
     {
-        PopulateAvatarGrid();   // refresh owned / locked / equipped state every time the picker opens
+        PopulateAvatarGrid();
         SetAvatarMessage("");
         RefreshAvatarPopupCoins();
         if (avatarPickerPopup != null) avatarPickerPopup.SetActive(true);
     }
 
-    /// <summary>Wired directly to the popup's Close ("X") Button OnClick() in the
-    /// Inspector — no code wiring needed for that button.</summary>
     public void CloseAvatarPopup()
     {
         if (avatarPickerPopup != null) avatarPickerPopup.SetActive(false);
@@ -446,13 +363,6 @@ public class ProfilePanel : MonoBehaviour
         CloseAvatarPopup();
     }
 
-    // ── POPULATE AVATAR GRID ──────────────────────────────────
-    // UPDATED — the Avatar Picker popup is now ALSO the avatar shop:
-    //   • FREE / OWNED avatar  → tap the avatar = equip (same as before)
-    //   • EQUIPPED avatar      → green outline
-    //   • LOCKED avatar        → greyed out (+ padlock) and a
-    //                            [coin 150] BUY button right under it.
-    //                            Tap the button = buy + equip, done.
     private void PopulateAvatarGrid()
     {
         if (avatarGridContainer == null || avatarSlotPrefab == null)
@@ -507,7 +417,6 @@ public class ProfilePanel : MonoBehaviour
         }
     }
 
-    /// <summary>Tapping the avatar picture itself.</summary>
     private void OnAvatarSlotClicked(AvatarPresetData preset)
     {
         AudioManager.Instance?.PlaySFX("button_click");
@@ -518,7 +427,6 @@ public class ProfilePanel : MonoBehaviour
             SetAvatarMessage($"Tap the coin button under {preset.NameOrId} to buy it.");
     }
 
-    /// <summary>Tapping the [coin 150] button under a locked avatar.</summary>
     private void OnBuyButtonClicked(AvatarPresetData preset, Transform button)
     {
         AudioManager.Instance?.PlaySFX("button_click");
@@ -535,10 +443,10 @@ public class ProfilePanel : MonoBehaviour
             return;
         }
 
-        AvatarShopManager.Equip(preset);      // updates profile image, top bar icon, leaderboard
+        AvatarShopManager.Equip(preset);
         RefreshAvatarPopupCoins();
-        RefreshUI();                          // profile card coins text
-        PopulateAvatarGrid();                 // button disappears, green outline moves to the new avatar
+        RefreshUI();
+        PopulateAvatarGrid();
         SetAvatarMessage($"{preset.NameOrId} unlocked!");
     }
 
@@ -557,11 +465,6 @@ public class ProfilePanel : MonoBehaviour
         img.raycastTarget = false;
     }
 
-    /// <summary>
-    /// Creates the [coin + price] Buy button directly UNDER the avatar slot.
-    /// It hangs below the slot's rect, so give the GridContainer's Grid Layout
-    /// Group enough vertical Spacing (≈ button height + gap + 10).
-    /// </summary>
     private void AddBuyButton(Transform slot, AvatarPresetData preset, bool canAfford)
     {
         GameObject btnGo;
@@ -569,7 +472,6 @@ public class ProfilePanel : MonoBehaviour
 
         if (buyButtonPrefab != null)
         {
-            // ── Designer's own prefab ──
             btnGo = Instantiate(buyButtonPrefab, slot, false);
             priceText = btnGo.GetComponentInChildren<TMP_Text>(true);
             Transform coinT = btnGo.transform.Find("CoinIcon");
@@ -577,7 +479,6 @@ public class ProfilePanel : MonoBehaviour
         }
         else
         {
-            // ── Built by code: [ (coin) 150 ] ──
             btnGo = new GameObject("BuyButton", typeof(RectTransform), typeof(Image), typeof(Button));
             btnGo.transform.SetParent(slot, false);
 
@@ -623,7 +524,6 @@ public class ProfilePanel : MonoBehaviour
             priceText = tmp;
         }
 
-        // Position: centred, just below the avatar
         var rt = (RectTransform)btnGo.transform;
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
         rt.pivot     = new Vector2(0.5f, 1f);
@@ -654,7 +554,7 @@ public class ProfilePanel : MonoBehaviour
     {
         if (avatarPopupMessageText == null)
         {
-            if (!string.IsNullOrEmpty(msg)) ShowError(msg);   // falls back to the panel's error text
+            if (!string.IsNullOrEmpty(msg)) ShowError(msg);
             return;
         }
         avatarPopupMessageText.text = msg;
@@ -668,8 +568,6 @@ public class ProfilePanel : MonoBehaviour
         yield return new WaitForSecondsRealtime(seconds);
         if (avatarPopupMessageText != null) avatarPopupMessageText.gameObject.SetActive(false);
     }
-
-    // ── Display Name Edit ─────────────────────────────────────
 
     private void StartEditName()
     {
@@ -695,15 +593,12 @@ public class ProfilePanel : MonoBehaviour
 
         _isSavingName = true;
 
-        // Update locally first (instant feedback)
         if (displayNameText != null) displayNameText.text = newName;
         SetEditMode(false);
         _isEditingName = false;
 
-        // Save in background — NO loading overlay
         ProfileManager.Instance?.UpdateDisplayName(newName);
 
-        // Reset flag after short delay
         StartCoroutine(ResetSavingFlag());
     }
 
@@ -730,31 +625,16 @@ public class ProfilePanel : MonoBehaviour
         if (cancelNameButton != null) cancelNameButton.gameObject.SetActive(editing);
     }
 
-    // ── Logout ────────────────────────────────────────────────
-
     private void OnLogoutClicked()
     {
-        // Logout is immediate — no loading screen/blocking wait.
-        // Fire-and-forget a cloud push so if internet is available the
-        // latest progress also reaches the cloud (levels already
-        // auto-push on completion — this is just an extra safety push
-        // at logout time).
         Debug.Log("[ProfilePanel] Logging out...");
         _ = CloudSyncManager.Instance?.SyncAfterLevelAsync();
         Hide();
         AuthManager.Instance?.Logout();
     }
 
-    // ── GUEST REGISTER FLOW ───────────────────────────────────
-
     private void OnRegisterClicked()
     {
-        // NEW — FIX: if the guest's account is already linked and only
-        // waiting on verification (they tapped "Later" earlier), this same
-        // button must NOT reopen the registration form — UpgradeGuestAccount()
-        // would immediately fail with "No guest account to upgrade" because
-        // _currentUser.IsAnonymous is already false at this point. Instead,
-        // just reopen the verification panel directly.
         if (AuthManager.IsPendingEmailVerification)
         {
             ReopenVerificationPanel();
@@ -768,9 +648,6 @@ public class ProfilePanel : MonoBehaviour
         }
     }
 
-    /// <summary>NEW — re-shows the verification panel for the currently signed-in
-    /// (already-linked-but-unverified) account, without going through
-    /// UpgradeGuestAccount() again.</summary>
     private void ReopenVerificationPanel()
     {
         string email = AuthManager.CurrentUser?.Email ?? "";
@@ -803,19 +680,9 @@ public class ProfilePanel : MonoBehaviour
 
         SetLoading(true);
 
-        // AuthManager handles token refresh + link internally
         AuthManager.Instance?.UpgradeGuestAccount(username, email, password);
     }
 
-    /// <summary>
-    /// NEW — single error handler for the ENTIRE guest-upgrade flow
-    /// (both the register-form submit and the later verification check).
-    /// Routes the message to whichever popup is actually on screen right
-    /// now, so it's always visible — this is the fix for "error nahi
-    /// dikhta": the old code always wrote to regErrorText, which is a
-    /// child of GuestRegisterPopup and stays invisible while
-    /// VerificationPanel is the one showing.
-    /// </summary>
     private void OnGuestFlowError(string message)
     {
         StopWatchdog();
@@ -833,17 +700,10 @@ public class ProfilePanel : MonoBehaviour
         }
         else
         {
-            // Neither guest popup is open — fall back to the main profile error text.
             ShowError(message);
         }
     }
 
-    // ── NEW — Guest Email Verification ─────────────────────────
-
-    /// <summary>
-    /// Fired by AuthManager once UpgradeGuestAccount() links the account.
-    /// Switches from the register form to the "check your inbox" panel.
-    /// </summary>
     private void OnGuestVerificationRequired(string email)
     {
         StopWatchdog();
@@ -860,7 +720,6 @@ public class ProfilePanel : MonoBehaviour
         if (guestVerificationResendConfirmText != null)
             guestVerificationResendConfirmText.gameObject.SetActive(false);
 
-        // Clear any leftover error from a previous attempt.
         if (guestVerificationErrorText != null)
             guestVerificationErrorText.gameObject.SetActive(false);
     }
@@ -870,9 +729,6 @@ public class ProfilePanel : MonoBehaviour
         SetLoading(true);
         if (guestVerificationErrorText != null) guestVerificationErrorText.gameObject.SetActive(false);
         AuthManager.Instance?.CheckEmailVerifiedAndContinue();
-        // On success -> AuthManager fires OnRegisterSuccess -> OnGuestUpgradeSuccess() below.
-        // On failure -> AuthManager fires OnAuthError -> OnGuestFlowError() (already subscribed
-        // once in Start()) -> shown via guestVerificationErrorText since this panel is active.
     }
 
     private void OnGuestVerificationResendClicked()
@@ -892,13 +748,6 @@ public class ProfilePanel : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// "Later" button — the guest's account is already linked to this
-    /// email/password (LinkWithCredentialAsync already succeeded), so the
-    /// player can keep playing under the new account right away. Only the
-    /// emailVerified flag stays false until they come back and verify —
-    /// nothing here is undone by closing this panel.
-    /// </summary>
     private void OnGuestVerificationLaterClicked()
     {
         if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
@@ -910,19 +759,12 @@ public class ProfilePanel : MonoBehaviour
         StopWatchdog();
         SetLoading(false);
 
-        // Close both popups
         if (guestRegisterPopup     != null) guestRegisterPopup.SetActive(false);
         if (guestVerificationPanel != null) guestVerificationPanel.SetActive(false);
 
         FinishGuestUpgradeUI();
     }
 
-    /// <summary>
-    /// Shared tail-end of the guest-upgrade flow — updates the in-memory
-    /// profile immediately (so the name/email show instantly) and reloads
-    /// from Firestore in the background. Used both by the normal success
-    /// path and by "Later".
-    /// </summary>
     private void FinishGuestUpgradeUI()
     {
         string newUsername = regUsernameInput?.text.Trim() ?? "";
@@ -934,12 +776,6 @@ public class ProfilePanel : MonoBehaviour
             ProfileManager.Instance.CurrentProfile.email       = newEmail;
         }
 
-        // NEW — FIX: only reload from Firestore when verification is actually
-        // done. While still pending (e.g. right after "Later"), Firestore still
-        // has the OLD "Guest_xxxx" placeholder data (the real username/email
-        // are only written once CheckEmailVerifiedAndContinue() confirms
-        // verification) — reloading here would silently overwrite the optimistic
-        // update above and flip the name/email back to the guest placeholder.
         if (AuthManager.CurrentUser != null && !AuthManager.IsPendingEmailVerification)
             ProfileManager.Instance?.LoadProfile(AuthManager.CurrentUser.UserId);
 
@@ -973,13 +809,10 @@ public class ProfilePanel : MonoBehaviour
         regErrorText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
     }
 
-    /// <summary>NEW — dedicated error display for the verification panel (see BUG FIX note on guestVerificationErrorText field).</summary>
     private void ShowGuestVerificationError(string msg)
     {
         if (guestVerificationErrorText == null)
         {
-            // Fallback so the message is at least visible somewhere if the
-            // Inspector field hasn't been wired yet — see chat setup guide.
             Debug.LogWarning("[ProfilePanel] guestVerificationErrorText is not assigned in the Inspector — showing error on the main profile error text instead.");
             ShowError(msg);
             return;
@@ -988,11 +821,8 @@ public class ProfilePanel : MonoBehaviour
         guestVerificationErrorText.gameObject.SetActive(!string.IsNullOrEmpty(msg));
     }
 
-    // ── Callbacks ─────────────────────────────────────────────
-
     private void OnSaveComplete()
     {
-        // Background save complete — no loading overlay needed
         Debug.Log("[ProfilePanel] Profile saved.");
     }
 
@@ -1016,8 +846,6 @@ public class ProfilePanel : MonoBehaviour
         HideError();
     }
 
-    // ── Loading + Watchdog (NEW) ────────────────────────────────
-
     private void SetLoading(bool show)
     {
         if (loadingOverlay != null) loadingOverlay.SetActive(show);
@@ -1025,9 +853,6 @@ public class ProfilePanel : MonoBehaviour
         if (regSubmitButton != null) regSubmitButton.interactable = !show;
         if (guestVerificationContinueButton != null) guestVerificationContinueButton.interactable = !show;
 
-        // Same watchdog pattern as LoginUIController — guarantees the
-        // loading overlay/buttons can never stay stuck no matter what
-        // interrupts the underlying Firebase call.
         StopWatchdog();
         if (show)
             _loadingWatchdog = StartCoroutine(LoadingWatchdogRoutine());
@@ -1051,12 +876,6 @@ public class ProfilePanel : MonoBehaviour
         }
     }
 
-    // ── NEW — same "Resend Email looks like a pause" fix as LoginUIController ──
-    // See the long comment in LoginUIController.cs for the full explanation:
-    // this is a genuine OS focus-loss event (a security dialog or the Mail
-    // app opening), not a scripted GameState.Paused. These handlers just make
-    // returning from it smooth, and silently re-check verification so the
-    // player doesn't have to tap "Continue" again if they already verified.
     private void OnApplicationFocus(bool hasFocus)
     {
         if (!hasFocus)

@@ -3,14 +3,11 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    // Attach to: UICanvas (BossArenaScene)
-    // Nav icons + Lives/Coins pills are handled separately by NavBarThemeBinder and
-    // TopBarPillThemeBinder - add those too on BottomBarPanel / TopBarPanel.
     public class BossArenaThemeApplier : MonoBehaviour, IThemeApplier
     {
-        [SerializeField] private Image background; // BGImage -> BG3
-        [SerializeField] private Image bgFrame;      // BossArenaPanel/BGFrame -> F2
-        [SerializeField] private Image titleImage;    // BossArenaPanel/TiltleImage -> F3
+        [SerializeField] private Image background;
+        [SerializeField] private Image bgFrame;
+        [SerializeField] private Image titleImage;
 
         public void Apply(ThemeData theme)
         {

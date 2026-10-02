@@ -1,16 +1,3 @@
-// ============================================================
-//  ThemeAmbientSceneSettings.cs  —  NEW (optional, one per scene)
-//
-//  Put this on ANY GameObject in a scene to change how the theme's
-//  ambient animation (snow / leaves / sand / stars) behaves in THAT
-//  scene only. Scenes without it use the defaults (full density).
-//
-//  Suggested:
-//    GameBoardScene      → densityMultiplier 0.5  (gems stay readable)
-//    BossGameBoardScene  → densityMultiplier 0.5
-//    Map / Login / Store → leave default (1.0)
-// ============================================================
-
 using UnityEngine;
 
 namespace Match3.Theme

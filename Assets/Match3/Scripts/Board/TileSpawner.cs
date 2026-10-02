@@ -1,11 +1,3 @@
-// ============================================================
-//  TileSpawner.cs — Phase 4 update
-//
-//  NEW: RefillSingleCell(int x, int y) — public method so
-//  BoardRefiller can spawn one tile at a specific cell.
-//  All existing logic preserved from Phase 3.
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -22,8 +14,6 @@ namespace Match3
 
         private TileData[] _activeTiles;
 
-        // ── Public API ────────────────────────────────────────
-
         public void SetLevel(LevelData levelData)
         {
             _activeTiles = (levelData?.allowedTiles != null && levelData.allowedTiles.Length > 0)
@@ -34,7 +24,6 @@ namespace Match3
                 Debug.LogError("[TileSpawner] No tiles configured!");
         }
 
-        /// <summary>Fill entire board bottom-to-top (initial setup).</summary>
         public void FillBoard()
         {
             if (!ValidateState()) return;
@@ -43,7 +32,6 @@ namespace Match3
                 SpawnAt(x, y);
         }
 
-        /// <summary>Fill all null cells (called after cascade).</summary>
         public void RefillEmpty()
         {
             if (!ValidateState()) return;
@@ -53,12 +41,6 @@ namespace Match3
                     SpawnAt(x, y);
         }
 
-        /// <summary>
-        /// NEW — Spawn exactly one tile at (x, y).
-        /// Called by BoardRefiller for animated per-cell refill.
-        /// The tile is placed in the grid; BoardRefiller moves its
-        /// transform from above the board to the target position.
-        /// </summary>
         public void RefillSingleCell(int x, int y)
         {
             if (!ValidateState()) return;
@@ -66,11 +48,8 @@ namespace Match3
             SpawnAt(x, y);
         }
 
-        // ── Core spawn ────────────────────────────────────────
-
         private void SpawnAt(int x, int y)
         {
-            // NEW — blank holes never get a tile.
             if (boardGrid.IsBlank(x, y)) return;
 
             TileData chosen = PickSafeTile(x, y);
@@ -90,15 +69,12 @@ namespace Match3
                     return candidate;
             }
 
-            // Fallback
             foreach (int idx in order)
                 if (_activeTiles[idx] != null && !_activeTiles[idx].isSpecial)
                     return _activeTiles[idx];
 
             return _activeTiles[0];
         }
-
-        // ── Match prediction ──────────────────────────────────
 
         private bool WouldFormMatch(int x, int y, TileColor color)
         {

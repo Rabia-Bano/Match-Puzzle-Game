@@ -1,17 +1,3 @@
-// ============================================================
-//  BossAttackExecutor.cs  —  MonoBehaviour
-//
-//  Does the actual board manipulation for each BossAttackType.
-//  Kept separate from BossController on purpose — BossController
-//  owns WHEN/WHICH attack fires, this owns HOW it touches the board.
-//  Same separation of concerns as PetSkill (the "how") vs PetManager
-//  (the "when") in the existing pet system.
-//
-//  Attach to: an empty "BossAttackExecutor" GameObject in BossArenaScene
-//  (sibling of BossController / BoardController).
-//  Wire up: boardGrid, moveCounter, hardTileData, dropStoneData.
-// ============================================================
-
 using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
@@ -43,7 +29,6 @@ namespace Match3
         [Tooltip("Punch-scale + tint feedback duration when a tile gets frozen/thawed.")]
         [SerializeField] private float feedbackDuration = 0.25f;
 
-        // Tiles this executor has frozen and still owns the "thaw" responsibility for.
         private readonly List<Tile> _bossFrozenTiles = new List<Tile>();
 
         private void Awake()
@@ -56,14 +41,8 @@ namespace Match3
             if (!boardController) Debug.LogWarning("[BossAttackExecutor] boardController not assigned — thawed tiles won't auto-match/clear even if unfreezing creates a valid match.", this);
         }
 
-        // ─────────────────────────────────────────────────────
-        // LOCK TILES — freezes N random normal tiles for a duration
-        // ─────────────────────────────────────────────────────
-
-        /// <summary>Locks up to <paramref name="count"/> random normal tiles for defaultLockDuration seconds.</summary>
         public void ExecuteLockTiles(int count) => ExecuteLockTiles(count, defaultLockDuration);
 
-        /// <summary>Locks up to <paramref name="count"/> random normal tiles for <paramref name="duration"/> seconds.</summary>
         public void ExecuteLockTiles(int count, float duration)
         {
             if (boardGrid == null || boardGrid.Grid == null) return;
@@ -74,7 +53,7 @@ namespace Match3
             {
                 Tile t = boardGrid.GetTile(x, y);
                 if (t == null || t.Data == null) continue;
-                if (t.State != TileState.Normal) continue;          // already locked/matched/falling — skip
+                if (t.State != TileState.Normal) continue;
                 if (t.Data.isSpecial || t.Data.isHardTile || t.Data.isDropStone) continue;
                 candidates.Add(t);
             }
@@ -104,7 +83,6 @@ namespace Match3
             ThawBossFrozenTiles();
         }
 
-        /// <summary>Unfreezes every tile this executor froze (that's still on the board and still Locked). Safe to call anytime — e.g. on boss defeat, to clean up immediately.</summary>
         public void ThawBossFrozenTiles()
         {
             bool thawedAny = false;
@@ -112,8 +90,8 @@ namespace Match3
             foreach (Tile t in _bossFrozenTiles)
             {
                 if (t == null) continue;
-                if (t.Data != null && t.Data.isHardTile) continue; // never touch a REAL hard-tile obstacle
-                if (t.State != TileState.Locked) continue;         // already cleared/changed by something else
+                if (t.Data != null && t.Data.isHardTile) continue;
+                if (t.State != TileState.Locked) continue;
 
                 t.SetState(TileState.Normal);
                 t.transform.DOKill();
@@ -122,18 +100,9 @@ namespace Match3
             }
             _bossFrozenTiles.Clear();
 
-            // FIX: unfreezing can suddenly line up 3+ same-colour tiles (e.g. 2
-            // frozen tiles sitting next to a normal tile of the same colour) —
-            // but match detection normally only runs after a swap or after
-            // gravity settles new tiles, and thawing goes through neither path.
-            // Without this, that match just sits there unmatched forever.
             if (thawedAny)
                 boardController?.CheckForMatchesAfterExternalChange();
         }
-
-        // ─────────────────────────────────────────────────────
-        // REDUCE MOVES
-        // ─────────────────────────────────────────────────────
 
         public void ExecuteReduceMoves(int amount)
         {
@@ -142,29 +111,17 @@ namespace Match3
             Debug.Log($"[BossAttackExecutor] ReduceMoves: -{amount}.");
         }
 
-        // ─────────────────────────────────────────────────────
-        // ADD OBSTACLES — rock (hard tile) blockers
-        // ─────────────────────────────────────────────────────
-
         public void ExecuteAddObstacles(int count = 3)
         {
             if (boardGrid == null || hardTileData == null) return;
             SpawnObstacleTiles(hardTileData, count, "AddObstacles (rock)");
         }
 
-        // ─────────────────────────────────────────────────────
-        // STONE TILES — dropdown-stone (ingredient) obstacles
-        // ─────────────────────────────────────────────────────
-
         public void ExecuteStoneTiles(int count = 3)
         {
             if (boardGrid == null || dropStoneData == null) return;
             SpawnObstacleTiles(dropStoneData, count, "StoneTiles (dropdown stone)");
         }
-
-        // ─────────────────────────────────────────────────────
-        // JELLY — spreads a jelly layer onto random cells (doesn't touch the tile above)
-        // ─────────────────────────────────────────────────────
 
         public void ExecuteAddJelly(int count = 1)
         {
@@ -174,10 +131,10 @@ namespace Match3
             for (int x = 0; x < boardGrid.Width; x++)
             for (int y = 0; y < boardGrid.Height; y++)
             {
-                if (jellyManager.HasJelly(x, y)) continue;         // already jellied
+                if (jellyManager.HasJelly(x, y)) continue;
                 Tile t = boardGrid.GetTile(x, y);
                 if (t == null || t.Data == null) continue;
-                if (t.Data.isHardTile) continue;                    // don't hide jelly under a hard tile
+                if (t.Data.isHardTile) continue;
                 candidates.Add(new Vector2Int(x, y));
             }
 
@@ -190,8 +147,6 @@ namespace Match3
             Debug.Log($"[BossAttackExecutor] Jelly: spread onto {n} cell(s).");
         }
 
-        // ─────────────────────────────────────────────────────
-
         private void SpawnObstacleTiles(TileData data, int count, string logLabel)
         {
             List<Vector2Int> candidates = new List<Vector2Int>();
@@ -199,8 +154,6 @@ namespace Match3
             for (int y = 0; y < boardGrid.Height; y++)
             {
                 Tile t = boardGrid.GetTile(x, y);
-                // Only replace a plain, currently-idle normal tile — never steal a
-                // cell mid-swap/mid-clear, and never overwrite an existing obstacle.
                 if (t == null || t.Data == null) continue;
                 if (t.State != TileState.Normal) continue;
                 if (t.Data.isSpecial || t.Data.isHardTile || t.Data.isDropStone) continue;

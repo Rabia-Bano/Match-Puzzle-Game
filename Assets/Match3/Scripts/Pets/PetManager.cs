@@ -1,7 +1,3 @@
-// ============================================================
-//  PetManager.cs  —  MonoBehaviour
-// ============================================================
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -69,18 +65,6 @@ namespace Match3
             if (boardController != null)
                 boardController.OnMatchGroupResolved -= HandleMatchGroupResolved;
 
-            // FIX ("charge stuck at 0%, never moves in later levels"): if a
-            // skill was still mid-animation when the level ended/transitioned,
-            // its coroutine (owned by THIS DontDestroyOnLoad PetManager) kept
-            // running into the new scene, referencing the OLD scene's now-
-            // destroyed boardGrid/boardController — Unity throws and silently
-            // KILLS the coroutine right there, so it never reaches the
-            // `IsBusy = false` line at the end of UseSkillRoutine(). IsBusy
-            // then stays stuck true forever, and HandleMatchGroupResolved's
-            // very first line ("if (... || IsBusy) return;") blocks EVERY
-            // future charge gain for the rest of the play session. A brand
-            // new level binding is the correct, safe point to guarantee a
-            // clean slate regardless of what happened in the previous scene.
             if (_skillCoroutine != null)
             {
                 StopCoroutine(_skillCoroutine);
@@ -167,9 +151,6 @@ namespace Match3
             OnPetChanged?.Invoke();
         }
 
-        // ── CHANGED: accepts an optional override so callers with FRESH data
-        //    (like ProfileManager right after updating levelsCompleted) don't
-        //    have to rely on the possibly-stale LocalSaveManager cache. ──
         private bool IsPetUnlocked(PetData pet, int? levelsCompletedOverride = null)
         {
             if (pet == null) return false;
@@ -178,8 +159,6 @@ namespace Match3
             return levelsCompleted >= pet.unlockAfterLevel;
         }
 
-        // ── CHANGED: same override pattern. Pass Profile.levelsCompleted
-        //    directly from ProfileManager to avoid the stale-cache bug. ──
         public List<string> GetUnlockedPetIds(int? levelsCompletedOverride = null)
         {
             var result = new List<string>();
@@ -215,15 +194,6 @@ namespace Match3
         {
             if (EquippedPet == null || IsBusy) return;
 
-            // FIX (pet icon size bug — root cause): IsCharged stays TRUE for every
-            // match the player makes AFTER first reaching 100%, right up until they
-            // tap Use. The old code fired OnPetReady on EVERY one of those matches
-            // (not just the first time), so during a fast cascade PetHUD's "ready"
-            // punch-scale animation on the pet icon was getting killed and restarted
-            // several times a second. Each individual restart resets scale safely,
-            // but that many back-to-back restarts is what made the icon look like
-            // it never settled back to its normal size. Only fire OnPetReady on the
-            // single frame charge crosses from "not ready" to "ready".
             bool wasCharged = IsCharged;
 
             int gain = matchSize switch
@@ -247,7 +217,6 @@ namespace Match3
         {
             if (!IsCharged || IsBusy || _skillInstance == null || EquippedPet == null) return;
 
-            // FIX — no pet power while a booster is selected (waiting for its target).
             if (BoosterManager.Instance != null && BoosterManager.Instance.IsTargeting) return;
             _skillCoroutine = StartCoroutine(UseSkillRoutine());
         }
@@ -259,13 +228,6 @@ namespace Match3
 
             Debug.Log($"[PetManager] Using skill: {EquippedPet.skillName} ({EquippedPet.skillType})");
 
-            // try/finally: guarantees IsBusy always clears even if the skill's
-            // own coroutine throws partway through (e.g. a board object it
-            // touches got destroyed by a scene change mid-animation) — a raw
-            // exception inside a coroutine otherwise aborts it silently and
-            // skips every line after the failure point, including the
-            // IsBusy = false reset that used to sit unprotected at the bottom
-            // of this method.
             try
             {
                 yield return _skillInstance.UseSkill(boardGrid, boardController, goalTracker, moveCounter);

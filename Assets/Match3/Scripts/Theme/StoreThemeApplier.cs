@@ -3,13 +3,10 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    // Attach to: StorePanel (Store scene)
-    // Nav icons + Lives/Coins pills -> NavBarThemeBinder / TopBarPillThemeBinder.
-    // StoreItemCard frame + BuyButton -> ThemedPrefabPiece placed directly on the StoreItemCard prefab.
     public class StoreThemeApplier : MonoBehaviour, IThemeApplier
     {
-        [SerializeField] private Image bgImage;      // BGImage -> BG3
-        [SerializeField] private Image headingBack;   // StorePanel/Image (heading backside) -> F3
+        [SerializeField] private Image bgImage;
+        [SerializeField] private Image headingBack;
 
         public void Apply(ThemeData theme)
         {

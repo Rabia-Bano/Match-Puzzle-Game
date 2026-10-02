@@ -1,15 +1,3 @@
-// ============================================================
-//  InventoryBoosterSlot.cs  —  MonoBehaviour
-//  Attach to: each "owned booster" button in the gameplay power-up bar.
-//  This is SEPARATE from BoosterSlotUI.cs (the existing pay-per-tap
-//  widget) — this button spends from the Store-purchased inventory via
-//  BoosterManager.cs instead of spending coins directly.
-//
-//  Used in BOTH GameHUD (regular level) and BossArenaHUD (Boss Arena) —
-//  same component, same prefab, just wired with a different boosterId
-//  per slot in each scene's Inspector.
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -26,32 +14,19 @@ namespace Match3
         [Header("UI Elements")]
         [SerializeField] private Button          button;
         [SerializeField] private Image           iconImage;
-        [SerializeField] private TextMeshProUGUI countText;        // owned quantity, e.g. "x2"
-        [SerializeField] private GameObject      targetingOutline; // highlighted while THIS booster is awaiting a tile tap
+        [SerializeField] private TextMeshProUGUI countText;
+        [SerializeField] private GameObject      targetingOutline;
 
         private void OnEnable()
         {
             button?.onClick.AddListener(OnTap);
             LocalSaveManager.OnProfileChanged += HandleInventoryChanged;
 
-            // FIX ("shuffle_2tiles bilkul attach nahi" / boosters randomly disabled):
-            // this used to check `if (BoosterManager.Instance != null)` — but
-            // BoosterManager is only actually created lazily, inside LevelManager's
-            // Start() (via GetOrCreateInstance()). Unity runs every object's OnEnable()
-            // BEFORE any Start() in the scene, so on the very first level/fight of a
-            // session, Instance was still null right here — this whole subscribe block
-            // was silently skipped, and this slot never heard OnTargetingStarted /
-            // OnTargetingEnded / OnBoosterUsed for the rest of that session. Whether
-            // that happened depended purely on scene-load history (had some earlier
-            // scene already created the DontDestroyOnLoad singleton?) — which is
-            // exactly why it looked random per booster/per session. Calling
-            // GetOrCreateInstance() here — same pattern PetHUD.cs already uses for
-            // PetManager — guarantees the singleton exists before we subscribe.
             BoosterManager manager = BoosterManager.GetOrCreateInstance();
             manager.OnTargetingStarted += HandleTargetingStarted;
             manager.OnTargetingEnded   += HandleTargetingEnded;
             manager.OnBoosterUsed      += HandleBoosterUsed;
-            manager.OnBound            += Refresh; // re-check CanUse() once BindToLevel() actually finishes
+            manager.OnBound            += Refresh;
 
             Refresh();
         }
@@ -76,7 +51,7 @@ namespace Match3
 
             if (!BoosterManager.Instance.CanUse(boosterId))
             {
-                transform.DOShakePosition(0.3f, 5f, 10); // same "not usable right now" feedback BoosterSlotUI.cs uses
+                transform.DOShakePosition(0.3f, 5f, 10);
                 return;
             }
 
@@ -91,7 +66,6 @@ namespace Match3
         {
             bool isThisOne = activeBoosterId == boosterId;
             if (targetingOutline != null) targetingOutline.SetActive(isThisOne);
-            // Grey out every OTHER slot while one booster is awaiting a tile tap.
             if (button != null && !isThisOne) button.interactable = false;
         }
 

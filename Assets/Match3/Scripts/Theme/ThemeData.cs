@@ -2,25 +2,20 @@ using UnityEngine;
 
 namespace Match3.Theme
 {
-    /// <summary>NEW — the animated ambient effect drawn over every scene for a theme.</summary>
     public enum ThemeAmbientType
     {
         None      = 0,
-        Snow      = 1,   // Ice World
-        Leaves    = 2,   // Forest World
-        Sand      = 3,   // Desert World (wind-blown sand + dust puffs)
-        Stars     = 4,   // Space World (twinkling stars + shooting stars)
-        Bubbles   = 5,   // Ocean / Water world
-        Embers    = 6,   // Volcano / Lava world
-        Petals    = 7,   // Candy / Spring world
-        Rain      = 8,   // Jungle / Storm world
-        Fireflies = 9    // Night / Magic world
+        Snow      = 1,
+        Leaves    = 2,
+        Sand      = 3,
+        Stars     = 4,
+        Bubbles   = 5,
+        Embers    = 6,
+        Petals    = 7,
+        Rain      = 8,
+        Fireflies = 9
     }
 
-    /// <summary>
-    /// One asset = one theme (e.g. "Ice World", "Forest World", "Desert World").
-    /// Create via: Assets > Create > Match3 > Theme Data
-    /// </summary>
     [CreateAssetMenu(fileName = "ThemeData_", menuName = "Match3/Theme Data")]
     public class ThemeData : ScriptableObject
     {
@@ -79,7 +74,6 @@ namespace Match3.Theme
         [Tooltip("BossArenaHUD panel image, themed the same way as GameBoard TopBar (gameBoardTopBarImage below).")]
         public Sprite bossArenaHUDImage;
 
-        // ── NEW — Theme animation ─────────────────────────────
         [Header("Ambient Animation (NEW — plays in EVERY scene)")]
         [Tooltip("Ice = Snow, Forest = Leaves, Desert = Sand, Space = Stars ... None = off.")]
         public ThemeAmbientType ambientType = ThemeAmbientType.None;

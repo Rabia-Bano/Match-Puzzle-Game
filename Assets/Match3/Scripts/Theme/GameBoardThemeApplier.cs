@@ -3,18 +3,16 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    // Attach to: GameHUD (GameBoard scene)
     public class GameBoardThemeApplier : MonoBehaviour, IThemeApplier
     {
-        [SerializeField] private SpriteRenderer background; // world-space "Background" 2D sprite -> BG3
-        [SerializeField] private Image topBarImage;          // GameHUD/TopBar Image
-        [SerializeField] private Image[] petAndBoosterSlots; // Slot_Pet + all InventoryBoosterSlot images -> F2
-        [SerializeField] private Image settingIcon;            // SettingsButton/Icon
-        [SerializeField] private Image goalPanelStart;         // GoalPanel/Start -> F2
-        [SerializeField] private Image settingPanel;           // SettingPanel -> F2
-        [SerializeField] private Image winCard;                // WinPanel/WinCard -> F2
-        [SerializeField] private Image loseCard;                // LosePanel/LoseCard -> F2
-        // Buttons inside WinPanel/LosePanel/SettingPanel: add ThemeButtonBinder on each button.
+        [SerializeField] private SpriteRenderer background;
+        [SerializeField] private Image topBarImage;
+        [SerializeField] private Image[] petAndBoosterSlots;
+        [SerializeField] private Image settingIcon;
+        [SerializeField] private Image goalPanelStart;
+        [SerializeField] private Image settingPanel;
+        [SerializeField] private Image winCard;
+        [SerializeField] private Image loseCard;
 
         public void Apply(ThemeData theme)
         {

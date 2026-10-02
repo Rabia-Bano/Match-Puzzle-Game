@@ -1,53 +1,20 @@
 using UnityEngine;
-using Game.Firebase;   // NEW — CloudSyncManager ke liye
+using Game.Firebase;
 
-/// <summary>
-/// Global singleton that owns the current GameState and a handful
-/// of values that must survive scene changes (coins, current level).
-///
-/// This script ONLY exists in the Preloader scene and is marked
-/// DontDestroyOnLoad — so the same instance is alive for the
-/// entire app session, across every scene.
-///
-/// IMPORTANT: This script does NOT touch the match-3 board at all.
-/// Board logic (BoardGrid, GoalTracker, MoveCounter, Score, etc.)
-/// lives in LevelManager.cs — a separate, scene-local script inside
-/// GameBoardScene. LevelManager fires GameEvents.OnLevelCompleted /
-/// OnLevelFailed when a level ends; GameManager reacts to those by
-/// switching state back to Map. That is the ONLY connection between
-/// the two scripts — no direct references either way.
-///
-/// FIXED: HandleBossDefeated() used to immediately ChangeState(Map)
-/// the instant GameEvents.OnBossDefeated fired — but BossResultManager
-/// fires that event right after SHOWING the win panel (reward screen
-/// with pet drop), not after the player dismisses it. That meant the
-/// scene would switch to MapScene mid-reward-screen, before the player
-/// ever saw it or tapped anything. Navigation away from the win/lose
-/// panel is now entirely up to BossResultManager's own Continue/Retry/
-/// Quit buttons (see BossResultManager.cs) — GameManager just logs the
-/// event now, for analytics or anything else that wants to listen
-/// without driving navigation.
-/// </summary>
 public class GameManager : MonoBehaviour
 {
-    /// <summary>Global access point: GameManager.Instance.ChangeState(...)</summary>
     public static GameManager Instance { get; private set; }
 
-    /// <summary>The state the game is currently in.</summary>
     public GameState CurrentState { get; private set; } = GameState.Loading;
 
-    /// <summary>The state before the current one — used to "go back" from Pause.</summary>
     public GameState PreviousState { get; private set; } = GameState.Loading;
 
-    /// <summary>Currently selected level number (set from MapScreen).</summary>
     public int CurrentLevel { get; private set; } = 1;
 
-    /// <summary>Player's coin balance — persists across scenes for this session.</summary>
     public int Coins { get; private set; } = 0;
 
     private void Awake()
     {
-        // Enforce exactly one instance, ever.
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -88,15 +55,6 @@ public class GameManager : MonoBehaviour
 
     private void OnApplicationQuit() => GameEvents.ClearAllEvents();
 
-    // ─────────────────────────────────────────────────────────
-    // STATE MACHINE — the one method that drives everything
-    // ─────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Changes the current state and broadcasts it. SceneLoader
-    /// reacts by loading the matching scene; UIManager reacts by
-    /// showing the matching panel. Nothing else needs to be called.
-    /// </summary>
     public void ChangeState(GameState newState)
     {
         if (newState == CurrentState) return;
@@ -106,31 +64,23 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"[GameManager] State: {PreviousState} → {CurrentState}");
 
-        // Freeze gameplay time while paused; resume otherwise.
         Time.timeScale = (newState == GameState.Paused) ? 0f : 1f;
 
         GameEvents.OnGameStateChanged?.Invoke(CurrentState);
     }
 
-    // ─────────────────────────────────────────────────────────
-    // PUBLIC HELPERS — called by UI buttons / other systems
-    // ─────────────────────────────────────────────────────────
-
-    /// <summary>Called from MapScreen when the player taps a level node.</summary>
     public void SetLevel(int levelIndex)
     {
         CurrentLevel = levelIndex;
         Debug.Log($"[GameManager] Level set to {levelIndex}");
     }
 
-    /// <summary>Adds coins and broadcasts the new total.</summary>
     public void AddCoins(int amount)
     {
         Coins += amount;
         GameEvents.OnCoinsChanged?.Invoke(Coins);
     }
 
-    /// <summary>Spends coins. Returns false (and does nothing) if balance is too low.</summary>
     public bool SpendCoins(int amount)
     {
         if (Coins < amount)
@@ -142,10 +92,6 @@ public class GameManager : MonoBehaviour
         GameEvents.OnCoinsChanged?.Invoke(Coins);
         return true;
     }
-
-    // ─────────────────────────────────────────────────────────
-    // EVENT HANDLERS — react to gameplay events by changing state
-    // ─────────────────────────────────────────────────────────
 
     private void HandleLevelCompleted(int level)
     {
@@ -159,16 +105,6 @@ public class GameManager : MonoBehaviour
         ChangeState(GameState.Map);
     }
 
-    /// <summary>
-    /// FIXED: no longer changes scene here. BossResultManager's win panel
-    /// is still on-screen when this fires (it's invoked right after SHOWING
-    /// the reward screen, not after the player dismisses it) — auto-navigating
-    /// here used to yank the player back to MapScene before they could see
-    /// their reward. Navigation is now entirely driven by BossResultManager's
-    /// own Continue / Retry / Quit buttons (see GoToBossList()/RetryFight()
-    /// in BossResultManager.cs). This handler is kept for anything else that
-    /// wants to react to a boss defeat (analytics, etc.) without moving screens.
-    /// </summary>
     private void HandleBossDefeated()
     {
         Debug.Log("[GameManager] Boss defeated (analytics/logging only — no auto-navigation).");
@@ -176,9 +112,6 @@ public class GameManager : MonoBehaviour
 
     private void HandleReturnToMap()
     {
-        // NEW (Rabia's request) — a deliberate exit to map mid-level is NOT
-        // an "abandoned via kill" case, so it must never cost a life either.
-        // No-op if nothing was marked (e.g. called from a non-gameplay screen).
         LivesManager.Instance?.ClearLevelInProgress();
         ChangeState(GameState.Map);
     }
@@ -197,9 +130,6 @@ public class GameManager : MonoBehaviour
 
     private void HandlePlayerLoggedIn()
     {
-        // NEW — login/register hote hi hybrid save sync trigger karo.
-        // Fire-and-forget: `_ =` isliye taake ChangeState() turant chale,
-        // network sync background mein hoti rahe aur Map screen block na ho.
         _ = CloudSyncManager.Instance?.SyncOnSessionStartAsync();
         ChangeState(GameState.Map);
     }

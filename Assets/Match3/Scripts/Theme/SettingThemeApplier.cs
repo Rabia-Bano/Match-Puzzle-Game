@@ -3,13 +3,11 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    // Attach to: UICanvas (SettingScene)
-    // Nav icons + Lives/Coins pills -> NavBarThemeBinder / TopBarPillThemeBinder.
     public class SettingThemeApplier : MonoBehaviour, IThemeApplier
     {
-        [SerializeField] private Image bgImage;       // BGImage -> BG3
-        [SerializeField] private Image headingBack;    // "Image" (heading backside) -> F3
-        [SerializeField] private Image settingPanel;    // SettingPanel/Image -> F2
+        [SerializeField] private Image bgImage;
+        [SerializeField] private Image headingBack;
+        [SerializeField] private Image settingPanel;
 
         public void Apply(ThemeData theme)
         {

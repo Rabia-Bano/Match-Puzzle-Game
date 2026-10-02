@@ -1,17 +1,3 @@
-// ============================================================
-//  LeaderboardManager.cs  —  Singleton MonoBehaviour (DontDestroyOnLoad)
-//  Attach to: "FirebaseManagers" GameObject in PreloaderScene — the
-//             SAME object that already has FirebaseInitializer,
-//             AuthManager, ProfileManager, CloudSyncManager, NetworkChecker.
-//  Call: Initialize() from FirebaseInitializer.OnFirebaseReady
-//        (Inspector UnityEvent), same as the other managers.
-//  Access: Game.Firebase.LeaderboardManager.Instance
-//
-//  ALL-TIME LEADERBOARD — no periodic reset. Every player has exactly
-//  ONE row at /leaderboard/{uid}, and totalScore accumulates forever
-//  across every level ever completed.
-// ============================================================
-
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -23,8 +9,6 @@ using Firebase.Database;
 using Firebase.Firestore;
 using Firebase.Extensions;
 
-// Both Firebase.Database and Firebase.Firestore have a "Query" type — alias
-// it explicitly to the Realtime Database one to remove the CS0104 ambiguity.
 using DbQuery = Firebase.Database.Query;
 
 using Match3;
@@ -48,12 +32,8 @@ namespace Game.Firebase
                  "(looks like https://your-project-default-rtdb.REGION.firebasedatabase.app/).")]
         [SerializeField] private string databaseUrlOverride = "";
 
-        /// <summary>Fired every time the RTDB listener receives fresh data,
-        /// already sorted descending by totalScore with rank assigned.</summary>
         public event Action<List<LeaderboardEntry>> OnLeaderboardUpdated;
 
-        /// <summary>Fired if the RTDB listener itself errors out (permission
-        /// denied, disconnected, etc). UI can show a retry / offline state.</summary>
         public event Action<string> OnLeaderboardError;
 
         private DatabaseReference _leaderboardRootRef;
@@ -68,7 +48,6 @@ namespace Game.Firebase
             DontDestroyOnLoad(gameObject);
         }
 
-        /// <summary>Call this from FirebaseInitializer.OnFirebaseReady (Inspector).</summary>
         public void Initialize()
         {
             if (!FirebaseInitializer.IsReady)
@@ -85,34 +64,8 @@ namespace Game.Firebase
             _initialized = true;
             if (logVerbose) Debug.Log("[LeaderboardManager] Ready.");
 
-            RequestSync();   // NEW — catch up anything earned while offline
+            RequestSync();
         }
-
-        // ============================================================
-        //  NEW — LEADERBOARD = MIRROR OF THE PLAYER'S PROFILE SCORE
-        //
-        //  OLD design (bugs Rabia found):
-        //   1. Every level win ADDED its score to /leaderboard/{uid} separately
-        //      from the profile. Offline wins, failed writes or the anti-cheat
-        //      check made the two numbers drift apart, so the leaderboard never
-        //      matched the score shown on the Players page / in-game profile.
-        //   2. When no profile was loaded yet, the name fell back to "Player"
-        //      and OVERWROTE the real name on the leaderboard.
-        //
-        //  NEW design:
-        //   • The player profile (players/{uid}.totalScore — already offline-
-        //     safe via LocalSaveManager + CloudSyncManager) is the ONE source
-        //     of truth. The leaderboard simply COPIES that number.
-        //   • Synced automatically whenever the profile changes, internet
-        //     comes back, the player logs in, or a level/boss is won.
-        //     Nothing is queued separately, so nothing can be lost or
-        //     counted twice.
-        //   • The name/avatar are written ONLY from a loaded profile that
-        //     belongs to the logged-in uid — never "Player". If no profile is
-        //     loaded yet, the sync simply waits.
-        //   • totalScore never goes DOWN (same as the RTDB rule), so a
-        //     half-loaded profile can't wipe a good leaderboard score.
-        // ============================================================
 
         [Header("Profile → Leaderboard sync (NEW)")]
         [Tooltip("Waits this long after the last profile change before writing (batches rapid saves).")]
@@ -153,7 +106,6 @@ namespace Game.Firebase
             if (online) RequestSync();
         }
 
-        /// <summary>Schedules a (debounced) profile → leaderboard sync.</summary>
         public void RequestSync()
         {
             if (!isActiveAndEnabled) return;
@@ -168,7 +120,6 @@ namespace Game.Firebase
             _ = SyncFromProfileAsync();
         }
 
-        /// <summary>The profile that belongs to the CURRENTLY logged-in uid, or null.</summary>
         private static PlayerProfile CurrentPlayersProfile(string uid)
         {
             PlayerProfile p = ProfileManager.Instance?.Profile;
@@ -176,7 +127,6 @@ namespace Game.Firebase
             return (p != null && p.uid == uid) ? p : null;
         }
 
-        /// <summary>Copies profile.totalScore + name + avatar to /leaderboard/{uid}.</summary>
         public async Task<bool> SyncFromProfileAsync()
         {
             if (!_initialized || _leaderboardRootRef == null) return false;
@@ -216,14 +166,13 @@ namespace Game.Firebase
                     long existing = dict.TryGetValue("totalScore", out object v) && long.TryParse(v?.ToString(), out long ex) ? ex : 0;
                     string existingName = dict.TryGetValue("displayName", out object n) ? n?.ToString() : null;
 
-                    // Never write a placeholder name; keep the stored one instead.
                     string finalName = !string.IsNullOrWhiteSpace(name) ? name : existingName;
                     if (string.IsNullOrWhiteSpace(finalName)) return TransactionResult.Abort();
 
-                    long finalScore = Math.Max(existing, profileScore);   // never goes down
+                    long finalScore = Math.Max(existing, profileScore);
                     bool same = existing == finalScore && existingName == finalName
                                 && (dict.TryGetValue("avatarId", out object a) ? a?.ToString() : "") == avatarId;
-                    if (same) return TransactionResult.Abort();           // nothing to change
+                    if (same) return TransactionResult.Abort();
 
                     dict["uid"]         = uid;
                     dict["displayName"] = finalName;
@@ -242,7 +191,6 @@ namespace Game.Firebase
             }
             catch (Exception ex)
             {
-                // An aborted transaction (nothing to change) can also land here on some SDK versions.
                 if (logVerbose) Debug.Log($"[LeaderboardManager] Leaderboard sync not written: {ex.GetBaseException().Message}");
                 return false;
             }
@@ -253,15 +201,6 @@ namespace Game.Firebase
             }
         }
 
-        // ============================================================
-        //  LISTENING
-        // ============================================================
-
-        /// <summary>
-        /// Attaches a ValueChanged listener to /leaderboard/, ordered by
-        /// totalScore. Call from LeaderboardPanel.OnEnable(). Safe to call
-        /// multiple times — it will not double-subscribe.
-        /// </summary>
         public void StartListening()
         {
             if (!_initialized || _leaderboardRootRef == null)
@@ -283,8 +222,6 @@ namespace Game.Firebase
             if (logVerbose) Debug.Log("[LeaderboardManager] Listening on /leaderboard (all-time, no reset).");
         }
 
-        /// <summary>Detaches the listener. MUST be called from LeaderboardPanel.OnDisable()
-        /// (and/or OnDestroy) to avoid callbacks firing on a destroyed UI.</summary>
         public void StopListening()
         {
             if (_currentQuery != null)
@@ -295,22 +232,6 @@ namespace Game.Firebase
             _isListening = false;
         }
 
-        // ============================================================
-        //  AVATAR SYNC
-        // ============================================================
-
-        /// <summary>
-        /// Patches ONLY the avatar fields into the caller's existing
-        /// /leaderboard/{uid} entry, immediately when they change their avatar —
-        /// without waiting for their next SubmitScore() call. Without this,
-        /// a player who already has an all-time leaderboard row from a previous
-        /// session, and then changes their preset avatar, would keep showing the
-        /// OLD (or empty) avatar on the leaderboard until they finish another
-        /// level. Call this from ProfileManager right after SetPresetAvatar /
-        /// after an avatar photo upload completes.
-        /// No-ops if the player doesn't have a leaderboard entry yet (hasn't
-        /// finished a level) so this never creates a phantom zero-score row.
-        /// </summary>
         public void SyncAvatarToLeaderboard(string avatarId, string avatarUrl)
         {
             if (!_initialized || _leaderboardRootRef == null)
@@ -326,7 +247,7 @@ namespace Game.Firebase
             entryRef.GetValueAsync().ContinueWithOnMainThread(t =>
             {
                 if (t.IsFaulted || t.IsCanceled || !t.Result.Exists)
-                    return; // no leaderboard entry yet — nothing to patch
+                    return;
 
                 var updates = new Dictionary<string, object>
                 {
@@ -360,9 +281,6 @@ namespace Game.Firebase
                 if (entry != null) entries.Add(entry);
             }
 
-            // OrderByChild in the query only guarantees ascending order and only
-            // within what the SDK streamed — sort again client-side to be 100% safe,
-            // descending (highest score first), then assign 1-based rank.
             entries.Sort((a, b) => b.totalScore.CompareTo(a.totalScore));
             for (int i = 0; i < entries.Count; i++)
                 entries[i].rank = i + 1;
@@ -375,30 +293,8 @@ namespace Game.Firebase
             if (Instance == this) StopListening();
         }
 
-        // ============================================================
-        //  SUBMIT SCORE
-        // ============================================================
-
-        /// <summary>
-        /// SPARK-PLAN VERSION (no Cloud Functions / no Blaze required).
-        /// Submits a level score to the all-time leaderboard:
-        ///   1) Reads levels/{levelId}.maxPossibleScore from Firestore (free on Spark)
-        ///      and rejects locally if the score is implausible — logs to
-        ///      Firestore "anomaly_log" (best-effort; not tamper-proof since the
-        ///      check runs on-device).
-        ///   2) Writes to /leaderboard/{uid} using a Realtime Database
-        ///      RunTransaction so concurrent writes never clobber each other,
-        ///      and accumulates totalScore atomically — forever, no reset.
-        /// RTDB security rules restrict this write to the caller's OWN uid
-        /// only — nobody can write another player's entry.
-        /// </summary>
         public async Task<bool> SubmitScore(int score, string levelId)
         {
-            // UPDATED — the level's score has ALREADY been added to the player's
-            // profile (ProfileManager.OnLevelCompleted). The leaderboard now just
-            // mirrors that profile total, so here we only (1) run the anti-cheat
-            // check when online and (2) trigger the sync. Offline? The sync
-            // happens automatically as soon as the internet is back.
             if (!_initialized) return false;
 
             FirebaseUser user = AuthManager.CurrentUser;
@@ -419,8 +315,6 @@ namespace Game.Firebase
             return online;
         }
 
-        /// <summary>Reads levels/{levelId}.maxPossibleScore from Firestore. Returns 0
-        /// (meaning "no cap configured, skip check") if the field/doc is missing.</summary>
         private async Task<int> FetchMaxPossibleScoreAsync(string levelId)
         {
             if (string.IsNullOrEmpty(levelId)) return 0;
@@ -436,13 +330,10 @@ namespace Game.Firebase
             catch (Exception ex)
             {
                 Debug.LogWarning($"[LeaderboardManager] Could not fetch maxPossibleScore for '{levelId}': {ex.Message}");
-                return 0; // fail-open — don't block legit submissions because of a read hiccup
+                return 0;
             }
         }
 
-        /// <summary>Best-effort anomaly logging (Firestore is free on Spark).
-        /// Not tamper-proof — a modified client could skip this call — but useful
-        /// for spotting obvious cheating from normal players during testing.</summary>
         private async Task LogAnomalyAsync(string uid, string levelId, int score, int maxPossibleScore)
         {
             try

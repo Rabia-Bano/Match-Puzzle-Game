@@ -1,17 +1,3 @@
-// ============================================================
-//  UIManager.cs  —  FINAL
-//
-//  KEY FIX: HandleStateChanged() ab sirf mainPanel ko
-//  SHOW karta hai jab state match ho — lekin kabhi bhi
-//  mainPanel ko HIDE nahi karta GameBoardScene mein.
-//  
-//  GameBoardScene mein GameCanvas hamesha visible rehna chahiye.
-//  GoalPanel/Start, WinPanel, LosePanel — yeh LevelResultManager
-//  handle karta hai, UIManager nahi.
-//
-//  mainPanelState = Playing set karo GameBoardScene ke UIManager mein.
-// ============================================================
-
 using UnityEngine;
 
 public class UIManager : MonoBehaviour
@@ -83,16 +69,11 @@ public class UIManager : MonoBehaviour
     {
         if (mainPanel == null) return;
 
-        // ── KEY FIX ───────────────────────────────────────────
-        // alwaysShowMainPanel = true hone par mainPanel hamesha
-        // active rehta hai (GameBoardScene ke liye).
-        // LevelResultManager khud GoalPanel/Start manage karta hai.
         if (alwaysShowMainPanel)
         {
             mainPanel.SetActive(true);
             return;
         }
-        // ──────────────────────────────────────────────────────
 
         mainPanel.SetActive(
             newState == mainPanelState ||

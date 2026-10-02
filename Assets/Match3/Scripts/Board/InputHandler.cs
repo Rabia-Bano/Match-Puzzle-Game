@@ -1,12 +1,3 @@
-// ============================================================
-//  InputHandler.cs  — Phase 3 Update
-//
-//  New: OnTileClicked(Vector2Int cell) event
-//  Fires when player taps a tile WITHOUT swiping
-//  (press + release on same cell, delta < minSwipePixels).
-//  Used by SwapController to detect taps on special tiles.
-// ============================================================
-
 using System;
 using UnityEngine;
 
@@ -14,8 +5,6 @@ namespace Match3
 {
     public class InputHandler : MonoBehaviour
     {
-        // ── Inspector ─────────────────────────────────────────
-
         [Header("References")]
         [SerializeField] private BoardGrid boardGrid;
 
@@ -23,18 +12,9 @@ namespace Match3
         [SerializeField] private float     minSwipePixels = 20f;
         [SerializeField] private LayerMask tileLayerMask  = ~0;
 
-        // ── Events ────────────────────────────────────────────
-
-        /// <summary>Fired when a swipe gesture is completed (from → to cell).</summary>
         public event Action<Vector2Int, Vector2Int> OnSwipeDetected;
 
-        /// <summary>
-        /// Fired when player taps a tile without swiping.
-        /// Used to activate special tiles by clicking.
-        /// </summary>
         public event Action<Vector2Int> OnTileClicked;
-
-        // ── State ─────────────────────────────────────────────
 
         private Vector3    _touchStartWorld;
         private Vector3    _touchStartScreen;
@@ -43,8 +23,6 @@ namespace Match3
         private bool       _swipeFired;
 
         private Camera _cam;
-
-        // ── Lifecycle ─────────────────────────────────────────
 
         private void Awake()
         {
@@ -62,8 +40,6 @@ namespace Match3
 #endif
         }
 
-        // ── Mouse ─────────────────────────────────────────────
-
         private void HandleMouse()
         {
             if (Input.GetMouseButtonDown(0))
@@ -75,8 +51,6 @@ namespace Match3
             if (Input.GetMouseButtonUp(0))
                 OnPressEnd(Input.mousePosition);
         }
-
-        // ── Touch ─────────────────────────────────────────────
 
         private void HandleTouch()
         {
@@ -96,8 +70,6 @@ namespace Match3
                     OnPressEnd(t.position); break;
             }
         }
-
-        // ── Gesture logic ─────────────────────────────────────
 
         private void OnPressBegin(Vector3 screenPos)
         {
@@ -134,9 +106,8 @@ namespace Match3
         {
             if (_isDragging && !_swipeFired)
             {
-                // Player lifted without swiping → it's a tap/click
                 Vector2 screenDelta = (Vector2)screenPos - (Vector2)_touchStartScreen;
-                float minPx = minSwipePixels * 0.5f;   // half threshold for tap detection
+                float minPx = minSwipePixels * 0.5f;
 
                 if (screenDelta.magnitude < minPx)
                     OnTileClicked?.Invoke(_fromCell);
@@ -145,8 +116,6 @@ namespace Match3
             _isDragging = false;
             _swipeFired = false;
         }
-
-        // ── Helpers ───────────────────────────────────────────
 
         private Vector3 ScreenToWorld(Vector3 screenPos)
         {

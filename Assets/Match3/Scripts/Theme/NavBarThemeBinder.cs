@@ -3,11 +3,6 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    /// <summary>
-    /// Attach to BottomBarPanel in every scene that has it (Map, BossArena, PetCompanion,
-    /// Store, LeaderBoard, Setting). Same 6 icons everywhere, so one reusable component
-    /// instead of repeating this in every scene applier.
-    /// </summary>
     public class NavBarThemeBinder : MonoBehaviour, IThemeApplier
     {
         [SerializeField] private Image mapIcon;

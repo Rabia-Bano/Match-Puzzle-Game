@@ -1,9 +1,3 @@
-// ============================================================
-//  LeaderboardEntry.cs  —  Plain data model
-//  Attach to: NOTHING — this is not a MonoBehaviour, just a POCO.
-//  Put it anywhere under Scripts/Leaderboard/ (new folder).
-// ============================================================
-
 using System.Collections.Generic;
 using Firebase.Database;
 
@@ -15,20 +9,11 @@ namespace Match3
         public string uid;
         public string displayName;
         public string avatarUrl;
-        // Preset avatar id (e.g. "avatar_1"), resolved locally from
-        // Resources/Avatars/<avatarId>.asset — same field PlayerProfile uses.
-        // Takes priority over avatarUrl when both are present.
         public string avatarId;
         public long   totalScore;
 
-        // Not stored in RTDB — computed client-side after sorting.
         public int rank;
 
-        /// <summary>
-        /// Builds a LeaderboardEntry from one child DataSnapshot under
-        /// /leaderboard/{uid}. Returns null if the snapshot is
-        /// malformed so the caller can safely skip it.
-        /// </summary>
         public static LeaderboardEntry FromSnapshot(DataSnapshot snapshot)
         {
             if (snapshot == null || !snapshot.Exists) return null;

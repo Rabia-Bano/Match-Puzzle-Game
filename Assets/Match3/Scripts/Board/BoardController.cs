@@ -1,25 +1,3 @@
-// ============================================================
-//  BoardController.cs  —  Consolidated turn / cascade orchestrator
-//
-//  This is now the ONLY place on the board that:
-//    • clears matched tiles (with the pop animation)
-//    • reports cleared tiles to LevelManager (goals + score)
-//    • loops the match -> special -> clear -> gravity -> refill
-//      cascade until the board is stable
-//
-//  REDESIGN (bug report ke baad — hard tile damage):
-//    Pehle ClearTiles() ke andar NORMAL tile clear hone par
-//    hardTileManager.DamageAdjacent() call hoti thi — jo us cleared
-//    tile ke UP/DOWN/LEFT/RIGHT wali hard tile ko damage deti thi,
-//    chahe blast/combo ka target khud hard tile ki cell na ho.
-//    Ab yeh "adjacency damage" mechanic bilkul hata di gayi hai.
-//    Hard tile ab sirf tab damage leta hai jab caller (SpecialTileActivator,
-//    SpecialCombinations, ya ek pet skill) ne apni target list mein
-//    hard tile ka apna cell seedha shamil kiya ho — DIRECT hit — aur
-//    canDamageHardTiles:true pass kiya ho. Isliye hardTileManager
-//    field aur brokenHardTiles queue ab yahan zaroorat nahi rahi.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -72,17 +50,7 @@ namespace Match3
         public System.Action<int> OnTilesCleared;
         public System.Action<int> OnMatchGroupResolved;
 
-        /// <summary>
-        /// NEW — fires alongside OnMatchGroupResolved but also passes the matched
-        /// tile's colour. Added for BossController (Boss Arena "weakness colour"
-        /// damage rule) without touching PetManager's existing OnMatchGroupResolved
-        /// subscription (matchSize-only) or its behaviour.
-        /// </summary>
         public System.Action<TileColor, int> OnColorMatchResolved;
-
-        // ─────────────────────────────────────────────────────
-        //  PUBLIC API  (unchanged — SwapController depends on this)
-        // ─────────────────────────────────────────────────────
 
         public void ProcessTurn()
         {
@@ -98,21 +66,6 @@ namespace Match3
 
         public bool HasMatches() => matchFinder.FindAllMatches().Count > 0;
 
-        /// <summary>
-        /// NEW — Boss Arena freeze/thaw fix: call this after an external system
-        /// changes a tile's STATE (not tile count) in a way that could suddenly
-        /// create a valid match. Normal match detection only ever runs after a
-        /// player swap or after gravity settles newly-dropped tiles — thawing a
-        /// frozen tile goes through NEITHER path, so 2 frozen same-colour tiles
-        /// sitting next to a 3rd same-colour tile never got checked the moment
-        /// they unfroze, even though 3-in-a-row was now sitting right there.
-        /// See BossAttackExecutor.ThawBossFrozenTiles().
-        ///
-        /// Waits for the board to be fully idle first (never interrupts a swap
-        /// or an in-progress cascade), then runs one normal ResolveBoard() pass —
-        /// no gravity/refill needed since nothing was added or removed, only
-        /// unlocked.
-        /// </summary>
         public void CheckForMatchesAfterExternalChange()
         {
             StartCoroutine(ResolveAfterExternalChangeRoutine());
@@ -130,10 +83,6 @@ namespace Match3
             _turnBusy = false;
             inputHandler.SetInputEnabled(true);
         }
-
-        // ─────────────────────────────────────────────────────
-        //  MAIN TURN FLOW
-        // ─────────────────────────────────────────────────────
 
         private IEnumerator TurnRoutine()
         {
@@ -158,12 +107,6 @@ namespace Match3
             Debug.Log("[BoardController] Turn complete.");
         }
 
-        /// <summary>
-        /// Call this after tiles were removed by something OTHER than a normal
-        /// match — a special-tile blast (SpecialTileActivator) or a special+special
-        /// combo (SpecialCombinations). Applies gravity, refills, and resolves
-        /// any matches the new tiles create.
-        /// </summary>
         public IEnumerator SettleAfterExternalClear()
         {
             yield return StartCoroutine(gravitySystem.ApplyGravity());
@@ -171,10 +114,6 @@ namespace Match3
             yield return StartCoroutine(ResolveBoard());
         }
 
-        /// <summary>
-        /// The single cascade loop: find matches -> turn qualifying groups into
-        /// special tiles -> clear -> gravity -> refill -> repeat until stable.
-        /// </summary>
         public IEnumerator ResolveBoard()
         {
             for (int i = 0; i < maxCascadeIterations; i++)
@@ -191,27 +130,11 @@ namespace Match3
                 {
                     foreach (var group in matches)
                     {
-                        // FIX: SpecialTileFactory.TryCreateSpecial() removes the
-                        // pivot tile from group.Tiles when it turns this match
-                        // into a special (4-line/5-line/T/L). Reading
-                        // group.Tiles.Count AFTER that call under-reports the
-                        // real match size by 1 for every match that spawns a
-                        // special — which silently under-charged PetManager's
-                        // battery (e.g. a 4-match reported as 3 → only +5%
-                        // instead of +10%). Capture the true size first.
                         int matchSize = group.Tiles.Count;
                         TileColor matchColor = (group.Tiles.Count > 0 && group.Tiles[0].Data != null)
                             ? group.Tiles[0].Data.color
                             : TileColor.None;
 
-                        // FIX (goal off-by-one): the pivot tile that becomes a
-                        // special is removed from group.Tiles inside
-                        // TryCreateSpecial() — it transforms instead of being
-                        // destroyed, so it was never reaching ClearMatchGroups()
-                        // below, and its OnTileCleared()/jelly-decrement never
-                        // fired. It still visually "matched" for goal purposes,
-                        // so report it manually here using the data the factory
-                        // now hands back.
                         TileData pivotClearedData = specialFactory.TryCreateSpecial(group, boardGrid, out int pivotX, out int pivotY);
                         if (pivotClearedData != null)
                         {
@@ -241,13 +164,11 @@ namespace Match3
         {
             for (int x = 0; x < boardGrid.Width; x++)
             for (int y = 0; y < boardGrid.Height; y++)
-                if (boardGrid.IsPlayable(x, y) && boardGrid.GetTile(x, y) == null) return true;   // NEW — blank holes are never "empty"
+                if (boardGrid.IsPlayable(x, y) && boardGrid.GetTile(x, y) == null) return true;
             return false;
         }
 
         private static readonly List<Tile> EmptyTileList = new();
-
-        // ─────────────────────────────────────────────────────
 
         private IEnumerator ClearMatchGroups(List<MatchGroup> matches)
         {
@@ -257,63 +178,9 @@ namespace Match3
                     if (tile != null && tile.State != TileState.Inactive)
                         toClear.Add(tile);
 
-            // Plain colour matches NEVER damage hard tiles — MatchFinder already
-            // excludes Locked hard tiles from match groups, so canDamageHardTiles
-            // stays false (the default) here.
             yield return StartCoroutine(ClearTiles(toClear));
         }
 
-        /// <summary>
-        /// Clears the given tiles with the pop animation, reports every
-        /// non-special tile to LevelManager for goal tracking, and adds
-        /// score once for the whole batch. This is the ONLY method in the
-        /// project that should ever do this — anything that needs to clear
-        /// tiles (specials, boosters, pet powers) should call this instead
-        /// of writing its own clear + score logic.
-        ///
-        /// Handles FOUR kinds of tile it might find in the list:
-        ///   • Special tile      → chain-fires its blast
-        ///   • Hard tile         → this cell was DIRECTLY inside the caller's
-        ///                         own target area (a special blast's row/
-        ///                         column/3x3/5x5/colour-sweep, or a pet skill's
-        ///                         tile list) — takes exactly 1 point of damage
-        ///                         right here via Tile.DamageObstacle(). If that
-        ///                         breaks it, reports GoalTracker.OnHardTileCleared()
-        ///                         and clears it. If it survives, it's simply
-        ///                         left in place (already showed its own crack-
-        ///                         sprite + punch-scale feedback). It is NEVER
-        ///                         damaged just for being next to something else
-        ///                         that cleared.
-        ///   • Dropdown stone    → only ever arrives here from ResolveBoard()'s
-        ///                         "reached the bottom row" check
-        ///   • Normal colour tile → reports OnTileCleared() + jelly decrement
-        /// </summary>
-        /// <param name="canDamageHardTiles">
-        /// Pass true ONLY when this list comes from a special-tile blast, a
-        /// special+special combo, or a pet skill's own target area — i.e.
-        /// whenever a hard tile appearing IN this list means its cell was
-        /// deliberately, directly targeted. Plain colour matches (the
-        /// default, false) never include a hard tile in their list at all
-        /// (MatchFinder excludes Locked tiles) — this is just a safety guard.
-        /// </param>
-        /// <param name="allowStoneCollection">
-        /// Pass true ONLY from ResolveBoard()'s "stone reached the bottom
-        /// row" check. Dropdown stones are IMMUNE to every other clear source.
-        /// </param>
-        /// <param name="isExternalClear">
-        /// NEW (Boss Arena fix). Pass true when this tile list did NOT come from
-        /// ResolveBoard()'s own match-group loop — i.e. a pet skill (IceraSkill's
-        /// row clear, etc.) or a booster calling ClearTiles() directly. Regular
-        /// matches already report their damage via OnColorMatchResolved inside
-        /// ResolveBoard() BEFORE calling ClearTiles() — so ClearMatchGroups()
-        /// leaves this false (the default) to avoid double-counting the same
-        /// clear twice. Anything that calls ClearTiles() directly (bypassing
-        /// ResolveBoard()'s loop) needs to pass true here instead, or the boss
-        /// will never take damage from it. Special-tile blasts/combos don't use
-        /// this flag at all — they report through BossDamageEvents directly via
-        /// their own ClearNormalTileTracked() helper, since they don't call
-        /// ClearTiles() for their own blast tiles in the first place.
-        /// </param>
         public IEnumerator ClearTiles(IEnumerable<Tile> tiles, bool canDamageHardTiles = false, bool allowStoneCollection = false, bool isExternalClear = false)
         {
             int cleared = 0;
@@ -326,7 +193,6 @@ namespace Match3
 
                 TileData tileData = tile.Data;
 
-                // ── Special tile → chain-fire its own blast ──
                 if (tileData != null && tileData.isSpecial)
                 {
                     AudioManager.Instance?.PlaySFX("special_activate");
@@ -348,21 +214,16 @@ namespace Match3
                     continue;
                 }
 
-                // ── Hard tile → this cell was a DIRECT hit ──
                 if (tileData != null && tileData.isHardTile)
                 {
                     if (!canDamageHardTiles)
                     {
-                        // Shouldn't normally happen (MatchFinder excludes Locked
-                        // tiles from plain matches) — stay safe, leave it untouched.
                         continue;
                     }
 
                     bool broke = tile.DamageObstacle();
                     if (!broke)
                     {
-                        // Took 1 damage, still standing — DamageObstacle() already
-                        // updated its crack sprite + punch-scale feedback. Leave it.
                         continue;
                     }
 
@@ -377,11 +238,10 @@ namespace Match3
                     continue;
                 }
 
-                // ── Dropdown stone ──
                 if (tileData != null && tileData.isDropStone)
                 {
                     if (!allowStoneCollection)
-                        continue; // immune to this clear source, only gravity collects it
+                        continue;
 
                     Debug.Log($"[BoardController] Stone collected at ({tile.GridX},{tile.GridY}).");
                     levelManager?.OnStoneCollected();
@@ -395,7 +255,6 @@ namespace Match3
                     continue;
                 }
 
-                // ── Normal colour tile ──
                 levelManager?.OnTileCleared(tileData);
                 AudioManager.Instance?.PlaySFX("tile_match");
                 tile.GetComponent<TileVisualController>()?.PlayMatchBurst();
@@ -403,12 +262,6 @@ namespace Match3
                 if (jellyManager != null && jellyManager.DecrementAt(tile.GridX, tile.GridY))
                     levelManager?.OnJellyCleared();
 
-                // NEW — Boss Arena fix: pet skills (IceraSkill's row-clear, etc.)
-                // and boosters call ClearTiles() directly, bypassing ResolveBoard()'s
-                // match loop entirely — so OnColorMatchResolved never fired for them
-                // and the boss never took damage. isExternalClear=true is how THIS
-                // call site tells us that; regular matches (isExternalClear=false,
-                // the default) skip this since ResolveBoard() already reported them.
                 if (isExternalClear && tileData != null)
                     BossDamageEvents.OnSpecialTileCleared?.Invoke(tileData.color);
 
@@ -453,8 +306,6 @@ namespace Match3
             AudioManager.Instance?.PlaySFX("board_rotate");
             JuiceManager.Instance?.Shake(0.3f, 0.1f);
         }
-
-        // ─────────────────────────────────────────────────────
 
         private void Awake()
         {

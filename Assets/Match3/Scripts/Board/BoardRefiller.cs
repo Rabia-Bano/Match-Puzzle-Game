@@ -1,17 +1,3 @@
-// ============================================================
-//  BoardRefiller.cs  —  Pure "fill the board" mechanic
-//
-//  Only job: find empty cells left after gravity, ask TileSpawner
-//  to create a new tile in each one, and animate it falling in
-//  from above the board.
-//
-//  It used to ALSO run its own match-finding + clearing + scoring
-//  cascade loop, which duplicated (and slowly drifted out of sync
-//  with) the same logic in BoardController. That responsibility now
-//  lives only in BoardController.ResolveBoard(), which calls
-//  RefillEmptyCells() below as one step of its loop.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -30,11 +16,6 @@ namespace Match3
         [SerializeField] private float refillFallTime    = 0.25f;
         [SerializeField] private float columnStagger     = 0.03f;
 
-        /// <summary>
-        /// Spawns a new tile in every empty cell (column by column, bottom-most
-        /// empty row first) and animates it dropping in from above the board.
-        /// Waits for the longest fall before returning.
-        /// </summary>
         public IEnumerator RefillEmptyCells()
         {
             float longestFall = 0f;
@@ -42,18 +23,6 @@ namespace Match3
 
             for (int col = 0; col < boardGrid.Width; col++)
             {
-                // Only the CONTIGUOUS run of empty cells starting from the very
-                // top of the column is refillable. The moment we hit an occupied
-                // cell scanning downward, we STOP — anything empty further down
-                // is "trapped" below that tile (most commonly a hard tile, which
-                // GravitySystem deliberately never moves) and must stay empty
-                // until whatever's blocking it is cleared. Filling those cells
-                // anyway is what caused a tile to seemingly "appear out of
-                // nowhere" underneath a hard tile.
-                //
-                // NEW — blank holes are neither "occupied" nor "empty": the scan
-                // simply passes over them (new tiles drop THROUGH a hole), so a
-                // column whose top cell is blank still refills correctly.
                 var emptyRows = new List<int>();
                 for (int y = boardGrid.Height - 1; y >= 0; y--)
                 {

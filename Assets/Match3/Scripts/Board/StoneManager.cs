@@ -1,22 +1,3 @@
-// ============================================================
-//  StoneManager.cs  —  MonoBehaviour
-//
-//  Spawns "dropdown stone" (ingredient) obstacles at level start.
-//  A stone falls with gravity exactly like a normal tile (GravitySystem
-//  doesn't care about TileState), but can't be matched or swapped —
-//  it spawns TileState.Locked, same mechanism hard tiles use. Once a
-//  stone lands on the BOTTOM row (y == 0) it's ready to be collected;
-//  BoardController.ResolveBoard() asks this manager after every gravity
-//  + refill pass whether any stone has reached the bottom, and clears
-//  it through the normal ClearTiles() pipeline.
-//
-//  Attach to: an empty "StoneManager" GameObject in the GameBoard scene
-//  (sibling of BoardController / BoardGrid).
-//  Wire up: boardGrid.
-//  Wire into: LevelManager.stoneManager AND BoardController.stoneManager
-//  (same object, both fields point at it).
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -27,9 +8,6 @@ namespace Match3
         [Header("References")]
         [SerializeField] private BoardGrid boardGrid;
 
-        // ── Setup ─────────────────────────────────────────────
-
-        /// <summary>Spawns stones for a fresh level. Call from LevelManager.InitializeLevel(), AFTER TileSpawner.FillBoard().</summary>
         public void Setup(LevelData levelData, BoardGrid grid)
         {
             boardGrid = grid;
@@ -47,13 +25,6 @@ namespace Match3
             }
         }
 
-        // ── Query ─────────────────────────────────────────────
-
-        /// <summary>
-        /// Returns every stone tile currently sitting on the bottom row
-        /// (y == 0) — these are ready to be collected. Called by
-        /// BoardController.ResolveBoard() after each gravity+refill pass.
-        /// </summary>
         public List<Tile> GetStonesAtBottomRow()
         {
             var result = new List<Tile>();
@@ -61,8 +32,6 @@ namespace Match3
 
             for (int x = 0; x < boardGrid.Width; x++)
             {
-                // NEW — with blank holes the "bottom" of a column is its LOWEST
-                // PLAYABLE cell, not always row 0 (a stone can never fall into a hole).
                 int bottomY = 0;
                 while (bottomY < boardGrid.Height && boardGrid.IsBlank(x, bottomY)) bottomY++;
                 if (bottomY >= boardGrid.Height) continue;

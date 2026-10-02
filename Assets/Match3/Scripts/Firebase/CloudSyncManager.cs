@@ -1,4 +1,3 @@
-
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -16,10 +15,6 @@ namespace Game.Firebase
 
         [SerializeField] private bool logVerbose = true;
 
-        /// <summary>Fires har baar jab local profile ko cloud/merge se update kiya jata hai
-        /// (SyncOnSessionStartAsync ke andar). UI (ProfilePanel, TopBarHUD) is par subscribe
-        /// karke turant refresh ho sakti hai — LocalSaveManager.OnProfileChanged bhi automatically
-        /// fire hoga kyunki hum ApplyProfile() ke andar LocalSaveManager.SaveProfile() call karte hain.</summary>
         public event Action<PlayerProfile> OnProfileSynced;
 
         private FirebaseFirestore _db;
@@ -32,7 +27,6 @@ namespace Game.Firebase
             DontDestroyOnLoad(gameObject);
         }
 
-        /// <summary>Call this from FirebaseInitializer.OnFirebaseReady UnityEvent (Inspector).</summary>
         public void Initialize()
         {
             if (!FirebaseInitializer.IsReady)
@@ -45,11 +39,6 @@ namespace Game.Firebase
             Debug.Log("[CloudSyncManager] Ready.");
         }
 
-        // ============================================================
-        //  1) SESSION START SYNC
-        //  Login hone ke turant baad (ya app resume/foreground par) call karo.
-        //  AuthManager.OnLoginSuccess / OnRegisterSuccess dono se hook karna best hai.
-        // ============================================================
         public async Task SyncOnSessionStartAsync()
         {
             FirebaseUser user = AuthManager.CurrentUser;
@@ -74,28 +63,12 @@ namespace Game.Firebase
             PlayerProfile local   = LocalSaveManager.GetOrLoadProfile();
             DateTime      lastSync = LocalSaveManager.GetLastSyncTime();
 
-            // FIX — ACCOUNT SWITCH DETECTION:
-            // LocalSaveManager's PlayerPrefs cache is a single global slot, not
-            // scoped per-account. If a Guest (or a different registered account)
-            // was cached on THIS device before, and a DIFFERENT account is
-            // logging in now, `local` here still holds the PREVIOUS account's
-            // data (including its own uid). Without this check, that stale
-            // profile could get merged/pushed under the NEW user's session —
-            // which either leaks the old account's boosters/coins into the new
-            // account's UI, or (worse) tries to write to Firestore using the
-            // OLD account's uid while authenticated as the NEW user, which
-            // Firestore Rules correctly reject as "Missing or insufficient
-            // permissions" (request.auth.uid != that stale uid).
-            // Detecting the mismatch and discarding the stale cache makes this
-            // session behave exactly like a fresh install for the new account.
             if (local != null && !string.IsNullOrEmpty(local.uid) && local.uid != user.UserId)
             {
                 Debug.LogWarning($"[CloudSyncManager] Local cache belongs to a different account " +
                                   $"('{local.uid}') than the one logging in now ('{user.UserId}'). " +
                                   $"Discarding stale local cache for this session.");
-                LocalSaveManager.ClearAll();   // also wipes it from disk so no other
-                                                // UI (TopBarHUD, StorePanel, etc.) can
-                                                // read the old account's data either
+                LocalSaveManager.ClearAll();
                 local = null;
             }
 
@@ -115,10 +88,8 @@ namespace Game.Firebase
                 return;
             }
 
-            // TEMP DEBUG — prints exactly what was fetched from Firestore right now
             Debug.Log($"[TEMP DEBUG] cloud.isBanned = {(cloud != null ? cloud.isBanned.ToString() : "cloud is null")}");
 
-            // ── Case: Firestore par abhi tak profile document hi nahi hai ──
             if (cloud == null)
             {
                 if (local != null)
@@ -130,7 +101,6 @@ namespace Game.Firebase
                 return;
             }
 
-            // ── Case: local save hi nahi hai (fresh install / naya device) ──
             if (local == null)
             {
                 ApplyProfile(cloud);
@@ -138,11 +108,8 @@ namespace Game.Firebase
                 return;
             }
 
-            // TEMP DEBUG — prints exactly what's about to be pushed
             Debug.Log($"[TEMP DEBUG] local.isBanned = {local.isBanned}, local.uid = '{local.uid}', auth.uid = '{user.UserId}'");
 
-            // ── Dono maujood hain — decide karo: newer le lo, ya agar dono
-            //    last-sync ke baad independently change hui hain to safe merge karo ──
             DateTime localTime = ParseTime(local.lastUpdated);
             DateTime cloudTime = ParseTime(cloud.lastUpdated);
 
@@ -166,7 +133,6 @@ namespace Game.Firebase
                 finalProfile = local;
             }
 
-            // TEMP DEBUG — the EXACT value being written, right before it's sent
             Debug.Log($"[TEMP DEBUG] finalProfile.isBanned (about to push) = {finalProfile.isBanned}, finalProfile.uid = '{finalProfile.uid}'");
 
             ApplyProfile(finalProfile);
@@ -174,13 +140,6 @@ namespace Game.Firebase
             LocalSaveManager.SetLastSyncTime(DateTime.UtcNow);
         }
 
-        // ============================================================
-        //  2) AFTER-LEVEL SYNC
-        //  LevelResultManager se level win/lose ke baad call karo.
-        //  FIRE-AND-FORGET: caller `_ = CloudSyncManager.Instance.SyncAfterLevelAsync();`
-        //  se call kare, `await` na kare — taake Win/Lose panel turant dikhe,
-        //  network call background mein chale.
-        // ============================================================
         public async Task SyncAfterLevelAsync()
         {
             try
@@ -214,11 +173,6 @@ namespace Game.Firebase
             }
         }
 
-        // ============================================================
-        //  3) RAW FETCH / PUSH — dusri classes bhi direct use kar sakti hain
-        // ============================================================
-
-        /// <summary>Firestore se ek profile fetch karta hai. Document exist nahi karta to null.</summary>
         public async Task<PlayerProfile> FetchCloudProfileAsync(string uid)
         {
             if (!_initialized || _db == null)
@@ -234,7 +188,6 @@ namespace Game.Firebase
             return profile;
         }
 
-        /// <summary>Local profile ko Firestore par push karta hai (merge write — kisi aur field ko overwrite nahi karta).</summary>
         public async Task PushProfileAsync(PlayerProfile profile)
         {
             if (!_initialized || _db == null)
@@ -252,9 +205,6 @@ namespace Game.Firebase
 
             profile.lastUpdated = DateTime.UtcNow.ToString("o");
 
-            // TEMP DEBUG — the absolute last point before the Firestore call itself.
-            // If this line's isBanned prints "False" but the error still happens,
-            // the problem is 100% NOT isBanned — it's something else in the rules.
             var dict = profile.ToFirestoreDict();
             Debug.Log($"[TEMP DEBUG] PushProfileAsync — Document(\"{profile.uid}\"), " +
                       $"dict[\"isBanned\"] = {(dict.ContainsKey("isBanned") ? dict["isBanned"].ToString() : "KEY MISSING FROM DICT!")}");
@@ -262,10 +212,6 @@ namespace Game.Firebase
             await _db.Collection(COLLECTION).Document(profile.uid)
                      .SetAsync(dict, SetOptions.MergeAll);
         }
-
-        // ============================================================
-        //  Helpers
-        // ============================================================
 
         private async Task SafePushAsync(PlayerProfile profile, string context)
         {
@@ -283,10 +229,6 @@ namespace Game.Firebase
             }
         }
 
-        /// <summary>Local cache update karta hai aur listeners ko inform karta hai.
-        /// Jaan-boojh kar ProfileManager ko seedha nahi chherta — LocalSaveManager.OnProfileChanged
-        /// aur is class ka apna OnProfileSynced event dono UI ko refresh karne ke liye kaafi hain,
-        /// bina do managers ko tightly couple kiye.</summary>
         private void ApplyProfile(PlayerProfile profile)
         {
             LocalSaveManager.SaveProfile(profile);

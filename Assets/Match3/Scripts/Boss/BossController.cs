@@ -1,44 +1,3 @@
-// ============================================================
-//  BossController.cs  —  MonoBehaviour
-//
-//  The Boss Arena "brain".
-//
-//  DAMAGE RULE: only matches of bossData.weaknessTileType hurt the
-//  boss. Damage is tiered by how many weakness tiles were cleared at
-//  once — the exact percentages (default 1-2 tiles=1%, 3=2%, 4=3%,
-//  5+=5%) now live on BossData (damagePercent1To2/3/4/5Plus) so each
-//  boss can be tuned separately. This
-//  applies to BOTH a regular match's size AND the total weakness
-//  tiles cleared by one special-tile blast/combo (batched together —
-//  see HandleSpecialTileCleared). Other colours still clear normally,
-//  they just don't damage the boss.
-//
-//  PASSIVE DEFENSE LOOP / SELF-HEAL LOOP / DAMAGE SUBSCRIPTIONS now
-//  ONLY start once BeginFight() is called — NOT automatically in
-//  Start(). This is the fix for "boss kept attacking / matches kept
-//  landing while the intro panel was still up (or invisible)":
-//  previously everything auto-started the instant the scene loaded,
-//  with nothing actually gating it behind the player pressing Start.
-//
-//  INTRO PANEL — BossController (proven-reliable: Awake() always
-//  resolves bossData correctly, since regular damage already worked)
-//  now DIRECTLY calls introPanel.ShowIntro(bossData) itself once
-//  ready, instead of the old design where BossIntroPanel had to
-//  subscribe to a LevelManager static event in its own OnEnable().
-//  That old design silently failed whenever BossIntroPanel's
-//  GameObject happened to start inactive in the scene (OnEnable never
-//  ran → subscription never happened → the event fired into nothing).
-//  A direct method call from a guaranteed-active object removes that
-//  entire class of timing bug. BossController also forces the
-//  GameObject active itself before calling Show(), so even an
-//  accidentally-inactive panel GameObject in the scene self-heals.
-//
-//  Attach to: an empty "BossController" GameObject in BossGameBoardScene.
-//  Wire up: bossData, boardController, boardGrid, attackExecutor,
-//  inputHandler, introPanel. moveCounter is OPTIONAL (only used by
-//  BossResultManager for an optional move-limit lose condition).
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -73,15 +32,6 @@ namespace Match3
                  "limit (BossResultManager's lose condition). Does NOT drive attack cadence.")]
         [SerializeField] private MoveCounter moveCounter;
 
-        // NOTE: attack cadence, escalation thresholds, damage tiers, batch
-        // window, and heal pacing all moved to BossData (per-boss tuning) —
-        // see bossData.attackIntervalSeconds, .severityTier2HpFraction,
-        // .damagePercent3, .healIntervalSeconds etc. below. This was a set of
-        // MonoBehaviour fields before, which meant every boss fought with
-        // identical pacing since BossGameBoardScene is one shared scene.
-
-        // ── Public state ───────────────────────────────────────
-
         public BossData BossData => bossData;
         public int CurrentHealth { get; private set; }
         public int MaxHealth     { get; private set; }
@@ -89,40 +39,24 @@ namespace Match3
         public bool HasFightBegun { get; private set; }
         public BossAttack LastAttack { get; private set; }
 
-        // ── Events ─────────────────────────────────────────────
-
         [Header("Events")]
         public UnityEvent OnBossDefeated;
         public UnityEvent OnBossAttack;
 
-        public event System.Action<int> OnDamageTaken;      // amount
-        public event System.Action<int> OnHealed;            // amount
-        public event System.Action<int, int> OnHealthChanged; // (current, max)
-
-        // ── Private ────────────────────────────────────────────
+        public event System.Action<int> OnDamageTaken;
+        public event System.Action<int> OnHealed;
+        public event System.Action<int, int> OnHealthChanged;
 
         private Coroutine _defenseLoopHandle;
         private Coroutine _healLoopHandle;
         private int   _pendingSpecialWeaknessHits;
         private float _lastSpecialClearTime = -1f;
 
-        // ─────────────────────────────────────────────────────
-        // LIFECYCLE
-        // ─────────────────────────────────────────────────────
-
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
 
-            // MOST LIKELY CAUSE of "every boss fight shows Boss 1's data":
-            // BossGameBoardScene is ONE shared scene reused for every boss —
-            // bossData is only auto-resolved from PlayerPrefs when this field
-            // is left EMPTY. If it was ever manually dragged in (e.g. while
-            // testing Boss 1 before the selection list existed), it silently
-            // overrides BossLevelLoader/BossNodeController's per-tap selection
-            // forever, for every boss, since Awake() never even checks
-            // PlayerPrefs when this is already non-null.
             if (bossData != null)
             {
                 Debug.LogWarning($"[BossController] bossData is ALREADY assigned in the Inspector " +
@@ -143,9 +77,6 @@ namespace Match3
             if (bossData == null)   Debug.LogError("[BossController] No BossData assigned and none could be " +
                                      "resolved from PlayerPrefs 'SelectedBossId' — assign bossData in the Inspector.", this);
 
-            // Board must be completely inert until BeginFight() — do this in
-            // Awake (runs before ANY Start()) rather than waiting on whatever
-            // LevelManager does or doesn't do in this scene.
             inputHandler?.SetInputEnabled(false);
         }
 
@@ -162,10 +93,6 @@ namespace Match3
 
             if (introPanel != null)
             {
-                // Force it active even if it was accidentally left unchecked in
-                // the scene — a direct call works on a disabled component, but
-                // panelRoot.SetActive(true) inside it would still be invisible
-                // if THIS parent GameObject itself is inactive.
                 introPanel.gameObject.SetActive(true);
                 introPanel.ShowIntro(bossData, this);
                 Debug.Log("[BossController] Showing boss intro panel — waiting for Start button.");
@@ -188,12 +115,6 @@ namespace Match3
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>
-        /// Call this (from BossIntroPanel's Start button, or immediately if you
-        /// skip the intro) to actually begin the fight: enables input, wires up
-        /// every damage source, and kicks off the defense/heal loops. Safe to
-        /// call more than once — later calls are no-ops.
-        /// </summary>
         public void BeginFight()
         {
             if (HasFightBegun || bossData == null) return;
@@ -216,10 +137,6 @@ namespace Match3
                       $"heal every {bossData.healIntervalSeconds}s (+{bossData.healPercentPerTick}%).");
         }
 
-        // ─────────────────────────────────────────────────────
-        // DAMAGE (called via BoardController's color-aware match event)
-        // ─────────────────────────────────────────────────────
-
         private void HandleColorMatchResolved(TileColor color, int matchSize)
         {
             if (!HasFightBegun || bossData == null || IsDefeated) return;
@@ -232,40 +149,15 @@ namespace Match3
             TakeDamage(amount);
         }
 
-        /// <summary>
-        /// Shared damage-tier lookup — used for BOTH a regular match's size AND
-        /// the total weakness-colour tiles cleared by one special-tile blast/combo.
-        /// Reads this boss's own tiers (bossData.damagePercent1To2 / 3 / 4 / 5Plus)
-        /// — no longer a hardcoded 1%/2%/3%/5%, so each boss can be tuned separately.
-        /// </summary>
         private float GetDamagePercentForCount(int count)
         {
             if (count <= 0 || bossData == null) return 0f;
             if (count <= 2) return bossData.damagePercent1To2;
             if (count == 3) return bossData.damagePercent3;
             if (count == 4) return bossData.damagePercent4;
-            return bossData.damagePercent5Plus; // 5+
+            return bossData.damagePercent5Plus;
         }
 
-        /// <summary>
-        /// Handles damage from special-tile blasts / combos (striped, wrapped,
-        /// color-bomb, Bomb+Bomb, Rainbow+X). These clear tiles one at a time
-        /// through SpecialTileEffect / SpecialCombinations' own paths,
-        /// completely bypassing BoardController's match-group loop — so
-        /// HandleColorMatchResolved() above never sees them on its own.
-        ///
-        /// Every weakness-colour tile cleared this way bumps a counter and
-        /// stamps the time; Update() below waits for specialClearBatchWindow
-        /// of silence (the WHOLE blast finished clearing) before scoring it —
-        /// so a striped tile wiping out 6 weakness tiles in one row is scored
-        /// as a single "5+" hit (5%), not six separate 1% pokes.
-        ///
-        /// Deliberately NOT a coroutine (unlike earlier versions of this file):
-        /// StartCoroutine silently does nothing if this component is ever
-        /// disabled when the event fires. Tallying here + flushing from
-        /// Update() has no such dependency — Update() simply skips ticks
-        /// while disabled and catches up the moment it's active again.
-        /// </summary>
         private void HandleSpecialTileCleared(TileColor color)
         {
             if (!HasFightBegun || bossData == null || IsDefeated) return;
@@ -275,13 +167,6 @@ namespace Match3
             _lastSpecialClearTime = Time.time;
         }
 
-        /// <summary>
-        /// CORRECTED — Color Bomb's single blast (not the Rainbow+Rainbow combo)
-        /// only damages the boss when it clears the boss's own weakness colour —
-        /// same weakness rule as a normal match. When it does match, it's a flat
-        /// "5+ weakness tiles" tier hit (bossData.damagePercent5Plus — 5% by
-        /// default), regardless of exactly how many tiles of that colour existed.
-        /// </summary>
         private void HandleColorBombBlast(TileColor color)
         {
             if (!HasFightBegun || bossData == null || IsDefeated) return;
@@ -309,11 +194,6 @@ namespace Match3
             TakeDamage(amount);
         }
 
-        /// <summary>
-        /// Applies damage to the boss. Public so pet skills, boosters, or a
-        /// special-tile blast on the boss's weakness colour can also call
-        /// this directly if you want them to hurt the boss too.
-        /// </summary>
         public void TakeDamage(int amount)
         {
             if (IsDefeated || amount <= 0) return;
@@ -328,7 +208,6 @@ namespace Match3
                 Defeat();
         }
 
-        /// <summary>Boss self-heal — capped at MaxHealth. No-ops once defeated.</summary>
         public void Heal(int amount)
         {
             if (IsDefeated || amount <= 0) return;
@@ -355,10 +234,6 @@ namespace Match3
             OnBossDefeated?.Invoke();
         }
 
-        // ─────────────────────────────────────────────────────
-        // PASSIVE DEFENSE LOOP — every N seconds, forever (only after BeginFight())
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator PassiveDefenseLoop()
         {
             while (!IsDefeated)
@@ -373,13 +248,6 @@ namespace Match3
         {
             int severity = GetCurrentSeverity();
 
-            // Pick ONE hurdle type at random each tick. Which types are even
-            // eligible now comes from bossData.attackPattern (the "Legacy /
-            // Optional" list in the Inspector) — add ONLY the BossAttack
-            // entries for the types you want this boss to ever throw (e.g.
-            // just LockTiles + Jelly), and every tick will only ever pick
-            // among those. Leave attackPattern EMPTY to keep the old
-            // behaviour: cycle randomly through all four types.
             BossAttackType[] pool = BuildAttackPool();
             BossAttackType chosen = pool[Random.Range(0, pool.Length)];
 
@@ -398,9 +266,6 @@ namespace Match3
 
             yield return new WaitForSeconds(bossData.attackWarningDelay);
 
-            // Waits until BOTH the board and the equipped pet are fully idle —
-            // guarantees the attack only ever touches a fully-settled board
-            // (fixes hurdles landing on cells mid-combo-clear).
             while (IsDefeated ||
                    (boardController != null && boardController.IsBusy) ||
                    (PetManager.Instance != null && PetManager.Instance.IsBusy))
@@ -411,7 +276,7 @@ namespace Match3
 
             if (attackExecutor == null) yield break;
 
-            AudioManager.Instance?.PlaySFX("boss_attack");   
+            AudioManager.Instance?.PlaySFX("boss_attack");
             JuiceManager.Instance?.Shake(0.2f, 0.1f);
 
             switch (chosen)
@@ -431,13 +296,6 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// NEW — builds the set of attack types this boss is allowed to throw,
-        /// from bossData.attackPattern (distinct attackType values, duplicates
-        /// collapsed). Falls back to the full default four-type pool if
-        /// attackPattern is empty, so existing bosses that never touched this
-        /// list keep working exactly as before.
-        /// </summary>
         private BossAttackType[] BuildAttackPool()
         {
             if (bossData.attackPattern != null && bossData.attackPattern.Count > 0)
@@ -455,8 +313,6 @@ namespace Match3
                 }
             }
 
-            // Default — every existing boss with an empty attackPattern list
-            // keeps this exact behaviour (unchanged from before this fix).
             return new[]
             {
                 BossAttackType.Jelly,
@@ -466,7 +322,6 @@ namespace Match3
             };
         }
 
-        /// <summary>1 = healthy (&gt;66% HP), 2 = hurt (33–66%), 3 = desperate (&lt;33%) — "wo khud ko bachane ki koshish karta hai".</summary>
         private int GetCurrentSeverity()
         {
             float fraction = MaxHealth > 0 ? (float)CurrentHealth / MaxHealth : 0f;
@@ -484,10 +339,6 @@ namespace Match3
             _                           => "Boss is attacking!"
         };
 
-        // ─────────────────────────────────────────────────────
-        // SELF-HEAL LOOP — every N seconds, forever (only after BeginFight())
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator SelfHealLoop()
         {
             while (!IsDefeated)
@@ -499,10 +350,6 @@ namespace Match3
                 Heal(amount);
             }
         }
-
-        // ─────────────────────────────────────────────────────
-        // HELPERS
-        // ─────────────────────────────────────────────────────
 
         private static BossData LoadBossFromSelectedId()
         {

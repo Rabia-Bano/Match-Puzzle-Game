@@ -1,10 +1,3 @@
-// ============================================================
-//  StoreItemCard.cs  —  MonoBehaviour
-//  Attach to: the "StoreItemCard" prefab — a single horizontal row
-//  inside the Store's vertical list (matches the mockup: owned-count,
-//  icon, "Coins : N" text, Buy button, left to right).
-// ============================================================
-
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,9 +9,9 @@ namespace Match3
     {
         [Header("Visuals")]
         [SerializeField] private Image    iconImage;
-        [SerializeField] private TMP_Text ownedCountText;   // leftmost number in the row
-        [SerializeField] private TMP_Text nameText;         // optional — not shown in the current mockup, leave unassigned if unused
-        [SerializeField] private TMP_Text priceText;        // "Coins : 10"
+        [SerializeField] private TMP_Text ownedCountText;
+        [SerializeField] private TMP_Text nameText;
+        [SerializeField] private TMP_Text priceText;
 
         [Header("Buy Button")]
         [SerializeField] private Button   buyButton;
@@ -32,8 +25,6 @@ namespace Match3
             buyButton?.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
         }
 
-        /// <summary>Populates the card. ownedCount is the player's current
-        /// quantity of this booster (all items in this catalog are boosters).</summary>
         public void Setup(StoreItem item, int ownedCount)
         {
             Data = item;
@@ -52,8 +43,6 @@ namespace Match3
             if (buyButton != null) buyButton.interactable = true;
         }
 
-        // ── Purchase dispatch ───────────────────────────────────────
-
         private async void OnBuyTapped()
         {
             if (Data == null) return;
@@ -63,8 +52,6 @@ namespace Match3
 
             if (buyButton != null) buyButton.interactable = true;
 
-            // Punch-scale feedback on a successful purchase — same DOTween
-            // call BoosterSlotUI.cs already uses elsewhere in the project.
             if (success) transform.DOPunchScale(Vector3.one * 0.15f, 0.2f, 5, 0.5f);
         }
     }

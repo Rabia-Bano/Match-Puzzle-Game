@@ -1,9 +1,3 @@
-// ============================================================
-//  ProfileManager.cs  —  Singleton MonoBehaviour (DontDestroyOnLoad)
-//  Attach to: FirebaseManagers (PreloaderScene)
-//  Call: Initialize() from FirebaseInitializer.OnFirebaseReady
-//  Access: ProfileManager.Instance.Profile
-// ============================================================
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -34,7 +28,6 @@ namespace Game.Firebase
         public PlayerProfile Profile { get; private set; }
         public bool IsLoaded => Profile != null;
 
-        // Aliases so ProfilePanel.cs works with both naming styles
         public PlayerProfile CurrentProfile => Profile;
         public bool IsProfileLoaded => Profile != null;
 
@@ -73,7 +66,6 @@ namespace Game.Firebase
 
         private void OnLoggedOut() { Profile = null; }
 
-        // ── CREATE ───────────────────────────────────────────
         public void CreateProfile(FirebaseUser user, string displayName)
         {
             if (_db == null) return;
@@ -93,14 +85,8 @@ namespace Game.Firebase
                });
         }
 
-        // ── LOAD ─────────────────────────────────────────────
         public void LoadProfile(string uid) => StartCoroutine(LoadProfileCoroutine(uid));
 
-// ── ADD this new private method anywhere in the class ──
-/// <summary>Grants any pets the player already qualifies for based on
-/// current levelsCompleted — called right after a profile is loaded/created
-/// so "unlockAfterLevel = 0" starter pets show up immediately, without
-/// needing to wait for the player's first level completion.</summary>
         private void SyncUnlockedPets()
         {
             if (Profile == null) return;
@@ -112,23 +98,22 @@ namespace Game.Firebase
             {
                 if (!Profile.pets.Contains(petId))
                 {
-                    Profile.AddPet(petId);   // updates Profile.pets + Profile.unlockedPets
+                    Profile.AddPet(petId);
                     anyNew = true;
                 }
             }
 
             if (anyNew)
-                CacheLocally(Profile);   // persist immediately so ProfilePanel shows it right away
+                CacheLocally(Profile);
         }
 
         private IEnumerator LoadProfileCoroutine(string uid)
         {
-            // Instant cache
             var cached = LoadFromCache();
             if (cached != null && cached.uid == uid)
             {
                 Profile = cached;
-                SyncUnlockedPets(); 
+                SyncUnlockedPets();
                 SyncTheme();
                 OnProfileLoaded?.Invoke();
                 SyncCoinsToGameManager();
@@ -138,7 +123,6 @@ namespace Game.Firebase
                     StartCoroutine(DownloadAvatarCoroutine(cached.avatarUrl));
             }
 
-            // Fresh from Firestore
             bool done = false;
             _db.Collection(COLLECTION).Document(uid).GetSnapshotAsync()
             .ContinueWithOnMainThread(t =>
@@ -172,10 +156,9 @@ namespace Game.Firebase
                 OnProfileLoaded?.Invoke();
                 done = true;
             });
-            yield return new WaitUntil(() => done);        
+            yield return new WaitUntil(() => done);
         }
 
-        // ── SAVE ─────────────────────────────────────────────
         public void SaveProfile()
         {
             if (Profile == null) return;
@@ -208,7 +191,6 @@ namespace Game.Firebase
         {
             if (Profile == null || _db == null) return;
 
-            // uid empty hone par AuthManager se fill karo
             if (string.IsNullOrEmpty(Profile.uid))
             {
                 var user = Game.Firebase.AuthManager.CurrentUser;
@@ -232,7 +214,6 @@ namespace Game.Firebase
                });
         }
 
-        // ── DISPLAY NAME ─────────────────────────────────────
         public void UpdateDisplayName(string newName)
         {
             if (Profile == null) return;
@@ -243,7 +224,6 @@ namespace Game.Firebase
             CacheLocally(Profile);
         }
 
-        // ── AVATAR ───────────────────────────────────────────
         public void UploadAvatar(Texture2D tex)
         {
             if (_storage == null || Profile == null || tex == null) return;
@@ -281,13 +261,10 @@ namespace Game.Firebase
             OnAvatarLoaded?.Invoke(TexToSprite(DownloadHandlerTexture.GetContent(req)));
         }
 
-        /// <summary>Preset avatar picker calls this. No Storage upload, no network needed —
-        /// just saves the chosen id and resolves the sprite from Resources locally.</summary>
         public void SetPresetAvatar(string avatarId)
         {
             if (Profile == null || string.IsNullOrEmpty(avatarId)) return;
 
-            // NEW — Avatar Shop: a paid avatar can only be equipped once bought.
             var preset = Resources.Load<Match3.AvatarPresetData>("Avatars/" + avatarId);
             if (preset != null && !Match3.AvatarShopManager.IsOwned(preset))
             {
@@ -297,8 +274,6 @@ namespace Game.Firebase
             }
 
             Profile.avatarId = avatarId;
-            // Clear any old uploaded-photo URL so it doesn't come back after a
-            // future profile reload (preset and uploaded-photo are mutually exclusive).
             Profile.avatarUrl = "";
 
             UpdateField("avatarId", avatarId);
@@ -319,9 +294,6 @@ namespace Game.Firebase
                 Debug.LogWarning($"[ProfileManager] Avatar preset '{avatarId}' not found under Resources/Avatars/.");
         }
 
-        // ── GAME EVENTS ──────────────────────────────────────
-
-        /// <summary>Call after every level completion from LevelResultManager.</summary>
         public void OnLevelCompleted(int levelIndex, int stars, int score, int coinsEarned)
         {
             if (Profile == null) return;
@@ -336,13 +308,8 @@ namespace Game.Firebase
             {
                 Profile.currentThemeIndex = newTheme;
             }
-            // Actually switch the live visuals - Profile.currentThemeIndex above is
-            // only the saved/synced number, this line is what makes every scene re-skin.
             SyncTheme();
 
-            // ── FIXED: pass Profile.levelsCompleted directly (fresh, just-updated
-            //    value) instead of letting GetUnlockedPetIds() fall back to the
-            //    possibly one-level-stale LocalSaveManager cache. ──
             var petManager = Match3.PetManager.GetOrCreateInstance();
             foreach (string petId in petManager.GetUnlockedPetIds(Profile.levelsCompleted))
                 if (!Profile.pets.Contains(petId))
@@ -352,7 +319,6 @@ namespace Game.Firebase
             SaveProfile();
             LocalSaveManager.SaveProfile(Profile);
         }
-        /// <summary>Call when Boss Arena is won from BossArenaManager.</summary>
         public void OnBossDefeated(int bossIndex, int rewardCoins)
         {
             if (Profile == null) return;
@@ -362,7 +328,6 @@ namespace Game.Firebase
             SaveProfile();
         }
 
-        /// <summary>Call when pet unlocked (every 3 levels) from ThemeManager.</summary>
         public void OnPetUnlocked(string petName)
         {
             if (Profile == null) return;
@@ -371,7 +336,6 @@ namespace Game.Firebase
             CacheLocally(Profile);
         }
 
-        // ── STORE ────────────────────────────────────────────
         public void AddBooster(string boosterId)
         {
             if (Profile == null) return;
@@ -389,7 +353,6 @@ namespace Game.Firebase
             return true;
         }
 
-        // ── SETTINGS ─────────────────────────────────────────
         public void SaveSettings(bool sound, bool music, bool vibration)
         {
             if (Profile == null) return;
@@ -399,10 +362,8 @@ namespace Game.Firebase
             CacheLocally(Profile);
         }
 
-        // ── LOCAL CACHE ──────────────────────────────────────
-        
         private void CacheLocally(PlayerProfile p) => LocalSaveManager.SaveProfile(p);
-        
+
         private bool IsNewer(string aIso, string bIso)
         {
             bool aOk = DateTime.TryParse(aIso, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime a);
@@ -437,7 +398,6 @@ namespace Game.Firebase
         }
         private PlayerProfile LoadFromCache()       => LocalSaveManager.LoadProfile();
 
-        // ── SYNC HELPERS ─────────────────────────────────────
         private void SyncCoinsToGameManager()
         {
             if (GameManager.Instance == null || Profile == null) return;
@@ -445,15 +405,11 @@ namespace Game.Firebase
             if (diff > 0) GameManager.Instance.AddCoins(diff);
         }
 
-        /// <summary>Tells ThemeManager which theme should be active based on the
-        /// player's actual saved progress (levelsCompleted). Safe no-op if
-        /// ThemeManager isn't in the scene yet (e.g. very first frame of Preloader).</summary>
         private void SyncTheme()
         {
             if (Profile == null) return;
             Match3.Theme.ThemeManager.Instance?.SetHighestLevelCompleted(Profile.levelsCompleted);
         }
-
 
         private static Sprite TexToSprite(Texture2D tex) =>
             Sprite.Create(tex, new UnityEngine.Rect(0,0,tex.width,tex.height), new UnityEngine.Vector2(0.5f,0.5f));

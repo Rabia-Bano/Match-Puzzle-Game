@@ -1,12 +1,6 @@
 using System.Collections;
 using UnityEngine;
 
-/// <summary>
-/// Lives only in the Preloader scene. Waits briefly for splash,
-/// then waits for Firebase to finish initializing, then transitions
-/// to MainMenu (Login screen). This is the very first script that
-/// runs when the app opens.
-/// </summary>
 public class PreloaderController : MonoBehaviour
 {
     [Header("Minimum splash duration before checking Firebase")]
@@ -17,7 +11,7 @@ public class PreloaderController : MonoBehaviour
 
     private void Start()
     {
-        AudioManager.Instance?.PlayMusic("ice_world_theme");   // ← ADD THIS — game shuru hote hi music
+        AudioManager.Instance?.PlayMusic("ice_world_theme");
         StartCoroutine(InitializeGame());
     }
 

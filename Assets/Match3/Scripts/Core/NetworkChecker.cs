@@ -1,14 +1,3 @@
-// ============================================================
-//  NetworkChecker.cs  —  Singleton MonoBehaviour (DontDestroyOnLoad)
-//  Attach to: FirebaseManagers GameObject (PreloaderScene), same
-//             object jahan FirebaseInitializer / AuthManager /
-//             ProfileManager / CloudSyncManager attached hain.
-//  Call: koi Initialize() nahi chahiye — Awake() se hi kaam start
-//        ho jata hai. Bas Instance is ready as soon as scene loads.
-//  Access: NetworkChecker.Instance.IsOnline               (cached, instant)
-//          await NetworkChecker.Instance.CheckConnectivityAsync()  (fresh-ish, cache-aware)
-// ============================================================
-
 using System;
 using System.Collections;
 using System.Threading.Tasks;
@@ -28,16 +17,12 @@ public class NetworkChecker : MonoBehaviour
     [SerializeField] private float cacheDurationSeconds = 30f;
     [SerializeField] private int   timeoutSeconds        = 5;
 
-    /// <summary>Fires jab bhi connectivity status TRUE se FALSE ya FALSE se TRUE badalta hai.</summary>
     public event Action<bool> OnConnectivityChanged;
 
-    private bool  _cachedIsOnline = true;   // optimistic default — pehla check hone tak
+    private bool  _cachedIsOnline = true;
     private float _lastCheckRealtime = -999f;
     private bool  _checkInFlight = false;
 
-    /// <summary>Instant, non-blocking read of the last-known connectivity status.
-    /// Cache 30s (configurable) ke liye valid rehta hai; background mein
-    /// periodically refresh hoti rehti hai (Start() ka InvokeRepeating dekho).</summary>
     public bool IsOnline => _cachedIsOnline;
 
     private void Awake()
@@ -49,8 +34,6 @@ public class NetworkChecker : MonoBehaviour
 
     private void Start()
     {
-        // Turant ek check kardo taake game shuru hote hi accurate status mile,
-        // phir har cacheDurationSeconds par background refresh chalta rahe.
         _ = CheckConnectivityAsync(forceRefresh: true);
         InvokeRepeating(nameof(BackgroundRefreshTick), cacheDurationSeconds, cacheDurationSeconds);
     }
@@ -60,11 +43,6 @@ public class NetworkChecker : MonoBehaviour
         _ = CheckConnectivityAsync(forceRefresh: true);
     }
 
-    /// <summary>
-    /// Cache 30s se purana ho ya forceRefresh=true ho to actual network ping karta hai,
-    /// warna cached value turant (bina network call ke) return kar deta hai.
-    /// Safe to call from anywhere with `await`.
-    /// </summary>
     public Task<bool> CheckConnectivityAsync(bool forceRefresh = false)
     {
         bool cacheValid = (Time.realtimeSinceStartup - _lastCheckRealtime) < cacheDurationSeconds;
@@ -73,8 +51,6 @@ public class NetworkChecker : MonoBehaviour
 
         if (_checkInFlight)
         {
-            // Ek check pehle se chal rahi hai — usi cached value ke saath turant return kardo
-            // taake ek hi waqt mein multiple overlapping pings na chalein.
             return Task.FromResult(_cachedIsOnline);
         }
 
@@ -88,8 +64,6 @@ public class NetworkChecker : MonoBehaviour
         _checkInFlight = true;
         bool result;
 
-        // Pehle Unity ka built-in reachability check — Airplane mode / no radio
-        // jaise cases mein bina network call ke hi turant "offline" pata chal jata hai.
         if (Application.internetReachability == NetworkReachability.NotReachable)
         {
             result = false;

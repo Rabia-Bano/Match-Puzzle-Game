@@ -1,34 +1,3 @@
-// ============================================================
-//  VerificationRequestTracker.cs  —  static helper  (NEW)
-//
-//  Problem: kuch players register karke bar-bar "Resend verification
-//  email" dabate rehte hain lekin kabhi verify nahi karte (fake /
-//  spam email, bot, ya kisi aur ka email). Admin ko iska pata nahi
-//  chalta tha, kyun ke unverified player ka players/{uid} document
-//  banta hi nahi (profile verification ke BAAD banti hai).
-//
-//  Solution — alag collection:  verificationRequests/{uid}
-//    uid, email, username
-//    emailsSent        — total verification emails (pehli + resends)
-//    resendCount       — sirf "Resend" button wali requests
-//    firstRequestAt, lastRequestAt
-//    verified, verifiedAt
-//    flagged           — true jab resendCount >= MAX_RESENDS (3)
-//    banned, banReason — SIRF admin panel likh sakta hai
-//
-//  Rules:
-//    • Registration wali pehli email count NAHI hoti — sirf resends.
-//    • 3 resends ke baad (MAX_RESENDS) → flagged = true → admin panel
-//      ki "Verification Alerts" list + notification bell mein aa jata
-//      hai, aur 4th resend game mein BLOCK ho jata hai.
-//    • Admin wahan se BAN kar sakta hai (reason ke saath). Banned
-//      player na resend kar sakta hai, na verify karke andar aa sakta
-//      hai, na login kar sakta hai.
-//
-//  IMPORTANT: MAX_RESENDS yahan aur firestore.rules dono mein SAME
-//  hona chahiye (rules mein "resendCount >= 3" wali line).
-// ============================================================
-
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -46,7 +15,6 @@ namespace Game.Firebase
 
         private static FirebaseFirestore Db => FirebaseFirestore.DefaultInstance;
 
-        /// <summary>Reads the doc and says whether another resend is allowed.</summary>
         public static void CheckCanResend(string uid, Action<ResendDecision, int> callback)
         {
             if (string.IsNullOrEmpty(uid)) { callback?.Invoke(ResendDecision.NetworkError, 0); return; }
@@ -72,11 +40,6 @@ namespace Game.Firebase
             });
         }
 
-        /// <summary>
-        /// Call AFTER a verification email was actually sent.
-        /// isFirstSend = the automatic email at registration (doesn't count as a resend).
-        /// previousResendCount = value read by CheckCanResend (0 for first send).
-        /// </summary>
         public static void RecordSend(string uid, string email, string username, bool isFirstSend, int previousResendCount)
         {
             if (string.IsNullOrEmpty(uid)) return;
@@ -106,14 +69,10 @@ namespace Game.Firebase
             });
         }
 
-        /// <summary>Marks the request as verified (fire-and-forget).</summary>
         public static void MarkVerified(string uid)
         {
             if (string.IsNullOrEmpty(uid)) return;
 
-            // The security rules only accept verified:true when the ID token says
-            // email_verified == true. After the player clicks the link, the CACHED
-            // token still says false — so force a token refresh first.
             var user = AuthManager.CurrentUser;
             if (user == null) return;
 
@@ -133,11 +92,6 @@ namespace Game.Firebase
             });
         }
 
-        /// <summary>
-        /// NEW — used on every normal login: if a verificationRequests doc exists and
-        /// still says verified:false, flip it to true. Never creates a doc for players
-        /// that never had one.
-        /// </summary>
         public static void MarkVerifiedIfPending(string uid)
         {
             if (string.IsNullOrEmpty(uid)) return;
@@ -149,11 +103,6 @@ namespace Game.Firebase
             });
         }
 
-        /// <summary>
-        /// True if the admin banned this uid from the Verification Alerts page.
-        /// On a read error it answers false (never locks a real player out because of
-        /// a network hiccup) — the players/{uid}.isBanned check still applies.
-        /// </summary>
         public static void CheckBanned(string uid, Action<bool, string> callback)
         {
             if (string.IsNullOrEmpty(uid)) { callback?.Invoke(false, null); return; }

@@ -1,21 +1,7 @@
-// ============================================================
-//  TileData.cs  —  ScriptableObject
-//  Create via: Assets > Create > Match3 > Tile Data
-//
-//  Each colour/type in your game gets ONE TileData asset.
-//  Drag them into TileSpawner.availableTiles[].
-// ============================================================
-
 using UnityEngine;
 
 namespace Match3
 {
-    // ── Enums ────────────────────────────────────────────────
-
-    /// <summary>
-    /// The visual / logical colour of a tile.
-    /// Add more colours here and create matching TileData assets.
-    /// </summary>
     public enum TileColor
     {
         None   = 0,
@@ -27,20 +13,14 @@ namespace Match3
         Orange = 6
     }
 
-    /// <summary>
-    /// Extra behaviour that a special tile can carry.
-    /// RowBlast clears the whole row; ColBlast clears the column, etc.
-    /// </summary>
     public enum SpecialType
     {
         None      = 0,
-        RowBlast  = 1,   // clears the entire row
-        ColBlast  = 2,   // clears the entire column
-        Bomb      = 3,   // clears a 3×3 area
-        Rainbow   = 4    // clears all tiles of a target colour
+        RowBlast  = 1,
+        ColBlast  = 2,
+        Bomb      = 3,
+        Rainbow   = 4
     }
-
-    // ── ScriptableObject ─────────────────────────────────────
 
     [CreateAssetMenu(
         fileName = "TileData_New",
@@ -58,7 +38,6 @@ namespace Match3
         [Tooltip("Which colour group this tile belongs to.")]
         public TileColor color;
 
-        // ── Special tile ──────────────────────────────────────
         [Header("Special Behaviour")]
         [Tooltip("Is this tile a special / power-up tile?")]
         public bool isSpecial;
@@ -66,7 +45,6 @@ namespace Match3
         [Tooltip("Only relevant when isSpecial == true.")]
         public SpecialType specialType;
 
-        // ── Hard tile (blocker obstacle) ───────────────────────
         [Header("Hard Tile (Blocker)")]
         [Tooltip("Is this a hard/blocker obstacle? Cannot be matched or swapped " +
                  "(spawns with TileState.Locked). Takes 1 damage only when a special " +
@@ -83,14 +61,12 @@ namespace Match3
                  "— the 'sprite' field above is the undamaged (stage 0) look.")]
         public Sprite[] hardTileDamageSprites;
 
-        // ── Dropdown stone (ingredient obstacle) ───────────────
         [Header("Dropdown Stone (Ingredient)")]
         [Tooltip("Is this a dropdown-stone / ingredient obstacle? Falls with gravity " +
                  "like a normal tile, but cannot be matched or swapped (spawns with " +
                  "TileState.Locked), and is collected once it reaches the BOTTOM row.")]
         public bool isDropStone;
 
-        // ── Visual polish ─────────────────────────────────────
         [Header("Visuals")]
         [Tooltip("Optional highlight / glow sprite shown when selected.")]
         public Sprite highlightSprite;
@@ -98,9 +74,6 @@ namespace Match3
         [Tooltip("Particle effect prefab played when this tile is cleared.")]
         public GameObject clearParticlePrefab;
 
-        // ── Helper ────────────────────────────────────────────
-
-        /// <summary>Returns true if two tiles are the same colour (and neither is None).</summary>
         public static bool SameColor(TileData a, TileData b)
         {
             if (a == null || b == null)          return false;

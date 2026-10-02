@@ -1,11 +1,3 @@
-// ============================================================
-//  LunaSkill.cs  —  Luna's power
-//  Shuffles the TileData of every non-special tile on the board,
-//  TWICE in a row (each shuffle is followed by a full resolve, so any
-//  matches the first shuffle creates get cleared before the second
-//  shuffle scrambles the board again).
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
@@ -47,7 +39,6 @@ namespace Match3
                 dataPool.Add(t.Data);
             }
 
-            // Fisher-Yates shuffle of the TileData pool.
             for (int i = dataPool.Count - 1; i > 0; i--)
             {
                 int j = Random.Range(0, i + 1);
@@ -57,7 +48,7 @@ namespace Match3
             for (int i = 0; i < tiles.Count; i++)
             {
                 Tile t = tiles[i];
-                t.Initialize(dataPool[i], t.GridX, t.GridY);   // kills tweens + refreshes visuals
+                t.Initialize(dataPool[i], t.GridX, t.GridY);
                 t.transform.DOPunchScale(Vector3.one * 0.15f, 0.25f, 4, 0.6f);
             }
 

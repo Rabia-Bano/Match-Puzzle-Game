@@ -1,31 +1,3 @@
-// ============================================================
-//  BoardGrid.cs  —  MonoBehaviour
-//
-//  Owns the 2-D array of Tile references and handles:
-//    • Board initialisation (size, world-space layout)
-//    • Grid <-> World coordinate conversion
-//    • Spawning / removing individual tile GameObjects via the ObjectPool
-//
-//  This is the single source of truth for "what tile is at (x,y)".
-//  Every other board script (MatchFinder, GravitySystem, BoardRefiller,
-//  BoardRotation, SwapController, InputHandler) reads/writes through
-//  this class instead of keeping its own copy of the grid state.
-//
-//  Place on a dedicated "BoardGrid" GameObject in your game scene.
-//  Wire up: tilePool reference in the Inspector.
-//
-//  UPDATE (Blank Tiles + Rectangular Rotation):
-//    • Blank cells — LevelData.blankPositions. A blank cell is a HOLE
-//      in the board: no gem, no obstacle, no jelly can ever sit there,
-//      the player can't swap into it, and falling tiles pass THROUGH
-//      it. Query with IsBlank(x,y) / IsPlayable(x,y).
-//    • ApplyRotatedLayout() — lets BoardRotation swap Width/Height
-//      (e.g. a 6x8 board becomes 8x6 after a 90° turn). Recomputes the
-//      world-space origin and re-fits the camera.
-//    • Optional cellBackgroundPrefab — drawn only under PLAYABLE cells,
-//      so blank cells visibly look empty (shaped boards).
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
@@ -34,8 +6,6 @@ namespace Match3
 {
     public class BoardGrid : MonoBehaviour
     {
-        // ── Inspector ─────────────────────────────────────────
-
         [Header("Layout")]
         [Tooltip("World-space size of one tile (sprite width/height at 1 unit = 100 px).")]
         [SerializeField] private float cellSize = 1.0f;
@@ -48,9 +18,6 @@ namespace Match3
         [Range(0.3f, 1f)]
         [SerializeField] private float tileVisualScale = 1f;
 
-        /// <summary>Current board's tile visual scale — read by Tile.cs and
-        /// SpecialTileFactory.cs so every tile (regular or special) stays visually
-        /// consistent without threading this value through every spawn call.</summary>
         public static float TileVisualScale { get; private set; } = 1f;
 
         [Header("References")]
@@ -73,39 +40,19 @@ namespace Match3
                  "Leave empty if your board already has its own background art.")]
         [SerializeField] private GameObject cellBackgroundPrefab;
 
-        // ── Public read-only state ────────────────────────────
-
         public int Width  { get; private set; }
         public int Height { get; private set; }
 
-        /// <summary>
-        /// The authoritative grid. [x, y] where x = column, y = row.
-        /// Null means the cell is empty (pending a new tile).
-        /// Exposed so tightly-coupled systems (gravity, rotation) can
-        /// batch-update it directly during heavy operations — but prefer
-        /// SetTile / RemoveTile / SwapTiles below wherever possible.
-        /// </summary>
         public Tile[,] Grid { get; private set; }
 
-        /// <summary>NEW — true = this cell is a hole (LevelData.blankPositions).</summary>
         public bool[,] BlankMask { get; private set; }
 
-        /// <summary>NEW — fired after ApplyRotatedLayout() changes the board layout.</summary>
         public System.Action OnLayoutChanged;
-
-        // ── World-space origin ────────────────────────────────
 
         private Vector3 _originOffset;
         private readonly List<GameObject> _cellBackgrounds = new();
         private Tween _camTween;
 
-        // ── Initialisation ────────────────────────────────────
-
-        /// <summary>
-        /// Creates the empty Grid array and calculates the world-space
-        /// origin so the board is centred on this transform.
-        /// Call this from LevelManager after reading the LevelData asset.
-        /// </summary>
         public void InitializeBoard(int width, int height)
         {
             Width     = width;
@@ -133,13 +80,6 @@ namespace Match3
                               0f);
         }
 
-        // ── Blank cells (NEW) ─────────────────────────────────
-
-        /// <summary>
-        /// NEW — marks the given cells as blank holes. Call right after
-        /// InitializeBoard() and BEFORE TileSpawner.FillBoard() (LevelManager
-        /// does this). Out-of-bounds entries are ignored with a warning.
-        /// </summary>
         public void SetBlankCells(IEnumerable<Vector2Int> cells)
         {
             if (BlankMask == null) return;
@@ -159,7 +99,7 @@ namespace Match3
                         continue;
                     }
                     BlankMask[c.x, c.y] = true;
-                    RemoveTile(c.x, c.y);   // safety: nothing may live in a hole
+                    RemoveTile(c.x, c.y);
                     count++;
                 }
             }
@@ -168,15 +108,12 @@ namespace Match3
             RebuildCellBackgrounds();
         }
 
-        /// <summary>True if (x,y) is inside the board AND is a blank hole.</summary>
         public bool IsBlank(int x, int y) =>
             IsInBounds(x, y) && BlankMask != null && BlankMask[x, y];
 
-        /// <summary>True if (x,y) is inside the board and is NOT blank — i.e. a tile may live here.</summary>
         public bool IsPlayable(int x, int y) =>
             IsInBounds(x, y) && (BlankMask == null || !BlankMask[x, y]);
 
-        /// <summary>Number of playable (non-blank) cells on the board.</summary>
         public int PlayableCellCount
         {
             get
@@ -189,14 +126,6 @@ namespace Match3
             }
         }
 
-        // ── Rotation support (NEW) ────────────────────────────
-
-        /// <summary>
-        /// NEW — used ONLY by BoardRotation. Replaces the grid + blank mask with
-        /// already-rotated arrays whose dimensions may be swapped (W x H -> H x W),
-        /// recomputes the world origin and re-fits the camera for the new shape.
-        /// Tile transforms are NOT moved here — BoardRotation snaps them afterwards.
-        /// </summary>
         public void ApplyRotatedLayout(Tile[,] newGrid, bool[,] newBlank)
         {
             int w = newGrid.GetLength(0);
@@ -218,8 +147,6 @@ namespace Match3
             OnLayoutChanged?.Invoke();
         }
 
-        /// <summary>World position a cell WOULD have on a board of the given size
-        /// (used by BoardRotation's per-tile animation before the layout is applied).</summary>
         public Vector3 GridToWorldForSize(int x, int y, int width, int height)
         {
             float step = cellSize + cellSpacing;
@@ -227,8 +154,6 @@ namespace Match3
                 - new Vector3((width - 1) * step * 0.5f, (height - 1) * step * 0.5f, 0f);
             return origin + new Vector3(x * step, y * step, 0f);
         }
-
-        // ── Cell backgrounds (NEW, optional) ──────────────────
 
         private void RebuildCellBackgrounds()
         {
@@ -243,21 +168,13 @@ namespace Match3
             {
                 if (!IsPlayable(x, y)) continue;
                 Vector3 pos = GridToWorld(x, y);
-                pos.z += 0.2f;   // behind jelly (0.1) and tiles (0)
+                pos.z += 0.2f;
                 GameObject bg = Instantiate(cellBackgroundPrefab, pos, Quaternion.identity, transform);
                 bg.name = $"CellBG_{x}_{y}";
                 _cellBackgrounds.Add(bg);
             }
         }
 
-        /// <summary>
-        /// NEW — zooms the orthographic camera out just enough so the FULL board width
-        /// (not just height) always fits the current device's screen, regardless of its
-        /// aspect ratio. Without this, cellSize/cellSpacing produce a fixed world-space
-        /// board size while the camera's orthographicSize was only tuned for one aspect
-        /// ratio in the editor — on narrower/taller phones the board overflows and gets
-        /// cut off at the sides. Runs every time a level (re)initializes the board.
-        /// </summary>
         private void FitCameraToBoard(int width, int height, float duration)
         {
             Camera cam = targetCamera != null ? targetCamera : Camera.main;
@@ -279,7 +196,7 @@ namespace Match3
 
             if (duration > 0f)
             {
-                _camTween?.Kill();   // only OUR zoom tween — never a camera shake tween
+                _camTween?.Kill();
                 _camTween = cam.DOOrthoSize(target, duration).SetEase(Ease.InOutQuad);
             }
             else
@@ -287,8 +204,6 @@ namespace Match3
                 cam.orthographicSize = target;
             }
         }
-
-        // ── Coordinate conversion ─────────────────────────────
 
         public Vector3 GridToWorld(int x, int y)
         {
@@ -307,13 +222,6 @@ namespace Match3
             return IsInBounds(x, y);
         }
 
-        // ── Tile management ───────────────────────────────────
-
-        /// <summary>
-        /// Retrieves a Tile from the ObjectPool, positions it at grid (x, y),
-        /// initialises it with <paramref name="data"/>, and registers it in
-        /// the Grid array. Returns null if the pool is exhausted or (x,y) is invalid.
-        /// </summary>
         public Tile SpawnTile(int x, int y, TileData data)
         {
             if (!IsInBounds(x, y))
@@ -322,7 +230,6 @@ namespace Match3
                 return null;
             }
 
-            // NEW — a blank hole can never hold a tile (gem OR obstacle).
             if (IsBlank(x, y))
             {
                 Debug.LogWarning($"[BoardGrid] SpawnTile refused at ({x},{y}) — that cell is BLANK. " +
@@ -344,7 +251,6 @@ namespace Match3
             return tile;
         }
 
-        /// <summary>Returns the tile at (x, y) to the pool and clears the grid slot. Safe on an empty cell.</summary>
         public void RemoveTile(int x, int y)
         {
             if (!IsInBounds(x, y)) return;
@@ -357,11 +263,6 @@ namespace Match3
             Grid[x, y] = null;
         }
 
-        /// <summary>
-        /// Directly places an already-existing Tile reference into a grid slot and
-        /// syncs its GridX/GridY. Used by GravitySystem / BoardRotation when they move
-        /// tiles around without spawning/removing them.
-        /// </summary>
         public void SetTile(int x, int y, Tile tile)
         {
             if (!IsInBounds(x, y)) return;
@@ -374,7 +275,6 @@ namespace Match3
             tile?.SetGridPosition(x, y);
         }
 
-        /// <summary>Swaps the two grid slots (and each tile's GridX/GridY) without touching transforms.</summary>
         public void SwapTiles(int ax, int ay, int bx, int by)
         {
             if (!IsInBounds(ax, ay) || !IsInBounds(bx, by)) return;
@@ -389,20 +289,12 @@ namespace Match3
             tB?.SetGridPosition(ax, ay);
         }
 
-        // ── Bounds check ──────────────────────────────────────
-
         public bool IsInBounds(int x, int y) =>
             x >= 0 && x < Width && y >= 0 && y < Height;
 
         public Tile GetTile(int x, int y) =>
             IsInBounds(x, y) ? Grid[x, y] : null;
 
-        // ── Neighbour helpers (used by match-detection) ───────
-
-        /// <summary>
-        /// Fills <paramref name="results"/> (pre-allocated, length >= 4) with the
-        /// horizontal and vertical neighbours of (x, y). Returns how many were found.
-        /// </summary>
         public int GetNeighbours(int x, int y, Tile[] results)
         {
             int count = 0;
@@ -415,8 +307,6 @@ namespace Match3
 
             return count;
         }
-
-        // ── Gizmos (editor visualisation) ─────────────────────
 
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()

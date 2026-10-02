@@ -1,23 +1,3 @@
-// ============================================================
-//  SpecialTileActivator.cs  —  Set to use BoardController's shared pipeline
-//
-//  ClearList()  -> decides WHICH tiles a blast pattern hits, hands the
-//                  actual clearing to BoardController.ClearTiles().
-//  Settle()     -> just calls BoardController.SettleAfterExternalClear().
-//
-//  REDESIGN NOTE (bug report ke baad — hard tile damage):
-//    ClearList() ka code khud bilkul same hai — yeh already row/column/
-//    3x3/5x5/colour-sweep ki har cell (hard tiles included) ko
-//    "normals" list mein daal kar boardController.ClearTiles() ko de
-//    deta tha. Sirf param ka naam change hua hai: damageAdjacentHardTiles
-//    → canDamageHardTiles — kyunki ab ClearTiles() ke andar hard tile
-//    ko "adjacency" se nahi, seedha DIRECT hit (is list mein khud
-//    shamil hone) se damage milta hai. Yeh single special activation
-//    (row/col/3x3/5x5/color-bomb — jab player ek special tile tap
-//    kare ya match kare) ab bhi hard tile ko sahi tareeqe se hit
-//    karta hai agar hard tile khud us blast path mein ho.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,8 +10,8 @@ namespace Match3
     {
         [Header("References — ALL must be assigned")]
         [SerializeField] private BoardGrid       boardGrid;
-        [SerializeField] private BoardController boardController;  // owns clearing/scoring/gravity/refill/cascade now
-        [SerializeField] private LevelManager    levelManager; 
+        [SerializeField] private BoardController boardController;
+        [SerializeField] private LevelManager    levelManager;
         [SerializeField] private JellyManager    jellyManager;
 
         [Header("Special TileData Assets")]
@@ -47,12 +27,6 @@ namespace Match3
 
         public bool IsRunning { get; private set; }
 
-        /// <summary>
-        /// Called by BoardController.ClearTiles() when it finds a special tile
-        /// inside a list it was asked to clear (pet skill, booster, or a special
-        /// caught inside a normal match) — activates that tile's own blast
-        /// pattern instead of letting BoardController silently erase it.
-        /// </summary>
         public IEnumerator ChainActivate(Tile tile) => FireSingle(tile);
 
         public void ActivateSingle(Tile tile)
@@ -133,14 +107,6 @@ namespace Match3
                         ? normalTile.Data.color
                         : GetMostCommonColorOnBoard();
 
-                    // FIX (bug report — "color bomb pe jelly thi, effect chala
-                    // but jelly clear nahi hui"): this branch removed the bomb's
-                    // own tile directly, without ever calling
-                    // jellyManager.DecrementAt() on ITS OWN cell first — unlike
-                    // FireSingle()/tap-to-activate, which always does. So a
-                    // jelly layer sitting under the color bomb itself never got
-                    // peeled when the bomb was fired via a SWAP. Mirror
-                    // FireSingle()'s own-cell jelly handling here too.
                     if (jellyManager != null && jellyManager.DecrementAt(special.GridX, special.GridY))
                         levelManager?.OnJellyCleared();
 
@@ -156,7 +122,6 @@ namespace Match3
             IsRunning = false;
         }
 
-        /// <summary>Fallback target colour for a Rainbow (Color Bomb) swap when the swap partner has no colour of its own (e.g. a dropdown stone).</summary>
         private TileColor GetMostCommonColorOnBoard()
         {
             var counts = new System.Collections.Generic.Dictionary<TileColor, int>();
@@ -176,10 +141,6 @@ namespace Match3
 
             return best;
         }
-
-        // ─────────────────────────────────────────────────────
-        //  WHICH SPECIAL FIRES WHAT  (pattern selection — kept as-is)
-        // ─────────────────────────────────────────────────────
 
         private IEnumerator FireSingle(Tile tile)
         {
@@ -269,18 +230,6 @@ namespace Match3
             }
             yield return StartCoroutine(ClearList(list));
 
-            // FIX (Rabia's report — "color bomb swapped with weakness tile, boss
-            // HP didn't change at all"): THIS is the method that actually runs
-            // for a standalone Color Bomb blast — both a lone tap (FireSingle's
-            // Rainbow case above) and a swap with a normal tile (SwapRoutine's
-            // Rainbow branch above) both call ClearAllOfColor() right here.
-            // ColorBombEffect.cs's own copy of this same event-fire is ONLY
-            // reached through SpecialCombinations.cs (2-special-tile combos) —
-            // it was never in this file, so standalone Color Bomb activation
-            // never reported anything to the boss at all. Same rule as
-            // ColorBombEffect.Activate(): only damages the boss when `color`
-            // is this boss's own weakness colour (checked inside
-            // BossController.HandleColorBombBlast()) — a flat "5+" tier hit.
             if (list.Count > 0)
                 BossDamageEvents.OnColorBombBlast?.Invoke(color);
         }
@@ -331,19 +280,6 @@ namespace Match3
                 yield return StartCoroutine(FireSingle(t));
         }
 
-        // ─────────────────────────────────────────────────────
-        //  CLEAR — delegates the actual clear+score+goal work to
-        //  BoardController.ClearTiles(). This method's only job is
-        //  separating "tiles hit by the blast" into normals (which
-        //  ClearTiles() further splits into colour/hard/stone) vs
-        //  specials (chain-fire them).
-        //
-        //  canDamageHardTiles: true because every list built above
-        //  (row/column/3x3/5x5/colour-sweep) is this special's own
-        //  direct target area — any hard tile caught inside it is a
-        //  genuine direct hit, never just a neighbour.
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator ClearList(List<Tile> tiles)
         {
             var normals  = new List<Tile>();
@@ -366,17 +302,11 @@ namespace Match3
             yield return new WaitForSeconds(blastDelay);
         }
 
-        // ─────────────────────────────────────────────────────
-        //  SETTLE
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator Settle()
         {
             yield return new WaitForSeconds(postSettleWait);
             yield return StartCoroutine(boardController.SettleAfterExternalClear());
         }
-
-        // ─────────────────────────────────────────────────────
 
         private static bool IsSpecial(Tile t) => t != null && t.Data != null && t.Data.isSpecial;
         private static bool IsStriped(SpecialType t) => t == SpecialType.RowBlast || t == SpecialType.ColBlast;

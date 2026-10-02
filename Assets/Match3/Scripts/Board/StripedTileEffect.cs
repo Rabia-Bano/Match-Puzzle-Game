@@ -1,23 +1,3 @@
-// ============================================================
-//  StripedTileEffect.cs  —  SpecialTileEffect Subclass
-//
-//  Orientation ke hisaab se:
-//    • Horizontal (RowBlast)  → poori row clear
-//    • Vertical   (ColBlast)  → poora column clear
-//
-//  REDESIGN (bug report ke baad — hard tile damage):
-//    Ab jab hard tile khud is row/column ke path mein aata hai, wahi
-//    ek DIRECT HIT hai — turant 1 damage lagta hai (DamageHardTileDirect).
-//    Poori row/column ki adjacency-based damage (jo door wali hardtiles
-//    ko bhi galat tareeqe se destroy kar deti thi) bilkul hata di gayi
-//    hai — ab hardtile SIRF apni khud ki cell blast hone par damage
-//    leta hai, kabhi bhi paas wali cell clear hone se nahi.
-//
-//    (Pehle wale fix mein jelly-decrement + hardtile-skip add kiya
-//    gaya tha — wo dono still yahan hain, sirf hardtile handling
-//    "skip + adjacency" se "direct damage" mein badal gayi hai.)
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -27,16 +7,10 @@ namespace Match3
 {
     public class StripedTileEffect : SpecialTileEffect
     {
-        // ── Inspector ─────────────────────────────────────────
-
         [Header("Stripe Settings")]
         [SerializeField] private GameObject hLaserTrailPrefab;
         [SerializeField] private GameObject vLaserTrailPrefab;
         [SerializeField] private float laserDuration = 0.4f;
-
-        // ─────────────────────────────────────────────────────
-        //  PUBLIC OVERRIDE
-        // ─────────────────────────────────────────────────────
 
         public override IEnumerator Activate(Vector2Int position, List<Tile> clearedTiles)
         {
@@ -56,10 +30,6 @@ namespace Match3
 
             AddScoreForCleared(clearedTiles.Count);
         }
-
-        // ─────────────────────────────────────────────────────
-        //  BLAST HELPERS  (public — SpecialCombinations calls these directly)
-        // ─────────────────────────────────────────────────────
 
         public IEnumerator BlastRow(int row, List<Tile> clearedTiles)
         {
@@ -85,10 +55,6 @@ namespace Match3
             yield return StartCoroutine(WaveClearVertical(colTiles, clearedTiles));
         }
 
-        // ─────────────────────────────────────────────────────
-        //  WAVE CLEAR ANIMATIONS
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator WaveClearHorizontal(List<Tile> tiles, List<Tile> cleared)
         {
             tiles.Sort((a, b) => a.GridX.CompareTo(b.GridX));
@@ -98,7 +64,6 @@ namespace Match3
                 if (t == null || t.State == TileState.Inactive) continue;
                 if (boardGrid.GetTile(t.GridX, t.GridY) != t)  continue;
 
-                // Special tile caught inside this row blast — chain-fire it.
                 if (t.Data != null && t.Data.isSpecial && specialActivator != null)
                 {
                     cleared.Add(t);
@@ -106,16 +71,12 @@ namespace Match3
                     continue;
                 }
 
-                // FIX: hard tile whose OWN cell is inside this row is a DIRECT
-                // hit — damage it right here (1 point), don't skip it and
-                // don't treat it as a normal colour tile.
                 if (t.Data != null && t.Data.isHardTile)
                 {
                     DamageHardTileDirect(t, cleared);
                     continue;
                 }
 
-                // Dropdown stone — IMMUNE to this clear source.
                 if (t.Data != null && t.Data.isDropStone) continue;
 
                 Sequence stretchSeq = DOTween.Sequence();
@@ -152,7 +113,6 @@ namespace Match3
                     continue;
                 }
 
-                // FIX: same direct-hit hard-tile damage as WaveClearHorizontal.
                 if (t.Data != null && t.Data.isHardTile)
                 {
                     DamageHardTileDirect(t, cleared);
@@ -178,8 +138,6 @@ namespace Match3
             foreach (Tile t in tiles)
                 if (t != null) t.transform.localScale = Vector3.one;
         }
-
-        // ─────────────────────────────────────────────────────
 
         private void PlayLaserTrail(Vector3 origin, bool horizontal)
         {

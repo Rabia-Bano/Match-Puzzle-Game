@@ -1,9 +1,3 @@
-// ============================================================
-//  LeaderboardPanel.cs  —  MonoBehaviour
-//  Attach to: "LeaderboardPanel" GameObject inside LeaderBoardScene's
-//  UICanvas (sibling of TopBarPanel / BottomBarPanel — see setup guide).
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,8 +10,8 @@ namespace Match3
     {
         [Header("List")]
         [SerializeField] private ScrollRect    scrollRect;
-        [SerializeField] private RectTransform contentContainer;   // ScrollRect -> Viewport -> Content
-        [SerializeField] private GameObject    rowPrefab;          // needs LeaderboardRow component
+        [SerializeField] private RectTransform contentContainer;
+        [SerializeField] private GameObject    rowPrefab;
 
         [Header("States")]
         [SerializeField] private GameObject loadingIndicator;
@@ -65,10 +59,6 @@ namespace Match3
             }
         }
 
-        // ============================================================
-        //  DATA
-        // ============================================================
-
         private void HandleLeaderboardUpdated(List<LeaderboardEntry> entries)
         {
             if (loadingIndicator != null) loadingIndicator.SetActive(false);
@@ -104,7 +94,6 @@ namespace Match3
                     _rowsByUid[entry.uid] = row;
                 }
 
-                // Keep row order in the hierarchy matching rank order (1st on top).
                 row.transform.SetSiblingIndex(entry.rank - 1);
 
                 bool isMe = !string.IsNullOrEmpty(myUid) && entry.uid == myUid;
@@ -116,8 +105,6 @@ namespace Match3
                 if (isMe) myRow = row;
             }
 
-            // Remove rows for players no longer present in this snapshot
-            // (e.g. banned/removed, or filtered out server-side).
             List<string> stale = new List<string>();
             foreach (var kv in _rowsByUid)
                 if (!seenUids.Contains(kv.Key)) stale.Add(kv.Key);
@@ -156,12 +143,11 @@ namespace Match3
             Canvas.ForceUpdateCanvases();
             float contentHeight  = contentContainer.rect.height;
             float viewportHeight = ((RectTransform)scrollRect.viewport).rect.height;
-            if (contentHeight <= viewportHeight) return; // nothing to scroll
+            if (contentHeight <= viewportHeight) return;
 
             float rowY = -rowRect.anchoredPosition.y;
             float normalized = Mathf.Clamp01(1f - (rowY / (contentHeight - viewportHeight)));
             scrollRect.verticalNormalizedPosition = normalized;
         }
-
     }
 }

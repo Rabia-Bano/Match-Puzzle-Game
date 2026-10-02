@@ -1,20 +1,3 @@
-// ============================================================
-//  BossLevelNode.cs  —  MonoBehaviour on the "BossLevelNode" prefab
-//
-//  One numbered circle in the BossArenaScene list (the mockup screen:
-//  a snowflake-style circle with "1", and locked circles with a
-//  chain/padlock icon for "2", "3"...). Reused for EVERY boss in the
-//  list — BossArenaListManager.Setup() configures each instance.
-//
-//  This is intentionally simpler than LevelNode.cs (no stars — a
-//  boss fight is pass/fail, not star-rated) but follows the exact
-//  same static-event + SetState() pattern so it reads the same way
-//  to anyone already familiar with LevelNode.
-//
-//  Attach to: "BossLevelNode" prefab (root GameObject) — save under
-//  Assets/Prefabs/UI/BossLevelNode.prefab
-// ============================================================
-
 using System;
 using DG.Tweening;
 using TMPro;
@@ -52,12 +35,6 @@ public class BossLevelNode : MonoBehaviour
 
     private Tween _pulseTween;
 
-    // ─────────────────────────────────────────────────────
-
-    /// <summary>Called by BossArenaListManager right after Instantiate.</summary>
-    /// <param name="unlockedAfterLevel">NEW — the regular level this boss needs
-    /// completed first. Only used to populate lockedLabel while State == Locked
-    /// (e.g. "Unlocks after Level 12") — pass 0 if you don't want the label.</param>
     public void Setup(int id, NodeState state, int unlockedAfterLevel = 0)
     {
         bossId = id;
@@ -69,8 +46,6 @@ public class BossLevelNode : MonoBehaviour
         SafeSetActive(defeatedBadge, state == NodeState.Defeated);
         SafeSetActive(glowEffect,    state == NodeState.Unlocked);
 
-        // NEW — "Unlocks after Level N", same pattern PetCollectionSlot uses
-        // for a locked pet ("Unlocks after Level X").
         if (lockedLabel != null) lockedLabel.gameObject.SetActive(state == NodeState.Locked);
         if (lockedLabel != null)
             lockedLabel.text = $"Unlocks after Level {unlockedAfterLevel}";
@@ -106,7 +81,7 @@ public class BossLevelNode : MonoBehaviour
         var theme = Match3.Theme.ThemeManager.Instance != null
             ? Match3.Theme.ThemeManager.Instance.CurrentTheme
             : null;
-        if (theme == null) return; // keep whatever color was already there
+        if (theme == null) return;
 
         nodeImage.color = state switch
         {

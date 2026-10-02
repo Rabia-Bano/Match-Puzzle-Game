@@ -1,16 +1,3 @@
-// ============================================================
-//  BossArenaHUD.cs  —  MonoBehaviour
-//
-//  Boss Arena's in-fight HUD: boss portrait + animated health bar,
-//  an attack warning popup, and a player-score-vs-boss-health readout.
-//  Mirrors PetHUD.cs's DOFillAmount bar-tween pattern on purpose.
-//
-//  Attach to: "BossArenaHUD" panel GameObject under the BossArenaScene
-//  Canvas (sibling of TopBarPanel in the hierarchy you showed).
-//  Wire up: bossController, levelManager (optional, for score text),
-//  and every UI reference below. See the setup guide for full hierarchy.
-// ============================================================
-
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -30,8 +17,8 @@ namespace Match3
         [Header("Boss Health Bar")]
         [SerializeField] private Image           bossPortrait;
         [SerializeField] private TextMeshProUGUI bossNameText;
-        [SerializeField] private Image           healthBarFill;   // Image, Type=Filled, Fill Method=Horizontal
-        [SerializeField] private TextMeshProUGUI healthText;      // e.g. "60 / 100"
+        [SerializeField] private Image           healthBarFill;
+        [SerializeField] private TextMeshProUGUI healthText;
 
         [Header("Player Score vs Boss Health")]
         [SerializeField] private TextMeshProUGUI playerScoreText;
@@ -46,8 +33,6 @@ namespace Match3
         [SerializeField] private float damageShakeStrength = 10f;
 
         private Tween _warningHideTween;
-
-        // ─────────────────────────────────────────────────────
 
         private void Start()
         {
@@ -88,10 +73,6 @@ namespace Match3
                 levelManager.OnScoreChanged.RemoveListener(HandleScoreChanged);
         }
 
-        // ─────────────────────────────────────────────────────
-        // HANDLERS
-        // ─────────────────────────────────────────────────────
-
         private void HandleHealthChanged(int current, int max)
         {
             float fraction = max > 0 ? (float)current / max : 0f;
@@ -112,17 +93,6 @@ namespace Match3
             }
             if (healthBarFill != null)
             {
-                // FIX (HP fill image keeps growing bug): DOPunchScale below runs on
-                // healthBarFill.transform, but this line was calling DOKill() on
-                // healthBarFill (the Image component) instead — that kills the FILL
-                // tween, not the punch-scale tween, so the previous punch was NEVER
-                // actually interrupted. On top of that there was no scale reset
-                // before starting a new punch. Result: every damage tick during a
-                // fast cascade (multiple matches hitting the boss in quick succession)
-                // stacked a fresh punch on top of whatever scale the still-running
-                // previous punch was at, so the bar's image kept growing bigger and
-                // bigger and never settled back to its normal size. Same pattern
-                // PetHUD.cs's icon already had fixed — mirroring that fix here.
                 healthBarFill.transform.DOKill();
                 healthBarFill.transform.localScale = Vector3.one;
                 healthBarFill.transform

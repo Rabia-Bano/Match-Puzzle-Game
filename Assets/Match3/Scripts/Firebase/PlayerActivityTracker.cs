@@ -1,35 +1,3 @@
-// ============================================================
-//  PlayerActivityTracker.cs  —  Singleton (auto-created, DontDestroyOnLoad)  NEW
-//
-//  Admin panel ko batata hai ke kaun player:
-//    • level beech mein CHHOD deta hai (quit — Exit button ya app band)
-//    • ek hi level BAAR BAAR khelta hai (attempts / replays)
-//
-//  Kya record hota hai (Firestore  playerStats/{uid}  — SEPARATE doc,
-//  players/{uid} profile ko bilkul nahi chherta):
-//
-//    totalStarts, totalWins, totalLosses, totalTimeouts,
-//    totalQuits, exitButtonQuits, appClosedQuits,
-//    replaysOfCompletedLevels,
-//    levelAttempts : { "L5": 12, ... }   ← har level kitni baar start hua
-//    levelQuits    : { "L5": 4,  ... }   ← har level kitni baar chhora
-//    lastQuitAt, lastQuitLevel, lastPlayedAt, lastEvent,
-//    uid, displayName, email, isGuest, updatedAt
-//
-//  OFFLINE SAFE: har event pehle PlayerPrefs mein "pending counters"
-//  ki shakal mein save hota hai. Internet hone par FieldValue.Increment()
-//  ke saath merge-write hota hai. Fail ho jaye to counters wapas queue
-//  mein chale jaate hain — koi event kabhi zaya nahi hota.
-//
-//  "App band kar di" detection: level start par ek in-progress flag
-//  save hota hai; win/lose/exit par clear. Agar app kill ho jaye to
-//  flag bacha rehta hai — agli dafa login par isko quit (appClosed)
-//  count kar liya jata hai.
-//
-//  Setup: kuch attach karne ki zaroorat NAHI — pehli call par khud
-//  ban jata hai. (Chahein to FirebaseManagers object par attach kar dein.)
-// ============================================================
-
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
@@ -46,9 +14,8 @@ namespace Game.Firebase
         public const string COLLECTION = "playerStats";
 
         private const string PREF_PENDING_PREFIX = "PlayerActivity_Pending_";
-        private const string PREF_IN_PROGRESS    = "PlayerActivity_InProgress";   // "uid|levelId|sessionId"
+        private const string PREF_IN_PROGRESS    = "PlayerActivity_InProgress";
 
-        // ── Singleton (lazy) ──────────────────────────────────
         private static PlayerActivityTracker _instance;
         private static bool _quitting;
 
@@ -80,17 +47,10 @@ namespace Game.Firebase
 
         private bool  _flushing;
         private float _flushStartedAt;
-        private const float FLUSH_TIMEOUT = 20f;   // a write stuck longer than this no longer blocks new ones
+        private const float FLUSH_TIMEOUT = 20f;
 
-        // FIX — unique id for THIS app launch. The in-progress flag stores it, so a
-        // flag written during the current run is never mistaken for an app-kill
-        // from a PREVIOUS run. (Bug: the tracker is created lazily on the first
-        // level start; its Start() ran one frame later, found the flag that was
-        // JUST written, and counted a fake "appClosed" quit every app session.)
         private static readonly string SessionId = Guid.NewGuid().ToString("N");
         private static bool _abandonCheckDone;
-
-        // ─────────────────────────────────────────────────────
 
         private void Awake()
         {
@@ -108,15 +68,11 @@ namespace Game.Firebase
                 NetworkChecker.Instance.OnConnectivityChanged -= HandleConnectivityChanged;
         }
 
-        // NEW — internet came back → upload everything recorded while offline,
-        // without waiting for the player to finish another level.
         private void HandleConnectivityChanged(bool online)
         {
             if (online) Flush();
         }
 
-        // NEW — player returns to the app (e.g. after turning Wi-Fi/data on from
-        // the phone's settings) → re-check the network right away and upload.
         private async void OnApplicationFocus(bool hasFocus)
         {
             if (!hasFocus || NetworkChecker.Instance == null) return;
@@ -130,7 +86,6 @@ namespace Game.Firebase
             if (NetworkChecker.Instance != null)
                 NetworkChecker.Instance.OnConnectivityChanged += HandleConnectivityChanged;
 
-            // If a session was resumed before this object existed, still catch up.
             if (AuthManager.IsLoggedIn) HandleLoggedIn();
         }
 
@@ -140,11 +95,6 @@ namespace Game.Firebase
             Flush();
         }
 
-        // ─────────────────────────────────────────────────────
-        //  PUBLIC API
-        // ─────────────────────────────────────────────────────
-
-        /// <summary>Player tapped Start on the goal panel.</summary>
         public void RecordLevelStart(int levelId)
         {
             string uid = AuthManager.CurrentUid;
@@ -167,7 +117,6 @@ namespace Game.Firebase
             Flush();
         }
 
-        /// <summary>Level finished normally (win or lose).</summary>
         public void RecordLevelResult(int levelId, Result result)
         {
             string uid = AuthManager.CurrentUid;
@@ -187,7 +136,6 @@ namespace Game.Firebase
             Flush();
         }
 
-        /// <summary>Player left a level before it finished. reason: "exitButton" or "appClosed".</summary>
         public void RecordLevelQuit(int levelId, string reason)
         {
             string uid = AuthManager.CurrentUid;
@@ -196,8 +144,6 @@ namespace Game.Firebase
             RecordQuitFor(uid, levelId, reason);
             Flush();
         }
-
-        // ─────────────────────────────────────────────────────
 
         private void RecordQuitFor(string uid, int levelId, string reason)
         {
@@ -212,10 +158,8 @@ namespace Game.Firebase
             Debug.Log($"[PlayerActivityTracker] Quit recorded — Level {levelId} ({reason}).");
         }
 
-        /// <summary>If the app was killed mid-level last time, count it as a quit now.</summary>
         private void DetectAbandonedLevel()
         {
-            // Only once per app launch — and never for a flag written in THIS launch.
             if (_abandonCheckDone) return;
             _abandonCheckDone = true;
 
@@ -223,13 +167,11 @@ namespace Game.Firebase
             if (string.IsNullOrEmpty(raw)) return;
 
             string[] parts = raw.Split('|');
-            if (parts.Length >= 3 && parts[2] == SessionId) return;   // level is being played right now
+            if (parts.Length >= 3 && parts[2] == SessionId) return;
 
             ClearInProgress();
             if (parts.Length < 2 || !int.TryParse(parts[1], out int levelId)) return;
 
-            // Charge it to the account that was actually playing (it may differ
-            // from the one logging in now — the pending queue is per-uid anyway).
             RecordQuitFor(parts[0], levelId, "appClosed");
         }
 
@@ -240,30 +182,17 @@ namespace Game.Firebase
             PlayerPrefs.Save();
         }
 
-        // ─────────────────────────────────────────────────────
-        //  FIRESTORE FLUSH
-        // ─────────────────────────────────────────────────────
-
-        /// <summary>Pushes pending counters for the CURRENT user (fire-and-forget).</summary>
         public void Flush()
         {
             string uid = AuthManager.CurrentUid;
             if (string.IsNullOrEmpty(uid) || !FirebaseInitializer.IsReady) return;
 
-            // FIX — while offline, a Firestore write never "finishes" (it just waits
-            // for the network), which used to keep _flushing = true and BLOCK every
-            // later upload until the player played online again. Now:
-            //   • don't even start a write while we know we're offline
-            //   • a write stuck for > FLUSH_TIMEOUT seconds no longer blocks new ones
-            //     (safe: each write only carries its own counters, so nothing is
-            //     counted twice)
             if (NetworkChecker.Instance != null && !NetworkChecker.Instance.IsOnline) return;
             if (_flushing && Time.realtimeSinceStartup - _flushStartedAt < FLUSH_TIMEOUT) return;
 
             Pending snapshot = LoadPending(uid);
             if (snapshot.IsEmpty) return;
 
-            // Take everything out of the queue now; put it back if the write fails.
             SavePending(uid, new Pending());
             _flushing = true;
             _flushStartedAt = Time.realtimeSinceStartup;
@@ -285,7 +214,6 @@ namespace Game.Firebase
                     }
                     Debug.Log("[PlayerActivityTracker] Activity stats synced to Firestore.");
 
-                    // NEW — anything recorded while this write was in flight goes up now
                     if (!LoadPending(uid).IsEmpty) Flush();
                 });
         }
@@ -306,7 +234,6 @@ namespace Game.Firebase
             }
             doc["isGuest"] = AuthManager.IsGuest;
 
-            // "levelAttempts.L5" → nested map { levelAttempts: { L5: Increment(n) } }
             foreach (var kv in p.counters)
             {
                 string[] path = kv.Key.Split('.');
@@ -328,8 +255,6 @@ namespace Game.Firebase
             foreach (var kv in p.numbers) doc[kv.Key] = kv.Value;
             return doc;
         }
-
-        // ── Pending queue helpers ─────────────────────────────
 
         private static void Add(Pending p, string key, long delta)
         {

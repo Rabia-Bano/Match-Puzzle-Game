@@ -1,16 +1,3 @@
-// ============================================================
-//  ColorBombEffect.cs  —  SpecialTileEffect Subclass
-//
-//  Board par jis color ki tiles sabse zyada hon, ya jis tile ke
-//  saath swap hua ho — us color ki SARI tiles hataata hai.
-//
-//  REDESIGN (bug report ke baad — hard tile damage):
-//    Agar kabhi hard tile ka apna color us target color se match
-//    kare (rare — hard tiles usually TileColor.None hote hain), to
-//    yeh ab uska cell DIRECT hit ginta hai aur damage lagata hai,
-//    adjacency ke through nahi.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,30 +8,20 @@ namespace Match3
 {
     public class ColorBombEffect : SpecialTileEffect
     {
-        // ── Inspector ─────────────────────────────────────────
-
         [Header("Color Bomb Settings")]
         [SerializeField] private GameObject arcParticlePrefab;
         [SerializeField] private GameObject rainbowFlashPrefab;
         [SerializeField] private float flashDuration = 0.18f;
         [SerializeField] private float minClearDelay = 0.02f;
 
-        // ── Runtime state ─────────────────────────────────────
-
         private TileColor _targetColor = TileColor.None;
         private bool _targetColorSet = false;
-
-        // ─────────────────────────────────────────────────────
 
         public void SetTargetColor(TileColor color)
         {
             _targetColor     = color;
             _targetColorSet  = true;
         }
-
-        // ─────────────────────────────────────────────────────
-        //  PUBLIC OVERRIDE
-        // ─────────────────────────────────────────────────────
 
         public override IEnumerator Activate(Vector2Int position, List<Tile> clearedTiles)
         {
@@ -63,11 +40,6 @@ namespace Match3
                 yield break;
             }
 
-            // FIX (same root cause as the swap-activation bug): GetAllTilesOfColor()
-            // below explicitly excludes special tiles, so the color bomb's OWN cell
-            // (isSpecial == true) never appeared in `targets` and its jelly was
-            // never peeled — even though the bomb clearly fires from that cell.
-            // Peel its own cell's jelly here, same as every other clear path does.
             if (jellyManager != null && jellyManager.DecrementAt(position.x, position.y))
                 levelManager?.OnJellyCleared();
 
@@ -82,19 +54,9 @@ namespace Match3
 
             AddScoreForCleared(clearedTiles.Count);
 
-            // CORRECTED (Rabia's clarification): Color Bomb only damages the boss
-            // when it actually clears the boss's WEAKNESS colour — not any colour.
-            // When it does, it's a flat "5%"/5+ tier hit (bossData.damagePercent5Plus),
-            // same rule as clearing 5+ weakness tiles at once. Every other special
-            // tile's STANDALONE single blast still does zero boss damage — see
-            // SpecialTileEffect.ReportBossDamageOnClear (defaults false).
             if (targets.Count > 0)
                 BossDamageEvents.OnColorBombBlast?.Invoke(colorToClear);
         }
-
-        // ─────────────────────────────────────────────────────
-        //  ARC CLEAR ANIMATION
-        // ─────────────────────────────────────────────────────
 
         private IEnumerator ArcAndClear(Vector3 origin, List<Tile> targets, List<Tile> cleared)
         {
@@ -121,7 +83,6 @@ namespace Match3
                 if (t == null || t.State == TileState.Inactive) continue;
                 if (boardGrid.GetTile(t.GridX, t.GridY) != t)  continue;
 
-                // Special tile caught by the color bomb's sweep — chain-fire it.
                 if (t.Data != null && t.Data.isSpecial && specialActivator != null)
                 {
                     cleared.Add(t);
@@ -129,8 +90,6 @@ namespace Match3
                     continue;
                 }
 
-                // FIX: hard tile whose colour happened to match is a DIRECT
-                // hit — damage it right here (1 point).
                 if (t.Data != null && t.Data.isHardTile)
                 {
                     DamageHardTileDirect(t, cleared);
@@ -152,10 +111,6 @@ namespace Match3
 
             yield return new WaitForSeconds(0.05f);
         }
-
-        // ─────────────────────────────────────────────────────
-        //  HELPERS
-        // ─────────────────────────────────────────────────────
 
         private List<Tile> GetAllTilesOfColor(TileColor color)
         {

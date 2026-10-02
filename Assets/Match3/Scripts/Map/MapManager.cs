@@ -1,20 +1,3 @@
-// ============================================================
-//  MapManager.cs  —  STAR FIX
-//
-//  ROOT CAUSE of stars not showing after level completion:
-//  Start() called BuildMap() immediately — but ProfileManager
-//  loads Firebase profile ASYNC. levelStars dict was empty at
-//  that point → GetStars() returned 0 → nodes showed Unlocked
-//  instead of Completed → no stars visible.
-//
-//  FIX:
-//  • Check ProfileManager.IsLoaded in Start()
-//  • If already loaded → build immediately
-//  • If not loaded → subscribe to OnProfileLoaded UnityEvent
-//  • OnProfileLoaded fires → unsubscribe → BuildMap()
-//  • Fallback coroutine if ProfileManager doesn't exist
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using Game.Firebase;
@@ -36,9 +19,7 @@ public class MapManager : MonoBehaviour
 
     [Header("Level Config")]
     public int totalLevels      = 15;
-    public int bossEveryNLevels = 6; // NOTE: was 5 — now matches LevelSession.CheckUnlocks()'s "id % 6" boss cadence.
-                                      // If this GameObject already exists in your scene, Unity kept the OLD
-                                      // serialized value (5) — update it by hand in the Inspector too.
+    public int bossEveryNLevels = 6;
 
     [Header("Path Line")]
     public LineRenderer pathLine;
@@ -55,17 +36,14 @@ public class MapManager : MonoBehaviour
     private void OnDisable()
     {
         LevelNode.OnLevelSelected -= HandleLevelSelected;
-        // Clean up profile listener if we're still waiting
         if (ProfileManager.Instance != null)
             ProfileManager.Instance.OnProfileLoaded.RemoveListener(OnProfileLoaded);
     }
 
-    // ── Start: wait for profile before building map ───────────
     private void Start()
     {
         if (ProfileManager.Instance == null)
         {
-            // No Firebase — build with fallback (Level 1 unlocked only)
             Debug.LogWarning("[MapManager] ProfileManager not found — building offline map.");
             BuildAndScroll();
             return;
@@ -73,18 +51,15 @@ public class MapManager : MonoBehaviour
 
         if (ProfileManager.Instance.IsLoaded)
         {
-            // Profile already in memory (e.g. returning from gameplay)
             BuildAndScroll();
         }
         else
         {
-            // Firebase is still loading — wait for it
             Debug.Log("[MapManager] Waiting for profile to load...");
             ProfileManager.Instance.OnProfileLoaded.AddListener(OnProfileLoaded);
         }
     }
 
-    // Called when Firebase profile finishes loading
     private void OnProfileLoaded()
     {
         ProfileManager.Instance?.OnProfileLoaded.RemoveListener(OnProfileLoaded);
@@ -98,8 +73,6 @@ public class MapManager : MonoBehaviour
         DrawPath();
         StartCoroutine(OpenAtBottom());
     }
-
-    // ─── MAP BUILDING ─────────────────────────────────────────
 
     private void BuildMap()
     {
@@ -155,11 +128,6 @@ public class MapManager : MonoBehaviour
             stars = profile.GetStars(levelId);
             bool unlocked = profile.IsLevelUnlocked(levelId);
 
-            // FIXED: unlock chain is now checked FIRST. A level can never show
-            // as Completed unless it's genuinely unlocked — this prevents stale
-            // or out-of-sync star data (e.g. Level 3 has old stars but Level 1's
-            // stars got reset) from producing a broken map with two "PLAY"
-            // buttons / a level showing Completed while an earlier one isn't.
             if (!unlocked)
                 state = LevelNode.NodeState.Locked;
             else if (stars > 0)
@@ -195,8 +163,6 @@ public class MapManager : MonoBehaviour
         boss.Setup(bossId, afterLevel, prevComplete);
     }
 
-    // ─── PATH ─────────────────────────────────────────────────
-
     private void DrawPath()
     {
         if (pathLine == null || nodePositions == null || nodePositions.Count < 2) return;
@@ -224,8 +190,6 @@ public class MapManager : MonoBehaviour
         pathLine.endWidth   = 6f;
     }
 
-    // ─── SCROLL ───────────────────────────────────────────────
-
     private IEnumerator OpenAtBottom()
     {
         yield return new WaitForEndOfFrame();
@@ -234,8 +198,6 @@ public class MapManager : MonoBehaviour
             mapScrollRect.verticalNormalizedPosition = 0f;
     }
 
-    // ─── NAVIGATION ───────────────────────────────────────────
-
     private void HandleLevelSelected(int levelId)
     {
         Debug.Log($"[MapManager] Level {levelId} selected.");
@@ -243,8 +205,6 @@ public class MapManager : MonoBehaviour
         { Debug.LogWarning("[MapManager] GameManager.Instance is null."); return; }
         Match3.LevelLoader.LoadLevel(levelId);
     }
-
-    // ─── UTILITY ──────────────────────────────────────────────
 
     private PlayerProfile GetProfile()
     {

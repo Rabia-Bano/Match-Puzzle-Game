@@ -1,33 +1,3 @@
-// ============================================================
-//  BoosterSlotUI.cs  —  MonoBehaviour
-//
-//  Attach to each booster button in the bottom panel.
-//  Handles: icon, cooldown overlay, tap activation.
-//
-//  Bottom panel layout (from image):
-//  [Pet Button] [Hammer] [Crystal] [Beam] [Refresh]
-//   → Pet button handled by PetSystem.OnPetButtonTapped()
-//   → Other 4 are BoosterSlotUI components
-//
-//  BoosterType enum matches the visual icons in the image:
-//    Hammer   — destroys one tile of player's choice
-//    Crystal  — adds +2 moves  
-//    Beam     — clears center column
-//    Refresh  — reshuffles the board
-//
-//  UPDATED: coin balance now reads/writes through LocalSaveManager
-//  (Newtonsoft-based local save, wraps the single canonical global
-//  PlayerProfile) instead of the deprecated Match3.SaveManager /
-//  Match3.PlayerProfile.
-//
-//  NOTE: this component is a "pay-per-use" in-level power-up button
-//  (coins are spent at the moment of tap, during a level) — NOT the
-//  Store screen. It doesn't need LocalSaveManager.SaveBoosterInventory()
-//  (that's for a "buy now, own N, use later" store inventory). When the
-//  Store screen gets built, wire purchases there with SaveBoosterInventory
-//  as discussed separately.
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -37,38 +7,32 @@ namespace Match3
 {
     public enum BoosterType
     {
-        Hammer  = 0,   // destroy 1 tile
-        Crystal = 1,   // +2 moves
-        Beam    = 2,   // clear center column
-        Refresh = 3    // shuffle board
+        Hammer  = 0,
+        Crystal = 1,
+        Beam    = 2,
+        Refresh = 3
     }
 
     public class BoosterSlotUI : MonoBehaviour
     {
-        // ── Inspector ─────────────────────────────────────────
-
         [Header("Booster Config")]
         [SerializeField] private BoosterType boosterType;
-        [SerializeField] private int         boosterCost = 50;   // coins
+        [SerializeField] private int         boosterCost = 50;
 
         [Header("UI Elements")]
         [SerializeField] private Button          button;
         [SerializeField] private Image           iconImage;
         [SerializeField] private TextMeshProUGUI costText;
-        [SerializeField] private GameObject      cooldownOverlay;  // dark overlay when unavailable
-        [SerializeField] private TextMeshProUGUI cooldownText;     // "5" countdown
-        [SerializeField] private Image           cooldownRadial;   // radial fill cooldown
+        [SerializeField] private GameObject      cooldownOverlay;
+        [SerializeField] private TextMeshProUGUI cooldownText;
+        [SerializeField] private Image           cooldownRadial;
 
         [Header("References")]
         [SerializeField] private BoardGrid   boardGrid;
         [SerializeField] private MoveCounter moveCounter;
 
-        // ── Private ───────────────────────────────────────────
-
         private int  _cooldownMovesLeft = 0;
         private bool _isOnCooldown      => _cooldownMovesLeft > 0;
-
-        // ── Lifecycle ─────────────────────────────────────────
 
         private void Start()
         {
@@ -83,18 +47,14 @@ namespace Match3
             RefreshVisual();
         }
 
-        // ── Tap handler ───────────────────────────────────────
-
         private void OnTap()
         {
             if (_isOnCooldown)
             {
-                // Shake to indicate not ready
                 transform.DOShakePosition(0.3f, 5f, 10);
                 return;
             }
 
-            // Check coins (LocalSaveManager)
             PlayerProfile profile = LocalSaveManager.GetOrLoadProfile();
             if (profile == null)
             {
@@ -106,30 +66,23 @@ namespace Match3
             if (profile.coins < boosterCost)
             {
                 Debug.Log("[BoosterSlotUI] Not enough coins!");
-                // TODO: show "not enough coins" popup
                 transform.DOShakePosition(0.3f, 5f, 10);
                 return;
             }
 
-            // Deduct coins
             if (boosterCost > 0)
             {
                 profile.coins -= boosterCost;
                 LocalSaveManager.SaveProfile(profile);
             }
 
-            // Activate
             ActivateBooster();
 
-            // Set cooldown
             _cooldownMovesLeft = 3;
             RefreshVisual();
 
-            // Tap animation
             transform.DOPunchScale(Vector3.one * 0.25f, 0.2f, 5, 0.5f);
         }
-
-        // ── Booster logic ─────────────────────────────────────
 
         private void ActivateBooster()
         {
@@ -137,16 +90,9 @@ namespace Match3
             {
                 case BoosterType.Hammer:
                     Debug.Log("[Booster] Hammer — tap a tile to destroy it.");
-                    // TODO: enter "select tile" mode → BoardController.ActivateHammerMode()
                     break;
 
                 case BoosterType.Crystal:
-                    // FIX: was moveCounter.AddMoves(2), which is capped at
-                    // TotalMoves and silently does nothing if the player still
-                    // has most of their moves left — meaning coins could be
-                    // spent for zero benefit. AddBonusMoves() always applies,
-                    // exactly as MoveCounter.cs's own docs recommend for a
-                    // paid/rewarded move bonus.
                     moveCounter?.AddBonusMoves(2);
                     Debug.Log("[Booster] Crystal — +2 moves");
                     break;
@@ -156,19 +102,14 @@ namespace Match3
                     if (boardGrid != null)
                     {
                         int centerCol = boardGrid.Width / 2;
-                        // Reuse SpecialTileActivator logic via event or direct call
-                        // For now: direct column clear
                     }
                     break;
 
                 case BoosterType.Refresh:
                     Debug.Log("[Booster] Refresh — shuffle board.");
-                    // TODO: call BoardController.ShuffleBoard()
                     break;
             }
         }
-
-        // ── Cooldown ──────────────────────────────────────────
 
         private void OnMoveUsed(int remaining)
         {
@@ -199,7 +140,6 @@ namespace Match3
             if (button != null)
                 button.interactable = !onCooldown;
 
-            // Dim icon when on cooldown
             if (iconImage != null)
                 iconImage.color = onCooldown
                     ? new Color(0.5f, 0.5f, 0.5f, 1f)

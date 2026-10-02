@@ -5,20 +5,14 @@ using UnityEngine;
 [Serializable]
 public class PlayerProfile
 {
-    // ── Save schema version (used by LocalSaveManager / SaveMigration) ──
     public int saveVersion = 2;
 
-    // ── Identity ──────────────────────────────────────────────
     public string uid          = "";
     public string displayName  = "";
     public string email        = "";
     public string avatarUrl    = "";
-    // Preset avatar id (e.g. "avatar_1"). Resolved locally from
-    // Resources/Avatars/<avatarId>.asset — no network/Storage needed.
-    // Takes priority over avatarUrl when both are set.
     public string avatarId     = "";
 
-    // ── Progression ───────────────────────────────────────────
     public int  level           = 1;
     public int  totalScore      = 0;
     public int  gems            = 0;
@@ -26,36 +20,24 @@ public class PlayerProfile
     public int  levelsCompleted = 0;
     public bool isBanned        = false;
 
-    // ── Theme & Boss ──────────────────────────────────────────
     public int currentThemeIndex  = 0;
     public int highestBossDefeated = 0;
 
-    // ── Lives (NEW) ───────────────────────────────────────────
-    // nextLifeUtc: ISO-8601 UTC timestamp of when the NEXT life will be
-    // granted by regen. Empty string means "not regenerating" (lives are
-    // already full). See LivesManager.cs for the regen logic that reads
-    // and writes these two fields.
     public int    lives       = 5;
-    public string nextLifeUtc = "";    // ── Settings ──────────────────────────────────────────────
+    public string nextLifeUtc = "";
     public bool soundEnabled     = true;
     public bool musicEnabled     = true;
     public bool vibrationEnabled = true;
 
-    // ── Per-level stars:  "level_1" -> 3 ─────────────────────
     public Dictionary<string, int> levelStars = new Dictionary<string, int>();
 
-    // ── Collections ───────────────────────────────────────────
     public List<string> pets        = new List<string>();
-    public List<string> unlockedPets = new List<string>();   // alias kept for compatibility
+    public List<string> unlockedPets = new List<string>();
     public List<string> boosters    = new List<string>();
-    // NEW — ids of avatars bought in the Avatar Shop (free ones are never stored here)
     public List<string> ownedAvatars = new List<string>();
 
-    // ── Timestamps (stored as string for Firestore) ───────────
     public string joinDate    = DateTime.UtcNow.ToString("o");
     public string lastUpdated = DateTime.UtcNow.ToString("o");
-
-    // ── Helpers ───────────────────────────────────────────────
 
     public int GetStars(int levelIndex)
     {
@@ -86,8 +68,6 @@ public class PlayerProfile
     public bool UseBooster(string boosterId) => boosters.Remove(boosterId);
 
     public bool HasBooster(string boosterId) => boosters.Contains(boosterId);
-
-    // ── Firestore serialization ───────────────────────────────
 
     public Dictionary<string, object> ToFirestoreDict()
     {
@@ -126,7 +106,6 @@ public class PlayerProfile
         PlayerProfile p = new PlayerProfile();
         p.uid              = Get(data, "uid");
         p.displayName      = Get(data, "displayName");
-        // Purane accounts mein sirf "username" field tha — fallback
         if (string.IsNullOrEmpty(p.displayName))
             p.displayName = Get(data, "username");
         p.email            = Get(data, "email");
@@ -160,8 +139,6 @@ public class PlayerProfile
 
         return p;
     }
-
-    // ── Parse helpers ─────────────────────────────────────────
 
     private static string Get(Dictionary<string, object> d, string key)
         => d.ContainsKey(key) ? d[key]?.ToString() ?? "" : "";

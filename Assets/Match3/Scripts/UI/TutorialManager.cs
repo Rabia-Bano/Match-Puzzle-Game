@@ -3,7 +3,7 @@ using DG.Tweening;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using Game.Firebase; // NEW — for AuthManager.CurrentUid
+using Game.Firebase;
 
 namespace Match3
 {
@@ -55,12 +55,6 @@ namespace Match3
         [Tooltip("Camera that renders the game board. Defaults to Camera.main if left blank.")]
         [SerializeField] private Camera worldCamera;
 
-        // NEW — no longer a plain const. Tutorial-seen flags used to be saved as
-        // PlayerPrefs "Tut_<key>", which is DEVICE-wide, not account-wide — so once
-        // dismissed, a tutorial stayed hidden forever on that device even after
-        // logout, even for a brand-new guest session. GetPrefPrefix() folds the
-        // current account's Firebase UID into the key so each account (including
-        // each fresh guest session, which gets its own UID) sees tutorials again.
         private string GetPrefPrefix()
         {
             string uid = AuthManager.CurrentUid;
@@ -87,8 +81,6 @@ namespace Match3
             if (gotItButton != null) gotItButton.onClick.AddListener(OnGotItPressed);
         }
 
-        // ── Public API ────────────────────────────────────────
-        /// <summary>NEW — true while a tutorial card is on screen (LevelTimer pauses during this).</summary>
         public bool IsShowing => _showing;
 
         public bool HasSeen(string key) => PlayerPrefs.GetInt(GetPrefPrefix() + key, 0) == 1;
@@ -108,8 +100,6 @@ namespace Match3
             if (!_showing) ShowNext();
         }
 
-        // ── Internal ──────────────────────────────────────────
-
         private void ShowNext()
         {
             if (_queue.Count == 0) { _showing = false; return; }
@@ -126,7 +116,6 @@ namespace Match3
                 iconImage.enabled = entry.icon != null;
             }
 
-            // Remember which key is currently on screen so OnGotItPressed can mark it seen.
             _currentKey = key;
             if (worldPos.HasValue && spotlightRing != null && overlayCanvas != null && worldCamera != null)
             {
@@ -144,7 +133,7 @@ namespace Match3
                 if (spotlightRing != null) spotlightRing.gameObject.SetActive(false);
             }
 
-            if (card != null) card.anchoredPosition = Vector2.zero; // ALWAYS centered now
+            if (card != null) card.anchoredPosition = Vector2.zero;
 
             overlayRoot.SetActive(true);
             card.localScale = Vector3.zero;
@@ -162,7 +151,7 @@ namespace Match3
             card.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack).OnComplete(() =>
             {
                 overlayRoot.SetActive(false);
-                ShowNext(); // shows the next queued one, if any; otherwise stays hidden
+                ShowNext();
             });
         }
     }

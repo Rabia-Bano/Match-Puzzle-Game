@@ -1,22 +1,3 @@
-// ============================================================
-//  AvatarShopCard.cs  —  MonoBehaviour  (NEW)
-//
-//  ONE card = one avatar. Used in TWO places with the SAME prefab:
-//    1. Store scene → Avatars section (AvatarShopPanel spawns these)
-//    2. Profile panel → avatar picker grid (ProfilePanel spawns these
-//       if its avatarSlotPrefab has this component)
-//
-//  Button states:
-//    Locked   → "🪙 150"  → tap once → "Confirm?" (3 sec) → tap again = BUY
-//    Owned    → "Equip"   → tap = equip
-//    Equipped → "Equipped" (disabled)
-//
-//  Prefab children (all optional except avatarImage + actionButton):
-//    AvatarImage (Image), NameText (TMP), ActionButton (Button) +
-//    ActionLabel (TMP), LockOverlay (GameObject), EquippedBadge
-//    (GameObject), BadgeText (TMP, e.g. "RARE"), CoinIcon (GameObject)
-// ============================================================
-
 using System;
 using System.Collections;
 using UnityEngine;
@@ -42,10 +23,8 @@ namespace Match3
 
         public AvatarPresetData Data { get; private set; }
 
-        /// <summary>Optional listener for toast messages ("Not enough coins" …).</summary>
         public event Action<string> OnMessage;
 
-        /// <summary>Called after a successful equip (ProfilePanel closes its popup on this).</summary>
         public event Action<AvatarPresetData> OnEquipped;
 
         private bool _awaitingConfirm;
@@ -110,7 +89,6 @@ namespace Match3
                 return;
             }
 
-            // first tap → ask for confirmation
             if (!_awaitingConfirm)
             {
                 if (AvatarShopManager.CurrentCoins < Data.price)
@@ -126,7 +104,6 @@ namespace Match3
                 return;
             }
 
-            // second tap → buy
             _awaitingConfirm = false;
             if (_confirmRoutine != null) StopCoroutine(_confirmRoutine);
 

@@ -3,16 +3,6 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    /// <summary>
-    /// Put this directly ON prefabs that get Instantiate()'d at runtime:
-    ///   - PetSlot prefab (root Image -> F2, UseButton -> UniversalButton)
-    ///   - StoreItemCard prefab (root Image -> F4, BuyButton -> UniversalButton)
-    ///   - LeaderBoardRow prefab (root Image -> F4)
-    ///
-    /// Each clone themes itself on spawn and re-themes itself live if the theme
-    /// changes mid-session - no changes needed in StoreController / LeaderBoardController
-    /// spawn code.
-    /// </summary>
     public class ThemedPrefabPiece : MonoBehaviour
     {
         public enum FrameType { F1, F2, F3, F4, UniversalButton }

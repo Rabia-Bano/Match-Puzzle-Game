@@ -1,29 +1,3 @@
-// ============================================================
-//  LevelTimer.cs  —  MonoBehaviour  (NEW)
-//
-//  Optional countdown timer for REGULAR levels (never Boss Arena —
-//  the Boss scene has no LevelData / LevelManager, so this simply
-//  never exists there).
-//
-//  Rules:
-//    • Only active when the level's LevelData.useTimer is ON.
-//    • Starts counting when the player taps the goal panel's Start
-//      button (LevelResultManager calls StartTimer()).
-//    • Uses scaled time — the in-game Settings popup (timeScale = 0)
-//      and app-in-background automatically pause it.
-//    • Also pauses while a tutorial card is on screen.
-//    • Reaching 0 fires OnTimeUp → LevelResultManager waits for the
-//      board to settle, then: goals complete → WIN, otherwise → LOSE
-//      ("Time's Up!") — even if moves are still left.
-//    • Moves running out still loses as before; whichever happens
-//      first ends the level.
-//
-//  Attach to: an empty "LevelTimer" GameObject in GameBoardScene
-//  (or directly on the timer's UI object in GameHUD).
-//  Wire: timerText (TMP), optional fillImage / timerRoot / clock icon.
-//  Then drag it into LevelManager.levelTimer AND LevelResultManager.levelTimer.
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -50,10 +24,9 @@ namespace Match3
 
         [Header("Events")]
         public UnityEvent       OnTimeUp;
-        public UnityEvent<int>  OnSecondTick;     // passes whole seconds remaining
+        public UnityEvent<int>  OnSecondTick;
         public UnityEvent       OnWarningStarted;
 
-        // ── State ─────────────────────────────────────────────
         public bool  IsEnabledForLevel { get; private set; }
         public bool  IsRunning         { get; private set; }
         public float TotalSeconds      { get; private set; }
@@ -63,14 +36,9 @@ namespace Match3
         private int   _warningSeconds = 10;
         private int   _lastWholeSecond = -1;
         private bool  _warningActive;
-        private float _freezeTimeLeft;   // for a future "Time Freeze" booster
+        private float _freezeTimeLeft;
         private Tween _pulseTween;
 
-        // ─────────────────────────────────────────────────────
-        //  PUBLIC API
-        // ─────────────────────────────────────────────────────
-
-        /// <summary>Called by LevelManager.InitializeLevel(). Hides the widget if this level has no timer.</summary>
         public void Initialize(LevelData data)
         {
             StopPulse();
@@ -89,21 +57,18 @@ namespace Match3
             RefreshUI();
         }
 
-        /// <summary>Called by LevelResultManager when the player taps Start.</summary>
         public void StartTimer()
         {
             if (!IsEnabledForLevel) return;
             IsRunning = true;
         }
 
-        /// <summary>Stops counting for good (win / lose / exit).</summary>
         public void StopTimer()
         {
             IsRunning = false;
             StopPulse();
         }
 
-        /// <summary>Adds bonus seconds (e.g. a future "+10s" booster or pet power).</summary>
         public void AddTime(float seconds)
         {
             if (!IsEnabledForLevel || seconds <= 0f) return;
@@ -114,7 +79,6 @@ namespace Match3
             RefreshUI();
         }
 
-        /// <summary>Freezes the clock for N seconds (ready for the "Time Freeze" store booster).</summary>
         public void FreezeFor(float seconds)
         {
             if (!IsEnabledForLevel || seconds <= 0f) return;
@@ -123,13 +87,10 @@ namespace Match3
 
         public string FormattedRemaining => Format(RemainingSeconds);
 
-        // ─────────────────────────────────────────────────────
-
         private void Update()
         {
             if (!IsEnabledForLevel || !IsRunning) return;
 
-            // Pause while a tutorial card is covering the board.
             if (TutorialManager.Instance != null && TutorialManager.Instance.IsShowing) return;
 
             if (_freezeTimeLeft > 0f)
@@ -138,7 +99,7 @@ namespace Match3
                 return;
             }
 
-            RemainingSeconds -= Time.deltaTime;   // scaled → pauses with timeScale 0
+            RemainingSeconds -= Time.deltaTime;
 
             if (RemainingSeconds <= 0f)
             {

@@ -1,10 +1,3 @@
-// ============================================================
-//  LevelHUD.cs  —  Updated: GameManager → LevelManager
-//
-//  gameManager.OnScoreChanged → levelManager.OnScoreChanged
-//  gameManager.Score          → levelManager.Score
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -37,7 +30,7 @@ namespace Match3
         [Header("Data Sources")]
         [SerializeField] private MoveCounter   moveCounter;
         [SerializeField] private GoalTracker   goalTracker;
-        [SerializeField] private LevelManager  levelManager;   // ← was GameManager
+        [SerializeField] private LevelManager  levelManager;
         [SerializeField] private BoardRotation boardRotation;
 
         private int   _displayedScore;
@@ -54,7 +47,7 @@ namespace Match3
 
             if (levelManager != null)
             {
-                levelManager.OnScoreChanged.AddListener(UpdateScore);  // ← was gameManager
+                levelManager.OnScoreChanged.AddListener(UpdateScore);
                 UpdateScore(0);
             }
 

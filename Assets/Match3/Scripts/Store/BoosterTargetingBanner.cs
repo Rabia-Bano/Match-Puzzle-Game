@@ -1,12 +1,3 @@
-// ============================================================
-//  BoosterTargetingBanner.cs  —  MonoBehaviour
-//  Attach to: a small banner UI element in BOTH GameHUD and BossArenaHUD
-//  (same component, one instance per scene). Shows "Tap a tile..." style
-//  guidance + a Cancel button while BoosterManager is waiting for the
-//  player to tap a tile (Hammer / Row Bomb / Column Bomb / Shuffle 2 Tiles).
-//  Shuffle Board needs no targeting, so it never triggers this banner.
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,7 +7,7 @@ namespace Match3
 {
     public class BoosterTargetingBanner : MonoBehaviour
     {
-        [SerializeField] private GameObject bannerRoot;   // parent to show/hide
+        [SerializeField] private GameObject bannerRoot;
         [SerializeField] private TMP_Text   messageText;
         [SerializeField] private Button     cancelButton;
 

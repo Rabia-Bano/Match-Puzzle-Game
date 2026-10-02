@@ -1,10 +1,3 @@
-// ============================================================
-//  GoalTracker.cs  —  FIXED
-//  Change: Awake() mein warning remove kiya — goals runtime
-//  mein LevelManager.SetGoals() se set honge, Awake warning
-//  false alarm thi. ResetState() bhi null-safe bana diya.
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -34,10 +27,7 @@ namespace Match3
 
         public IReadOnlyList<GoalData> Goals => goals;
 
-        // ── Awake: warning hataya — goals baad mein set honge ─
-        private void Awake() { /* goals set hoti hain LevelManager.Start() mein */ }
-
-        // ── Public API ────────────────────────────────────────
+        private void Awake() {   }
 
         public void SetGoals(GoalData[] levelGoals)
         {
@@ -70,9 +60,6 @@ namespace Match3
                             relevant = true;
                         break;
                     case GoalType.ClearJelly:
-                        // Jelly isn't a TileData colour — it's a separate layer
-                        // tracked by JellyManager. See OnJellyCleared() below,
-                        // called directly by BoardController.ClearTiles().
                         break;
                     case GoalType.ReachScore:
                         break;
@@ -81,11 +68,6 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// Called by BoardController.ClearTiles() whenever clearing a normal
-        /// tile peels off a jelly layer underneath it (JellyManager.DecrementAt
-        /// returned true). Increments any incomplete ClearJelly goal.
-        /// </summary>
         public void OnJellyCleared()
         {
             if (goals == null) return;
@@ -97,11 +79,6 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// Called by BoardController.ClearTiles() whenever a hard-tile obstacle
-        /// finishes clearing (its HP reached 0 and it was removed). Increments
-        /// any incomplete ClearHardTile goal.
-        /// </summary>
         public void OnHardTileCleared()
         {
             if (goals == null) return;
@@ -113,11 +90,6 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// Called by BoardController.ClearTiles() whenever a dropdown-stone
-        /// tile reaches the bottom row and is collected. Increments any
-        /// incomplete CollectStone goal.
-        /// </summary>
         public void OnStoneCollected()
         {
             if (goals == null) return;

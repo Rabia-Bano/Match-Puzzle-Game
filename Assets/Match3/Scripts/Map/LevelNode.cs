@@ -1,14 +1,3 @@
-// ============================================================
-//  LevelNode.cs — STAR FIX
-//
-//  FIX 3: filledStar aur emptyStar assign na hone par
-//  stars show nahi hote the. Ab:
-//  - filledStar null hone par star Image ka color yellow karta hai
-//  - emptyStar null hone par gray color karta hai
-//  - Sprite assign hai to use karta hai
-//  - starContainer properly active/inactive hota hai
-// ============================================================
-
 using System;
 using System.Collections.Generic;
 using DG.Tweening;
@@ -34,8 +23,8 @@ public class LevelNode : MonoBehaviour
     public List<Image> starImages = new List<Image>(3);
 
     [Header("Star Sprites (optional — color fallback if null)")]
-    public Sprite filledStar;   // ← assign filled star sprite
-    public Sprite emptyStar;    // ← assign empty/gray star sprite
+    public Sprite filledStar;
+    public Sprite emptyStar;
 
     [Header("Boss Node")]
     public bool isBossNode = false;
@@ -103,7 +92,7 @@ public class LevelNode : MonoBehaviour
         var theme = Match3.Theme.ThemeManager.Instance != null
             ? Match3.Theme.ThemeManager.Instance.CurrentTheme
             : null;
-        if (theme == null) return; // keep whatever color was already there
+        if (theme == null) return;
 
         nodeImage.color = state switch
         {
@@ -114,12 +103,10 @@ public class LevelNode : MonoBehaviour
         };
     }
 
-    // ── FIX 3: Stars refresh ──────────────────────────────────
     private void RefreshStars(int earned)
     {
         if (starImages == null) return;
 
-        // Make sure starContainer is active
         if (starContainer != null) starContainer.SetActive(true);
 
         for (int i = 0; i < starImages.Count; i++)
@@ -130,7 +117,6 @@ public class LevelNode : MonoBehaviour
 
             if (got)
             {
-                // Filled star
                 if (filledStar != null)
                 {
                     starImages[i].sprite = filledStar;
@@ -138,13 +124,11 @@ public class LevelNode : MonoBehaviour
                 }
                 else
                 {
-                    // Color fallback — golden yellow star
                     starImages[i].color = new Color(1f, 0.85f, 0.1f, 1f);
                 }
             }
             else
             {
-                // Empty star
                 if (emptyStar != null)
                 {
                     starImages[i].sprite = emptyStar;
@@ -152,12 +136,10 @@ public class LevelNode : MonoBehaviour
                 }
                 else
                 {
-                    // Color fallback — gray
                     starImages[i].color = new Color(0.5f, 0.5f, 0.5f, 0.4f);
                 }
             }
 
-            // Make sure star Image is active
             starImages[i].gameObject.SetActive(true);
         }
     }

@@ -1,12 +1,3 @@
-// ============================================================
-//  PetCollectionSlot.cs  —  MonoBehaviour
-//  One grid cell in the Pet Companion Collection screen
-//  (matches the "Pet Companion" mockup you shared — portrait,
-//  name, Use/equip button, locked padlock overlay).
-//
-//  Attach to: the PetSlot prefab used by PetCollection's grid.
-// ============================================================
-
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,11 +9,11 @@ namespace Match3
         [Header("UI Elements")]
         [SerializeField] private Image           portrait;
         [SerializeField] private TextMeshProUGUI nameText;
-        [SerializeField] private TextMeshProUGUI skillNameText;     // NEW — shows PetData.skillName
-        [SerializeField] private GameObject      lockedOverlay;     // padlock icon + dim tint
-        [SerializeField] private TextMeshProUGUI lockedLabel;       // "Unlocks at Lvl 6"
-        [SerializeField] private GameObject      equippedBadge;     // "Equipped" ribbon/checkmark
-        [SerializeField] private Button          selectButton;      // tap to equip (only works if unlocked)
+        [SerializeField] private TextMeshProUGUI skillNameText;
+        [SerializeField] private GameObject      lockedOverlay;
+        [SerializeField] private TextMeshProUGUI lockedLabel;
+        [SerializeField] private GameObject      equippedBadge;
+        [SerializeField] private Button          selectButton;
 
         public PetData Data { get; private set; }
 
@@ -34,7 +25,7 @@ namespace Match3
             if (nameText != null) nameText.text   = data.petName;
 
             if (skillNameText != null)
-                skillNameText.text = isUnlocked ? data.skillName : "???";   // hide skill name while locked
+                skillNameText.text = isUnlocked ? data.skillName : "???";
 
             if (lockedOverlay != null) lockedOverlay.SetActive(!isUnlocked);
             if (lockedLabel   != null) lockedLabel.text = $"Unlocks after Level {data.unlockAfterLevel}";

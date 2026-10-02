@@ -1,35 +1,3 @@
-// ============================================================
-//  SpecialCombinations.cs  —  Set to use BoardController's shared pipeline
-//
-//  Jab do special tiles swap hon to yeh class decide karti hai
-//  kaun sa combo effect fire hoga.
-//
-//  REDESIGN (bug report ke baad — hard tile damage):
-//    ClearOneObstacleAwareTile() (Bomb+Bomb aur Rainbow+Rainbow combos
-//    ke liye) mein ab hard tile ka apna cell agar combo ke target area
-//    mein ho to wahi DIRECT HIT gina jata hai — turant damage. Poori
-//    adjacency-based DamageAndClearAdjacentHardTiles() method hata
-//    di gayi hai — ab kahin bhi "paas wali cell clear hui isliye
-//    hardtile bhi clear ho gayi" wala behavior nahi hai.
-//
-//    hardTileManager field bhi hata diya gaya hai — damage ab seedha
-//    Tile.DamageObstacle() se lagta hai, manager ki zaroorat nahi.
-//
-//  Combo Table:
-//  ┌──────────────────┬──────────────────────────────────────────┐
-//  │ Combo            │ Effect                                   │
-//  ├──────────────────┼──────────────────────────────────────────┤
-//  │ Striped+Striped  │ Poori ROW + poora COLUMN dono clear      │
-//  │ Wrapped+Striped  │ 5 rows ya 5 columns sweep (3 row pass)   │
-//  │ Bomb+Bomb        │ Poora board clear                        │
-//  │ Bomb+Striped     │ Sab us color ki tiles striped ban jayen  │
-//  │                  │ aur phir activate hon                    │
-//  └──────────────────┴──────────────────────────────────────────┘
-//
-//  Attach to: SpecialEffectsManager (same GameObject as effects)
-//  Wire all effect references + boardController in Inspector.
-// ============================================================
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -42,8 +10,6 @@ namespace Match3
     [RequireComponent(typeof(ColorBombEffect))]
     public class SpecialCombinations : MonoBehaviour
     {
-        // ── Inspector ─────────────────────────────────────────
-
         [Header("Effect Component References")]
         [SerializeField] private StripedTileEffect stripedEffect;
         [SerializeField] private WrappedTileEffect wrappedEffect;
@@ -52,9 +18,9 @@ namespace Match3
         [Header("Board References")]
         [SerializeField] private BoardGrid            boardGrid;
         [SerializeField] private LevelManager         levelManager;
-        [SerializeField] private BoardController      boardController;  // owns gravity/refill/cascade now
-        [SerializeField] private SpecialTileActivator specialActivator;  // lets combo blasts chain-fire specials they catch
-        [SerializeField] private JellyManager         jellyManager;      // lets combo blasts decrement jelly under tiles they clear
+        [SerializeField] private BoardController      boardController;
+        [SerializeField] private SpecialTileActivator specialActivator;
+        [SerializeField] private JellyManager         jellyManager;
 
         [Header("Special TileData Assets (for BombCombo replacement)")]
         [SerializeField] private TileData hStripedData;
@@ -69,37 +35,30 @@ namespace Match3
         [Tooltip("Delay between spawning each replacement special tile while the " +
                  "color bomb converts same-color tiles. Lower = faster. Only affects " +
                  "the Rainbow+Other combo, nothing else.")]
-        [SerializeField] private float rainbowComboSpawnStagger = 0.006f;   // was hardcoded 0.015f
+        [SerializeField] private float rainbowComboSpawnStagger = 0.006f;
         [Tooltip("Buffer pause after all replacement tiles are spawned, before they " +
                  "fire. Only affects the Rainbow+Other combo.")]
-        [SerializeField] private float rainbowComboFireBuffer = 0.05f;      // was hardcoded 0.1f
+        [SerializeField] private float rainbowComboFireBuffer = 0.05f;
 
         [Header("Other Special+Special Combo Speed")]
         [Tooltip("DEPRECATED — no longer used. The two pulses in a Bomb+Bomb combo now fire " +
                  "back-to-back with no pause, per Rabia's 'ek daam se blast' request. Left in " +
                  "place only so any old Inspector value doesn't get silently dropped.")]
-        [SerializeField] private float wrappedWrappedPulseGap = 0.04f;      // was hardcoded 0.08f
+        [SerializeField] private float wrappedWrappedPulseGap = 0.04f;
         [Tooltip("DEPRECATED — no longer used. The outer 5x5 ring of a Bomb+Bomb combo now " +
                  "clears simultaneously instead of tile-by-tile, per Rabia's 'ek daam se blast' " +
                  "request. Left in place only so any old Inspector value doesn't get silently dropped.")]
-        [SerializeField] private float wrappedWrappedRingStagger = 0.006f;  // was hardcoded 0.015f
+        [SerializeField] private float wrappedWrappedRingStagger = 0.006f;
         [Tooltip("Delay per column while a Rainbow+Rainbow combo sweeps the whole " +
                  "board. Only affects Rainbow+Rainbow.")]
-        [SerializeField] private float rainbowRainbowColumnStagger = 0.01f; // was hardcoded 0.025f
-
+        [SerializeField] private float rainbowRainbowColumnStagger = 0.01f;
 
         [Header("Timings")]
         [SerializeField] private float settleDelay = 0.08f;
 
-        // ── State ─────────────────────────────────────────────
-
         public bool IsRunning { get; private set; }
 
         private readonly List<Tile> _clearedThisCombo = new();
-
-        // ─────────────────────────────────────────────────────
-        //  PUBLIC ENTRY POINT
-        // ─────────────────────────────────────────────────────
 
         public bool TryHandleCombo(Tile tileA, Tile tileB)
         {
@@ -146,10 +105,6 @@ namespace Match3
             return false;
         }
 
-        // ─────────────────────────────────────────────────────
-        //  COMBO COROUTINES
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator ComboStripedStriped(Tile tA, Tile tB)
         {
             IsRunning = true;
@@ -161,24 +116,10 @@ namespace Match3
 
             PlayComboFlash(boardGrid.GridToWorld(ax, ay));
 
-            // CORRECTED (Rabia's rule): a 2-special-tile combo (this is one —
-            // Striped+Striped) DOES damage the boss according to how many
-            // weakness-colour tiles it destroys, same as a regular match, AND
-            // clears "ek daam se" (all at once) instead of a left-to-right wave —
-            // stripedEffect.BlastRow/BlastColumn are the SAME shared methods a
-            // standalone single Striped blast uses (which must keep its normal
-            // sweep feel and NOT damage the boss) — these two flags are how the
-            // two cases are told apart. Always reset in `finally` so they can
-            // never get stuck true for a later standalone blast.
             stripedEffect.ReportBossDamageOnClear = true;
             stripedEffect.InstantBlast            = true;
             try
             {
-                // SPEED FIX: row and column only ever share the swap's own center
-                // cell, which is already removed above (RemoveBothFromBoard) — so
-                // they never touch the same live tile. Safe to fire both at once
-                // instead of waiting for the row to fully finish before starting
-                // the column.
                 int pendingCross = 2;
                 StartCoroutine(RunCounted(stripedEffect.BlastRow(ay, _clearedThisCombo), () => pendingCross--));
                 StartCoroutine(RunCounted(stripedEffect.BlastColumn(ax, _clearedThisCombo), () => pendingCross--));
@@ -209,16 +150,10 @@ namespace Match3
 
             int halfSweep = wrappedStripedSweepCount / 2;
 
-            // CORRECTED (Rabia's rule): 2-special-tile combo → damage scales with
-            // weakness tiles destroyed, AND clears all at once (see ComboStripedStriped
-            // comment above for why both flags are needed).
             stripedEffect.ReportBossDamageOnClear = true;
             stripedEffect.InstantBlast            = true;
             try
             {
-                // SPEED FIX: each row (or column) in the sweep is a separate line —
-                // no two share a cell — so fire them all together instead of one
-                // finishing before the next starts.
                 int pendingSweep = 0;
 
                 if (isHorizontal)
@@ -269,15 +204,6 @@ namespace Match3
             int cx = tA.GridX, cy = tA.GridY;
             RemoveBothFromBoard(tA, tB);
 
-            // CORRECTED (Rabia's rule): 2-special-tile combo → damage scales with
-            // weakness tiles destroyed, AND clears all at once. Pulse3x3 is the
-            // same shared method a standalone single Wrapped blast uses (must
-            // keep its normal feel and NOT damage the boss) — these flags tell
-            // the two apart. The gap between the two pulses (wrappedWrappedPulseGap)
-            // is also skipped now — Rabia's "ek daam se" request — the double-pulse
-            // is still needed to damage 2-hit hard tiles, just back-to-back with
-            // no pause. Blast5x5AtPosition below now fires its own tiles
-            // simultaneously too (see that method).
             wrappedEffect.ReportBossDamageOnClear = true;
             wrappedEffect.InstantBlast            = true;
             try
@@ -340,12 +266,6 @@ namespace Match3
 
                 foreach (var pos in positions)
                 {
-                    // FIX: yeh tile ab replace ho raha hai (striped ban raha hai),
-                    // is se pehle agar iske neeche jelly hai to wo yahin peel karo —
-                    // warna yeh cell na to abhi jelly-decrement paata hai, na baad
-                    // mein FireSingleSpecial() ke blast scan mein aata hai (kyunki
-                    // wahan tak pahunchte pahunchte yeh position pehle hi khali
-                    // ho chuki hoti hai), aur jelly permanently reh jati hai.
                     if (jellyManager != null && jellyManager.DecrementAt(pos.x, pos.y))
                         levelManager?.OnJellyCleared();
 
@@ -372,28 +292,12 @@ namespace Match3
                         specials.Add(t);
                 }
 
-                // CORRECTED (Rabia's rule): 2-special-tile combo → damage scales
-                // with weakness tiles destroyed, AND clears all at once.
-                // FireSingleSpecial() below fires each newly-spawned special
-                // through stripedEffect.Activate() or wrappedEffect.Activate()
-                // (same shared methods a standalone single blast uses) — set
-                // these flags true here so these count as combo behaviour, not
-                // standalone (which must stay silent + keep its normal sweep feel).
                 stripedEffect.ReportBossDamageOnClear = true;
                 stripedEffect.InstantBlast            = true;
                 wrappedEffect.ReportBossDamageOnClear = true;
                 wrappedEffect.InstantBlast            = true;
                 try
                 {
-                    // SPEED FIX: these newly-spawned specials sit on completely
-                    // separate cells (no two ever share a position), so firing them
-                    // ONE AT A TIME (the old `yield return StartCoroutine(...)` per
-                    // tile, waiting for each to fully finish before starting the
-                    // next) was pure serial waiting for no reason — SpecialTileEffect
-                    // subclasses hold no mutable shared state between calls (verified:
-                    // only read-only Inspector fields), so running them concurrently
-                    // is safe. Fire them all together and wait once for all to finish,
-                    // instead of waiting once per tile.
                     int pending = specials.Count;
                     foreach (Tile sp in specials)
                         StartCoroutine(FireSingleSpecialCounted(sp, () => pending--));
@@ -410,26 +314,11 @@ namespace Match3
                 }
             }
 
-
             levelManager?.AddScore(_clearedThisCombo.Count * 90);
 
             yield return StartCoroutine(Settle());
             IsRunning = false;
         }
-
-        // ─────────────────────────────────────────────────────
-        //  OBSTACLE-AWARE SINGLE TILE CLEAR — shared by the raw
-        //  combo methods below (Blast5x5AtPosition, RainbowSweepClearAll)
-        //  that don't go through StripedTileEffect/WrappedTileEffect/
-        //  ColorBombEffect directly.
-        //    • Special tile   → chain-fire instead of erasing
-        //    • Hard tile      → its OWN cell is inside this combo's target
-        //                       area, so this is a DIRECT hit — damage it
-        //                       right here (1 point), never adjacency-based
-        //    • Dropdown stone → SKIPPED — immune to everything except
-        //                       actually reaching the bottom row
-        //    • Normal tile    → OnTileCleared + jelly decrement
-        // ─────────────────────────────────────────────────────
 
         private IEnumerator ClearOneObstacleAwareTile(Tile t, List<Tile> cleared)
         {
@@ -446,15 +335,13 @@ namespace Match3
                 yield break;
             }
 
-            // FIX: this cell is inside the combo's own target area — a
-            // DIRECT hit. Damage it right here instead of skipping it.
             if (t.Data != null && t.Data.isHardTile)
             {
                 DamageHardTileDirect(t, cleared);
                 yield break;
             }
 
-            if (t.Data != null && t.Data.isDropStone) yield break;   // immune to everything except reaching bottom
+            if (t.Data != null && t.Data.isDropStone) yield break;
 
             if (t.Data != null)
                 levelManager?.OnTileCleared(t.Data);
@@ -462,9 +349,6 @@ namespace Match3
             if (jellyManager != null && jellyManager.DecrementAt(t.GridX, t.GridY))
                 levelManager?.OnJellyCleared();
 
-            // NEW — Boss Arena fix: same bridge as SpecialTileEffect.ClearNormalTileTracked().
-            // Combo blasts (this method) have their own separate clear path and were
-            // never damaging the boss either.
             if (t.Data != null)
                 BossDamageEvents.OnSpecialTileCleared?.Invoke(t.Data.color);
 
@@ -476,15 +360,10 @@ namespace Match3
                 .OnComplete(() => t.transform.localScale = Vector3.one);
         }
 
-        /// <summary>
-        /// Same direct-hit hard tile logic as SpecialTileEffect.DamageHardTileDirect() —
-        /// duplicated here in a small local form because SpecialCombinations is a
-        /// plain MonoBehaviour, not a SpecialTileEffect subclass.
-        /// </summary>
         private void DamageHardTileDirect(Tile t, List<Tile> cleared)
         {
             bool broke = t.DamageObstacle();
-            if (!broke) return;   // took damage, still standing
+            if (!broke) return;
 
             levelManager?.OnHardTileCleared();
             cleared.Add(t);
@@ -496,13 +375,6 @@ namespace Match3
 
         private IEnumerator RainbowSweepClearAll()
         {
-            // UPDATED (Rabia's request): "pura board ek dam se clear ho" — the
-            // whole board now clears SIMULTANEOUSLY. Previously this went
-            // column-by-column with a small stagger delay between each column
-            // (rainbowRainbowColumnStagger), which gave a left-to-right sweep
-            // feel instead of one instant full-board clear. Every eligible
-            // tile now fires its clear coroutine in the same frame; we just
-            // wait for all of them to finish before returning.
             int pending = 0;
 
             for (int x = 0; x < boardGrid.Width; x++)
@@ -534,15 +406,12 @@ namespace Match3
 
         private IEnumerator Blast5x5AtPosition(int cx, int cy)
         {
-            // UPDATED (Rabia's request): the outer 5x5 ring now clears
-            // simultaneously — every cell fires its clear coroutine in the same
-            // frame — instead of one tile at a time with a stagger delay.
             int pending = 0;
 
             for (int dx = -2; dx <= 2; dx++)
             for (int dy = -2; dy <= 2; dy++)
             {
-                if (Mathf.Abs(dx) <= 1 && Mathf.Abs(dy) <= 1) continue; // already cleared by 3x3
+                if (Mathf.Abs(dx) <= 1 && Mathf.Abs(dy) <= 1) continue;
 
                 Tile t = boardGrid.GetTile(cx + dx, cy + dy);
                 if (t == null) continue;
@@ -581,43 +450,23 @@ namespace Match3
             }
         }
 
-        /// <summary>
-        /// Wraps FireSingleSpecial() with a completion callback so several of
-        /// these can be started together (StartCoroutine, no yield) and waited
-        /// on once as a group — used by ComboRainbowWithOther() to fire all the
-        /// newly-created specials in parallel instead of one after another.
-        /// </summary>
         private IEnumerator FireSingleSpecialCounted(Tile tile, System.Action onDone)
         {
             yield return StartCoroutine(FireSingleSpecial(tile));
             onDone?.Invoke();
         }
 
-        /// <summary>
-        /// Generic version of the same pattern — runs any coroutine and reports
-        /// back via callback when it's done, so several independent coroutines
-        /// (e.g. BlastRow + BlastColumn, or several sweep lines) can be started
-        /// together and waited on once as a group instead of one after another.
-        /// </summary>
         private IEnumerator RunCounted(IEnumerator routine, System.Action onDone)
         {
             yield return StartCoroutine(routine);
             onDone?.Invoke();
         }
 
-        // ─────────────────────────────────────────────────────
-        //  SETTLE
-        // ─────────────────────────────────────────────────────
-
         private IEnumerator Settle()
         {
             yield return new WaitForSeconds(settleDelay);
             yield return StartCoroutine(boardController.SettleAfterExternalClear());
         }
-
-        // ─────────────────────────────────────────────────────
-        //  UTILITY
-        // ─────────────────────────────────────────────────────
 
         private void SetEffectReferences()
         {
@@ -689,8 +538,6 @@ namespace Match3
         {
             Camera.main?.transform.DOShakePosition(0.2f, 0.08f, 10, 45f);
         }
-
-        // ─────────────────────────────────────────────────────
 
         private void Awake()
         {

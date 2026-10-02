@@ -1,17 +1,3 @@
-// ============================================================
-//  LevelData.cs  —  Phase 5 Update
-//  Now uses GoalData[] assets instead of inline GoalData structs.
-//  Create via: Assets > Create > Match3 > Level Data
-//
-//  UPDATE:
-//    • blankPositions  — cells that are HOLES in the board (no gem,
-//      no obstacle, no jelly, nothing can move into them). Use the
-//      visual grid painter (LevelDataEditor.cs) to click cells on/off.
-//    • useTimer / timeLimitSeconds — optional countdown for REGULAR
-//      levels. Time up = level lost even if moves are left. Boss Arena
-//      never uses this (it has no LevelData).
-// ============================================================
-
 using UnityEngine;
 
 namespace Match3
@@ -79,9 +65,6 @@ namespace Match3
         public int scoreTar2 = 1000;
         public int scoreTar3 = 2000;
 
-        // ── Helpers ────────────────────────────────────────────
-
-        /// <summary>NEW — true if (x,y) is listed in blankPositions.</summary>
         public bool IsBlankCell(int x, int y)
         {
             if (blankPositions == null) return false;

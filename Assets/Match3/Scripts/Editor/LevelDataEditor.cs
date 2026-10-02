@@ -1,17 +1,3 @@
-// ============================================================
-//  LevelDataEditor.cs  —  Custom Inspector (EDITOR ONLY)
-//
-//  MUST live inside a folder named "Editor" (e.g. Assets/Scripts/Editor/)
-//  — Unity strips Editor folders from the Android build automatically.
-//
-//  Adds a clickable "Board Painter" grid under every LevelData asset:
-//    1. Pick a brush (Blank / Jelly / Hard Tile / Stone / Erase)
-//    2. Click cells on the grid — the TOP row on screen is the TOP row
-//       of the board (y = height-1), the bottom row is y = 0.
-//  It simply edits blankPositions / jellyPositions / hardTilePositions /
-//  stonePositions for you, so you never have to type coordinates.
-// ============================================================
-
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEditor;
@@ -127,7 +113,7 @@ namespace Match3.EditorTools
                 case Brush.Blank:
                     bool makeBlank = !Has(l.blankPositions, x, y);
                     l.blankPositions = Toggle(l.blankPositions, x, y, makeBlank);
-                    if (makeBlank)   // a hole can't hold anything else
+                    if (makeBlank)
                     {
                         l.jellyPositions    = Toggle(l.jellyPositions,    x, y, false);
                         l.hardTilePositions = Toggle(l.hardTilePositions, x, y, false);

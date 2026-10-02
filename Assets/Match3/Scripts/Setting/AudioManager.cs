@@ -1,31 +1,3 @@
-// ============================================================
-//  AudioManager.cs  —  MonoBehaviour, DontDestroyOnLoad singleton
-//
-//  Central sound system for the whole game. Same pattern as
-//  GameManager / SceneLoader — lives only in PreloaderScene on the
-//  persistent "FirebaseManagers" GameObject (or its own persistent
-//  object), Awake() does the singleton + DontDestroyOnLoad dance,
-//  and every other scene just calls AudioManager.Instance.
-//
-//  Two AudioSources:
-//    musicSource — loops background music, one clip at a time
-//    sfxSource   — one-shots for match/swap/win/etc (PlayOneShot,
-//                  so overlapping SFX don't cut each other off)
-//
-//  Clips are wired in the Inspector as (key, AudioClip) pairs and
-//  converted into Dictionaries at Awake() for fast lookup by string
-//  key — e.g. AudioManager.Instance.PlaySFX("tile_match").
-//
-//  Volume + mute state persist to PlayerPrefs using the same flat
-//  lower_snake_case key style as LocalSaveManager.cs:
-//    "audio_music_volume", "audio_sfx_volume",
-//    "audio_music_on",     "audio_sfx_on"
-//
-//  Attach to: an empty GameObject named "AudioManager" that lives
-//  inside PreloaderScene (sibling of FirebaseManagers, or as a
-//  child of it — either is fine, it does its own DontDestroyOnLoad).
-// ============================================================
-
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -34,8 +6,6 @@ using UnityEngine.Audio;
 public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance { get; private set; }
-
-    // ── Inspector: Audio Sources ────────────────────────────
 
     [Header("Audio Sources")]
     [Tooltip("Loops background music. Auto-created at Awake() if left empty.")]
@@ -51,8 +21,6 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioMixer audioMixer;
     [SerializeField] private string musicMixerParam = "MusicVolume";
     [SerializeField] private string sfxMixerParam    = "SFXVolume";
-
-    // ── Inspector: Clip Libraries ───────────────────────────
 
     [Serializable]
     public class SoundEntry
@@ -71,27 +39,20 @@ public class AudioManager : MonoBehaviour
     [Tooltip("Keys are up to you — e.g. \"map_theme\", \"ice_world_theme\", \"boss_theme\".")]
     [SerializeField] private List<SoundEntry> musicClips = new();
 
-    // ── Runtime lookup ───────────────────────────────────────
-
     private Dictionary<string, AudioClip> _sfxDict;
     private Dictionary<string, AudioClip> _musicDict;
     private string _currentMusicKey;
-
-    // ── PlayerPrefs keys (match LocalSaveManager's naming style) ──
 
     private const string PREF_MUSIC_VOL = "audio_music_volume";
     private const string PREF_SFX_VOL   = "audio_sfx_volume";
     private const string PREF_MUSIC_ON  = "audio_music_on";
     private const string PREF_SFX_ON    = "audio_sfx_on";
 
-    // ── Public volume / mute state ───────────────────────────
-
     private float _musicVolume = 1f;
     private float _sfxVolume   = 1f;
     private bool  _musicOn     = true;
     private bool  _sfxOn       = true;
 
-    /// <summary>0..1. Setting this updates the source/mixer AND saves to PlayerPrefs.</summary>
     public float MusicVolume
     {
         get => _musicVolume;
@@ -104,7 +65,6 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    /// <summary>0..1. Setting this updates the source/mixer AND saves to PlayerPrefs.</summary>
     public float SFXVolume
     {
         get => _sfxVolume;
@@ -117,7 +77,6 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    /// <summary>Master on/off toggle for music (Settings screen "Music" checkbox).</summary>
     public bool MusicOn
     {
         get => _musicOn;
@@ -130,7 +89,6 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    /// <summary>Master on/off toggle for SFX (Settings screen "Sound" checkbox).</summary>
     public bool SFXOn
     {
         get => _sfxOn;
@@ -141,8 +99,6 @@ public class AudioManager : MonoBehaviour
             PlayerPrefs.Save();
         }
     }
-
-    // ── Lifecycle ─────────────────────────────────────────────
 
     private void Awake()
     {
@@ -194,7 +150,6 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    /// <summary>Reads saved volume/mute state from PlayerPrefs (defaults: full volume, both on).</summary>
     private void LoadSettings()
     {
         _musicVolume = PlayerPrefs.GetFloat(PREF_MUSIC_VOL, 1f);
@@ -206,9 +161,6 @@ public class AudioManager : MonoBehaviour
         ApplySFXVolume();
     }
 
-    // ── Public API ────────────────────────────────────────────
-
-    /// <summary>Plays a one-shot SFX by key. Does nothing (with a warning) if the key isn't in the library.</summary>
     public void PlaySFX(string key)
     {
         if (!_sfxOn) return;
@@ -224,7 +176,6 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    /// <summary>Starts looping (by default) background music by key. Ignores the call if the same track is already playing.</summary>
     public void PlayMusic(string key, bool loop = true)
     {
         if (string.IsNullOrEmpty(key)) return;
@@ -244,14 +195,11 @@ public class AudioManager : MonoBehaviour
         if (_musicOn) musicSource.Play();
     }
 
-    /// <summary>Stops whatever music is currently playing.</summary>
     public void StopMusic()
     {
         _currentMusicKey = null;
         musicSource.Stop();
     }
-
-    // ── Internal helpers ──────────────────────────────────────
 
     private void ApplyMusicVolume()
     {
@@ -259,7 +207,6 @@ public class AudioManager : MonoBehaviour
 
         if (audioMixer != null && !string.IsNullOrEmpty(musicMixerParam))
         {
-            // Mixer expects decibels; -80dB is effectively silent.
             float db = vol > 0.0001f ? Mathf.Log10(vol) * 20f : -80f;
             audioMixer.SetFloat(musicMixerParam, db);
         }
@@ -270,15 +217,6 @@ public class AudioManager : MonoBehaviour
 
         if (!_musicOn && musicSource.isPlaying) musicSource.Pause();
         else if (_musicOn && !musicSource.isPlaying && musicSource.clip != null) musicSource.Play();
-        // FIX: was UnPause() before — that only resumes a source that was
-        // previously paused via Pause(). If MusicOn was false right from the
-        // very first PlayMusic() call (e.g. loaded from a saved "off"
-        // setting), musicSource.Play() was never called at all, so there was
-        // nothing to "un-pause" — the source was stuck in a stopped state
-        // forever, until the whole app restarted and PlayMusic() ran again
-        // with MusicOn already true. Play() correctly handles BOTH cases:
-        // it resumes from a paused position if the source was paused, and
-        // starts fresh if the source was never started.
     }
 
     private void ApplySFXVolume()
@@ -289,8 +227,5 @@ public class AudioManager : MonoBehaviour
             float db = vol > 0.0001f ? Mathf.Log10(vol) * 20f : -80f;
             audioMixer.SetFloat(sfxMixerParam, db);
         }
-        // sfxSource itself doesn't need a volume set — PlayOneShot takes the
-        // volume per-call (see PlaySFX above), which is what lets multiple
-        // overlapping SFX each carry the right volume.
     }
 }

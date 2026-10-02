@@ -1,32 +1,15 @@
-// ============================================================
-//  GoalData.cs  —  ScriptableObject
-//  Create via: Assets > Create > Match3 > Goal Data
-//
-//  One GoalData asset = one objective in a level.
-//  A level can have multiple goals (all must be complete to win).
-//
-//  GoalType:
-//    CollectTile  — clear N tiles of a specific TileData type
-//    ClearJelly   — clear N jelly/blocker tiles (future feature)
-//    ReachScore   — accumulate N score points
-// ============================================================
-
 using UnityEngine;
 
 namespace Match3
 {
-    // ── Enums ─────────────────────────────────────────────────
-
     public enum GoalType
     {
-        CollectTile   = 0,   // clear N tiles matching targetTile
-        ClearJelly    = 1,   // clear N jelly cells (blocker layer)
-        ReachScore    = 2,   // reach requiredAmount score
-        ClearHardTile = 3,   // break N hard tile (blocker) obstacles
-        CollectStone  = 4    // drop N dropdown stones to the bottom row
+        CollectTile   = 0,
+        ClearJelly    = 1,
+        ReachScore    = 2,
+        ClearHardTile = 3,
+        CollectStone  = 4
     }
-
-    // ── ScriptableObject ──────────────────────────────────────
 
     [CreateAssetMenu(
         fileName = "GoalData_New",
@@ -52,11 +35,7 @@ namespace Match3
         [Tooltip("Short label shown under the icon (e.g. 'Red x20').")]
         public string goalLabel;
 
-        // ── Runtime (non-serialised) ──────────────────────────
-
         [System.NonSerialized] public int currentAmount;
-
-        // ── Helpers ───────────────────────────────────────────
 
         public bool   IsComplete     => currentAmount >= requiredAmount;
         public float  Progress       => requiredAmount > 0
@@ -66,15 +45,11 @@ namespace Match3
 
         public void   ResetProgress() => currentAmount = 0;
 
-        /// <summary>
-        /// Increments progress by delta. Clamps to requiredAmount.
-        /// Returns true if this increment completed the goal.
-        /// </summary>
         public bool AddProgress(int delta = 1)
         {
             bool wasDone = IsComplete;
             currentAmount = Mathf.Min(currentAmount + delta, requiredAmount);
-            return !wasDone && IsComplete;   // true = just completed
+            return !wasDone && IsComplete;
         }
 
         public override string ToString() =>

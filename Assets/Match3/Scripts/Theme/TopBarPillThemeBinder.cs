@@ -3,10 +3,6 @@ using UnityEngine.UI;
 
 namespace Match3.Theme
 {
-    /// <summary>
-    /// Attach to TopBarPanel in every scene that has Lives/Coins pills.
-    /// Applies F1 to both pill backgrounds.
-    /// </summary>
     public class TopBarPillThemeBinder : MonoBehaviour, IThemeApplier
     {
         [SerializeField] private Image livePillBG;

@@ -1,19 +1,3 @@
-// ============================================================
-//  ThemeBackgroundAnimator.cs  —  NEW
-//
-//  Makes a scene BACKGROUND feel alive: very slow zoom-in/out and a
-//  gentle drift (the "Ken Burns" effect), strength taken from the
-//  active ThemeData (animateBackground / backgroundMotionStrength).
-//  Also plays a soft "pop" + fade when the theme changes.
-//
-//  Attach to: the background object of every scene —
-//    • a UI Image (Login BG, Map PathBackground, Store BG ...) OR
-//    • a world SpriteRenderer (GameBoard / BossGameBoard Background).
-//  No wiring needed. Make the background ~10% bigger than the screen
-//  (or set its RectTransform to stretch with a small negative margin)
-//  so the zoom never shows the edges.
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
@@ -65,7 +49,6 @@ namespace Match3.Theme
         private void HandleThemeChanged(ThemeData theme)
         {
             ReadTheme(theme);
-            // small celebratory pop when the world changes
             transform.DOKill();
             transform.DOPunchScale(_baseScale * 0.06f, 0.6f, 4, 0.5f).SetUpdate(true);
         }

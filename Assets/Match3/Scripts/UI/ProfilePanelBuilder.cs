@@ -1,25 +1,3 @@
-// ============================================================
-//  ProfilePanelBuilder.cs
-//
-//  WHAT THIS DOES:
-//  Ye script Unity mein puri ProfilePanel UI automatically
-//  banata hai — koi manual UI work nahi karna.
-//
-//  HOW TO USE:
-//  1. Kisi bhi scene mein empty GameObject banao "ProfileBuilder"
-//  2. Is script ko us par attach karo
-//  3. Inspector mein Canvas assign karo
-//  4. Play karo — poori ProfilePanel ban jayegi
-//  5. Play band karo — Panel Hierarchy mein saved rahega
-//  6. Is script (ProfilePanelBuilder) ko GameObject se REMOVE karo
-//  7. Ab ProfilePanel.cs use hogi — builder ki zaroorat nahi
-//
-//  GUEST vs REGISTERED:
-//  - Guest player ko "Register Account" button dikhega
-//  - Registered player ko "Logout" button dikhega
-//  - Guest register kare to progress safe rehti hai (same UID)
-// ============================================================
-
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -41,13 +19,12 @@ public class ProfilePanelBuilder : MonoBehaviour
     public Sprite cameraIconSprite;
 
     [Header("Colors")]
-    public Color headerBgColor     = new Color(0.20f, 0.47f, 0.75f, 1f);  // Blue
-    public Color statCardColor     = new Color(0.94f, 0.96f, 0.99f, 1f);  // Light blue-grey
-    public Color logoutBtnColor    = new Color(0.90f, 0.25f, 0.25f, 1f);  // Red
-    public Color registerBtnColor  = new Color(0.18f, 0.70f, 0.45f, 1f);  // Green
-    public Color saveBtnColor      = new Color(0.20f, 0.60f, 0.86f, 1f);  // Blue
+    public Color headerBgColor     = new Color(0.20f, 0.47f, 0.75f, 1f);
+    public Color statCardColor     = new Color(0.94f, 0.96f, 0.99f, 1f);
+    public Color logoutBtnColor    = new Color(0.90f, 0.25f, 0.25f, 1f);
+    public Color registerBtnColor  = new Color(0.18f, 0.70f, 0.45f, 1f);
+    public Color saveBtnColor      = new Color(0.20f, 0.60f, 0.86f, 1f);
 
-    // ── Called from Inspector button or automatically in Start ──
     [ContextMenu("Build Profile Panel")]
     public void BuildPanel()
     {
@@ -57,7 +34,6 @@ public class ProfilePanelBuilder : MonoBehaviour
             return;
         }
 
-        // Delete old panel if rebuilding
         Transform existing = targetCanvas.transform.Find("ProfilePanel");
         if (existing != null)
         {
@@ -73,18 +49,14 @@ public class ProfilePanelBuilder : MonoBehaviour
 #endif
     }
 
-    // ── MAIN BUILDER ──────────────────────────────────────────
-
     private GameObject BuildProfilePanel(Transform canvasRoot)
     {
-        // ── Root: full-screen dimmed overlay ──────────────────
         GameObject root = CreateGO("ProfilePanel", canvasRoot);
         RectTransform rootRT = AddFullStretch(root);
         Image dimmer = root.AddComponent<Image>();
         dimmer.color = new Color(0, 0, 0, 0.65f);
-        root.SetActive(false);   // Hidden by default
+        root.SetActive(false);
 
-        // ── Center card ───────────────────────────────────────
         GameObject card = CreateGO("Card", root.transform);
         RectTransform cardRT = card.GetComponent<RectTransform>();
         cardRT.anchorMin = new Vector2(0.03f, 0.04f);
@@ -105,27 +77,20 @@ public class ProfilePanelBuilder : MonoBehaviour
         ContentSizeFitter cardCSF = card.AddComponent<ContentSizeFitter>();
         cardCSF.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        // ── SECTION 1: Header (blue) ──────────────────────────
         GameObject header = BuildHeader(card.transform, root);
 
-        // ── SECTION 2: Stats grid ─────────────────────────────
         GameObject statsSection = BuildStatsSection(card.transform);
 
-        // ── SECTION 3: Pets row ───────────────────────────────
         GameObject petsSection = BuildPetsSection(card.transform);
 
-        // ── SECTION 4: Action buttons ─────────────────────────
         GameObject buttonsSection = BuildButtonsSection(card.transform, root);
 
-        // ── ProfilePanel.cs attach karo ───────────────────────
         ProfilePanel profilePanel = root.AddComponent<ProfilePanel>();
         WireProfilePanel(profilePanel, root, header, statsSection,
                          petsSection, buttonsSection);
 
         return root;
     }
-
-    // ── SECTION BUILDERS ──────────────────────────────────────
 
     private GameObject BuildHeader(Transform parent, GameObject panelRoot)
     {
@@ -134,7 +99,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         Image headerBg = header.AddComponent<Image>();
         headerBg.color = headerBgColor;
 
-        // Close button (top-right)
         GameObject closeBtn = CreateGO("CloseButton", header.transform);
         SetAnchored(closeBtn, new Vector2(1,1), new Vector2(1,1), new Vector2(-12,-12), 36, 36);
         Button closeBtnComp = closeBtn.AddComponent<Button>();
@@ -143,7 +107,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         if (closeIconSprite != null) closeBtnImg.sprite = closeIconSprite;
         else
         {
-            // Text fallback
             GameObject closeLabel = CreateGO("X", closeBtn.transform);
             TMP_Text ct = closeLabel.AddComponent<TextMeshProUGUI>();
             ct.text = "✕"; ct.fontSize = 16; ct.color = Color.white;
@@ -151,7 +114,6 @@ public class ProfilePanelBuilder : MonoBehaviour
             AddFullStretch(closeLabel);
         }
 
-        // Avatar container (center of header)
         GameObject avatarContainer = CreateGO("AvatarContainer", header.transform);
         RectTransform acRT = avatarContainer.GetComponent<RectTransform>();
         acRT.anchorMin = new Vector2(0.5f, 1f);
@@ -159,7 +121,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         acRT.sizeDelta = new Vector2(150, 150);
         acRT.anchoredPosition = new Vector2(0, -115f);
 
-        // Avatar circle
         GameObject avatarGO = CreateGO("AvatarImage", avatarContainer.transform);
         RectTransform avatarRT = avatarGO.GetComponent<RectTransform>();
         avatarRT.anchorMin = Vector2.zero; avatarRT.anchorMax = Vector2.one;
@@ -167,11 +128,9 @@ public class ProfilePanelBuilder : MonoBehaviour
         Image avatarImg = avatarGO.AddComponent<Image>();
         avatarImg.color = new Color(0.70f, 0.85f, 0.98f, 1f);
         if (defaultAvatarSprite != null) avatarImg.sprite = defaultAvatarSprite;
-        // Circular mask
         Mask avatarMask = avatarGO.AddComponent<Mask>();
         avatarMask.showMaskGraphic = true;
 
-        // Camera icon (change avatar) — bottom-right of avatar
         GameObject camBtn = CreateGO("ChangeAvatarButton", avatarContainer.transform);
         SetAnchored(camBtn, new Vector2(1,0), new Vector2(1,0), new Vector2(-2, 2), 26, 26);
         Button camBtnComp = camBtn.AddComponent<Button>();
@@ -186,7 +145,6 @@ public class ProfilePanelBuilder : MonoBehaviour
             AddFullStretch(camLabel.gameObject);
         }
 
-        // Display name row (name + edit pencil)
         GameObject nameRow = CreateGO("NameRow", header.transform);
         SetAnchored(nameRow, new Vector2(0,1), new Vector2(1,1), new Vector2(0, -245f), 0, 50);
         HorizontalLayoutGroup nameRowHLG = nameRow.AddComponent<HorizontalLayoutGroup>();
@@ -215,14 +173,12 @@ public class ProfilePanelBuilder : MonoBehaviour
         editIcon.alignment = TextAlignmentOptions.Center;
         AddFullStretch(editIcon.gameObject);
 
-        // Edit name INPUT (hidden by default)
         GameObject editInputGO = CreateGO("EditNameInput", header.transform);
         SetAnchored(editInputGO, new Vector2(0.1f,1), new Vector2(0.9f,1),
                     new Vector2(0,-148f), 0, 36);
         TMP_InputField inputComp = editInputGO.AddComponent<TMP_InputField>();
         Image inputBg = editInputGO.AddComponent<Image>();
         inputBg.color = Color.white;
-        // Input child text area
         GameObject textArea = CreateGO("TextArea", editInputGO.transform);
         AddFullStretch(textArea);
         textArea.AddComponent<RectMask2D>();
@@ -239,9 +195,8 @@ public class ProfilePanelBuilder : MonoBehaviour
         inputComp.textComponent   = inputTxt;
         inputComp.placeholder     = placeholderTxt;
         inputComp.characterLimit  = 20;
-        editInputGO.SetActive(false);  // Hidden by default
+        editInputGO.SetActive(false);
 
-        // Save / Cancel row (hidden by default)
         GameObject saveRow = CreateGO("SaveCancelRow", header.transform);
         SetAnchored(saveRow, new Vector2(0.1f,1), new Vector2(0.9f,1),
                     new Vector2(0,-190f), 0, 32);
@@ -253,9 +208,8 @@ public class ProfilePanelBuilder : MonoBehaviour
                                                 "Cancel", Color.grey, Color.white, 13);
         GameObject saveBtnGO   = MakeTextButton("SaveNameButton", saveRow.transform,
                                                 "Save ✓", saveBtnColor, Color.white, 13);
-        saveRow.SetActive(false);  // Hidden by default
+        saveRow.SetActive(false);
 
-        // Email text
         GameObject emailGO = CreateGO("EmailText", header.transform);
         SetAnchored(emailGO, new Vector2(0,1), new Vector2(1,1), new Vector2(0,-285f), 0, 35);
         TMP_Text emailTxt = emailGO.AddComponent<TextMeshProUGUI>();
@@ -273,25 +227,22 @@ public class ProfilePanelBuilder : MonoBehaviour
         Image sectionBg = section.AddComponent<Image>();
         sectionBg.color = Color.white;
 
-        // 2x2 Grid
         GameObject grid = CreateGO("StatsGrid", section.transform);
         RectTransform gridRT = grid.GetComponent<RectTransform>();
         gridRT.anchorMin = Vector2.zero; gridRT.anchorMax = Vector2.one;
         gridRT.offsetMin = new Vector2(12, 10);
         gridRT.offsetMax = new Vector2(-12, -10);
         GridLayoutGroup glg = grid.AddComponent<GridLayoutGroup>();
-        glg.cellSize        = new Vector2(0, 120);   // width auto via constraint
+        glg.cellSize        = new Vector2(0, 120);
         glg.spacing         = new Vector2(15, 15);
         glg.constraint      = GridLayoutGroup.Constraint.FixedColumnCount;
         glg.constraintCount = 2;
         glg.childAlignment  = TextAnchor.UpperCenter;
 
-        // ContentSizeFitter so grid fills
         ContentSizeFitter gridCSF = grid.AddComponent<ContentSizeFitter>();
         gridCSF.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         gridCSF.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
 
-        // 4 stat cards
         MakeStatCard("LevelText",           grid.transform, "Level",          "1",      statCardColor);
         MakeStatCard("TotalScoreText",       grid.transform, "Total Score",    "0",      statCardColor);
         MakeStatCard("CoinsText",            grid.transform, "Coins",          "0",      statCardColor);
@@ -307,7 +258,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         Image sectionBg = section.AddComponent<Image>();
         sectionBg.color = new Color(0.97f, 0.97f, 0.99f, 1f);
 
-        // Label
         GameObject label = CreateGO("PetsLabel", section.transform);
         SetAnchored(label, new Vector2(0,1), new Vector2(1,1),
                     new Vector2(14,-2), 0, 18);
@@ -315,7 +265,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         labelTxt.text = "🐾 Pets Collected";
         labelTxt.fontSize = 30; labelTxt.color = new Color(0.4f,0.4f,0.5f);
 
-        // Pets count badge
         GameObject countGO = CreateGO("PetsCountText", section.transform);
         SetAnchored(countGO, new Vector2(0,1), new Vector2(0,1),
                     new Vector2(132,-2), 30, 18);
@@ -324,7 +273,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         countTxt.color = new Color(0.2f,0.5f,0.85f);
         countTxt.fontStyle = FontStyles.Bold;
 
-        // Pets HorizontalLayoutGroup container
         GameObject petsContainer = CreateGO("PetsContainer", section.transform);
         SetAnchored(petsContainer, new Vector2(0,0), new Vector2(1,1),
                     new Vector2(12,8), 0, -28);
@@ -332,14 +280,13 @@ public class ProfilePanelBuilder : MonoBehaviour
         petsHLG.spacing = 15; petsHLG.childAlignment = TextAnchor.MiddleLeft;
         petsHLG.childControlHeight = true; petsHLG.childForceExpandWidth = false;
 
-        // 5 placeholder pet slots (ProfilePanel will replace these at runtime)
         for (int i = 0; i < 5; i++)
         {
             GameObject slot = CreateGO($"PetSlot_{i}", petsContainer.transform);
             Image slotImg = slot.AddComponent<Image>();
             slotImg.color = (i < 1)
-                ? new Color(0.85f, 0.93f, 1f, 1f)   // first slot: unlocked
-                : new Color(0.90f, 0.90f, 0.93f, 1f); // rest: locked
+                ? new Color(0.85f, 0.93f, 1f, 1f)
+                : new Color(0.90f, 0.90f, 0.93f, 1f);
             LayoutElement slotLE = slot.AddComponent<LayoutElement>();
             slotLE.preferredWidth = 80; slotLE.preferredHeight = 80;
 
@@ -366,7 +313,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         sectionVLG.childControlWidth = true; sectionVLG.childForceExpandWidth = true;
         sectionVLG.childControlHeight = false; sectionVLG.childForceExpandHeight = false;
 
-        // Error text (hidden by default)
         GameObject errorGO = CreateGO("ErrorText", section.transform);
         TMP_Text errorTxt = errorGO.AddComponent<TextMeshProUGUI>();
         errorTxt.text = "";
@@ -376,21 +322,18 @@ public class ProfilePanelBuilder : MonoBehaviour
         errorLE.preferredHeight = 16;
         errorGO.SetActive(false);
 
-        // Logout button (shown for registered players)
         GameObject logoutBtnGO = MakeTextButton("LogoutButton", section.transform,
                                                 "Logout", logoutBtnColor, Color.white, 24);
         LayoutElement logoutLE = logoutBtnGO.AddComponent<LayoutElement>();
         logoutLE.preferredHeight = 70;
 
-        // Register button (shown for guest players — hidden by default)
         GameObject registerBtnGO = MakeTextButton("RegisterButton", section.transform,
                                                   "Save Progress — Create Account",
                                                   registerBtnColor, Color.white, 22);
         LayoutElement registerLE = registerBtnGO.AddComponent<LayoutElement>();
         registerLE.preferredHeight = 70;
-        registerBtnGO.SetActive(false);  // ProfilePanel will toggle based on IsGuest
+        registerBtnGO.SetActive(false);
 
-        // Loading overlay (full card — hidden by default)
         GameObject loadingOverlay = CreateGO("LoadingOverlay", panelRoot.transform);
         SetAnchored(loadingOverlay, Vector2.zero, Vector2.one,
                     new Vector2(50, 80), new Vector2(-50, -80));
@@ -407,8 +350,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         return section;
     }
 
-    // ── WIRE PROFILEPANEL.CS FIELDS ──────────────────────────
-
     private void WireProfilePanel(ProfilePanel pp, GameObject root,
         GameObject header, GameObject statsSection,
         GameObject petsSection, GameObject buttonsSection)
@@ -417,7 +358,6 @@ public class ProfilePanelBuilder : MonoBehaviour
 
         pp.panelRoot           = root;
 
-        // Header refs
         Transform headerT = cardT.Find("Header");
         pp.avatarImage         = headerT.Find("AvatarContainer/AvatarImage")?.GetComponent<Image>();
         pp.changeAvatarButton  = headerT.Find("AvatarContainer/ChangeAvatarButton")?.GetComponent<Button>();
@@ -428,19 +368,16 @@ public class ProfilePanelBuilder : MonoBehaviour
         pp.cancelNameButton    = headerT.Find("SaveCancelRow/CancelNameButton")?.GetComponent<Button>();
         pp.emailText           = headerT.Find("EmailText")?.GetComponent<TMP_Text>();
 
-        // Stats refs
         Transform gridT = cardT.Find("StatsSection/StatsGrid");
         pp.levelText            = gridT?.Find("LevelText/ValueText")?.GetComponent<TMP_Text>();
         pp.totalScoreText       = gridT?.Find("TotalScoreText/ValueText")?.GetComponent<TMP_Text>();
         pp.coinsText            = gridT?.Find("CoinsText/ValueText")?.GetComponent<TMP_Text>();
         pp.levelsCompletedText  = gridT?.Find("LevelsCompletedText/ValueText")?.GetComponent<TMP_Text>();
 
-        // Pets refs
         Transform petsT = cardT.Find("PetsSection");
         pp.petsCountText   = petsT?.Find("PetsCountText")?.GetComponent<TMP_Text>();
         pp.petsContainer   = petsT?.Find("PetsContainer");
 
-        // Button refs
         Transform btnT = cardT.Find("ButtonsSection");
         pp.logoutButton    = btnT?.Find("LogoutButton")?.GetComponent<Button>();
         pp.registerButton  = btnT?.Find("RegisterButton")?.GetComponent<Button>();
@@ -453,13 +390,9 @@ public class ProfilePanelBuilder : MonoBehaviour
         Debug.Log("[ProfilePanelBuilder] ProfilePanel.cs wired successfully.");
     }
 
-    // ── HELPERS ───────────────────────────────────────────────
-
     private GameObject CreateGO(string name, Transform parent)
     {
         var go = new GameObject(name);
-        // RectTransform MUST be added before parenting to Canvas
-        // otherwise Unity gives it a regular Transform (no UI layout)
         go.AddComponent<RectTransform>();
         go.transform.SetParent(parent, false);
         return go;
@@ -481,7 +414,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         le.minHeight       = height;
     }
 
-    /// anchorPivot = anchor + pivot combined (for corner-anchored elements)
     private void SetAnchored(GameObject go, Vector2 anchorMin, Vector2 anchorMax,
                               Vector2 anchoredPos, float width, float height)
     {
@@ -494,8 +426,6 @@ public class ProfilePanelBuilder : MonoBehaviour
 
     private void AddRoundedCorners(GameObject go)
     {
-        // Unity default Image with no sprite = square corners.
-        // For actual rounded corners assign a rounded-rect sprite in Inspector later.
         var img = go.GetComponent<Image>() ?? go.AddComponent<Image>();
         img.type = Image.Type.Sliced;
     }
@@ -516,13 +446,11 @@ public class ProfilePanelBuilder : MonoBehaviour
         vlg.childControlWidth = true; vlg.childForceExpandWidth = true;
         vlg.childControlHeight = true;
 
-        // Label
         TMP_Text labelTxt = CreateGO("LabelText", card.transform).AddComponent<TextMeshProUGUI>();
         labelTxt.text = label; labelTxt.fontSize = 10;
         labelTxt.color = new Color(0.45f, 0.45f, 0.55f);
         labelTxt.alignment = TextAlignmentOptions.Center;
 
-        // Value (this is what ProfilePanel.cs sets at runtime)
         TMP_Text valueTxt = CreateGO("ValueText", card.transform).AddComponent<TextMeshProUGUI>();
         valueTxt.text = value; valueTxt.fontSize = 42;
         valueTxt.fontStyle = FontStyles.Bold;
@@ -538,7 +466,6 @@ public class ProfilePanelBuilder : MonoBehaviour
         btnImg.color = bg;
         Button btnComp = btn.AddComponent<Button>();
 
-        // Hover tint
         ColorBlock cb = btnComp.colors;
         cb.highlightedColor = new Color(bg.r * 0.9f, bg.g * 0.9f, bg.b * 0.9f);
         cb.pressedColor     = new Color(bg.r * 0.75f, bg.g * 0.75f, bg.b * 0.75f);

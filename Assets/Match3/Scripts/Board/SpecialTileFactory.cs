@@ -1,22 +1,3 @@
-// ============================================================
-//  SpecialTileFactory.cs  — FIXED
-//
-//  Bug Fixed: Tile visually nahi badal raha tha kyunki
-//  boardGrid.SpawnTile() pool se ek naya tile deta hai
-//  aur Tile.Initialize() sirf sprite set karta hai —
-//  lekin RefreshVisuals() call nahi ho raha tha clearly.
-//
-//  Fix: Ab SpawnTile ke baad explicitly tile ka
-//  SpriteRenderer update hota hai aur ek scale "pop"
-//  animation bhi play hoti hai taake player ko pata chale.
-//
-//  Special tile DATA assets Inspector mein assign karein:
-//    hStripedData  → TileData_HStriped  (isSpecial=true, RowBlast)
-//    vStripedData  → TileData_VStriped  (isSpecial=true, ColBlast)
-//    wrappedData   → TileData_Wrapped   (isSpecial=true, Bomb)
-//    colorBombData → TileData_ColorBomb (isSpecial=true, Rainbow)
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
@@ -38,32 +19,14 @@ namespace Match3
         [Header("Optional FX")]
         [SerializeField] private GameObject spawnFxPrefab;
 
-        // ── Public API ────────────────────────────────────────
-
-        /// <summary>
-        /// Turns a qualifying match into a special tile at its pivot cell.
-        /// Returns the PIVOT TILE'S ORIGINAL TileData (before it became
-        /// special) via pivotData, plus its grid position — or null/-1,-1 if
-        /// no special was created (Line3 match, or invalid data).
-        ///
-        /// WHY THIS RETURNS DATA NOW: the pivot tile is removed from
-        /// group.Tiles right below (it transforms instead of being
-        /// destroyed), so BoardController's caller previously had NO WAY to
-        /// report it for goal tracking / jelly decrement — every match that
-        /// spawned a special silently under-counted color-collection goals
-        /// by exactly 1 (a 4-match registered as 3, a 5-match as 4). The
-        /// pivot still visually "matched" for goal purposes, it just became
-        /// a special tile instead of clearing — so it should still count.
-        /// </summary>
         public TileData TryCreateSpecial(MatchGroup group, BoardGrid boardGrid, out int pivotX, out int pivotY)
         {
             pivotX = -1;
             pivotY = -1;
 
             TileData specialData = GetSpecialData(group.Shape);
-            if (specialData == null) return null;    // Line3 → no special
+            if (specialData == null) return null;
 
-            // Validate special data is assigned
             if (specialData.sprite == null)
             {
                 Debug.LogError($"[SpecialTileFactory] {group.Shape} TileData has no sprite assigned! " +
@@ -76,15 +39,12 @@ namespace Match3
 
             int px = pivot.GridX;
             int py = pivot.GridY;
-            TileData pivotOriginalData = pivot.Data; // capture BEFORE it's overwritten below
+            TileData pivotOriginalData = pivot.Data;
 
-            // Remove pivot from the clear list — it becomes the special tile
             group.Tiles.Remove(pivot);
 
-            // Remove current tile from board
             boardGrid.RemoveTile(px, py);
 
-            // Spawn special tile from pool
             Tile special = boardGrid.SpawnTile(px, py, specialData);
 
             if (special == null)
@@ -93,11 +53,8 @@ namespace Match3
                 return null;
             }
 
-            // ── CRITICAL FIX: Force visual refresh ───────────
-            // RefreshVisuals() sets the SpriteRenderer.sprite from TileData
             special.RefreshVisuals();
 
-            // ── Pop animation so player sees it appear ────────
             special.transform.localScale = Vector3.one * BoardGrid.TileVisualScale;
             special.transform.DOPunchScale(
                     Vector3.one * (popScale - 1f),
@@ -106,16 +63,11 @@ namespace Match3
                     elasticity: 0.5f)
                 .SetEase(Ease.OutBack);
 
-            // Optional particle
             PlaySpawnFx(special.transform.position);
 
             Debug.Log($"[SpecialTileFactory] ✓ Created {group.Shape} → " +
                       $"{specialData.name} at ({px},{py})");
 
-            // ── NEW: first-time "you just made a special tile!" callout ──
-            // Only fires the FIRST time each shape is ever created for this
-            // player (TutorialManager tracks that) — every later match of the
-            // same shape is silent, exactly like the real games do.
             string tutorialKey = group.Shape switch
             {
                 MatchShape.HLine4 => "special_striped_h",
@@ -127,14 +79,11 @@ namespace Match3
             };
             if (tutorialKey != null)
                 TutorialManager.Instance?.RequestTutorial(tutorialKey, boardGrid.GridToWorld(px, py));
-            // ──────────────────────────────────────────────────────────
 
             pivotX = px;
             pivotY = py;
             return pivotOriginalData;
         }
-
-        // ── Shape → Data mapping ─────────────────────────────
 
         private TileData GetSpecialData(MatchShape shape) => shape switch
         {
@@ -145,8 +94,6 @@ namespace Match3
             MatchShape.LShape => wrappedData,
             _                 => null
         };
-
-        // ── Pivot selection ───────────────────────────────────
 
         private static Tile PickPivot(List<Tile> tiles, MatchShape shape, BoardGrid boardGrid)
         {

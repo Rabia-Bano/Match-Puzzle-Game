@@ -1,30 +1,3 @@
-// ============================================================
-//  ThemeAmbientFX.cs  —  MonoBehaviour (lives on ThemeManager, DontDestroyOnLoad)  NEW
-//
-//  Theme ke hisaab se HAR scene mein chalti hui animation:
-//    Ice World    → Snow falling (girti hui barf)
-//    Forest World → Leaves swaying down (ghoomte hue patte)
-//    Desert World → Sand blowing + dust puffs (hawa mein uD-ti ret)
-//    Space World  → Twinkling stars + shooting stars
-//    (+ Bubbles, Embers, Petals, Rain, Fireflies for future themes)
-//
-//  KAISE KAAM KARTA HAI:
-//    • Ek alag Screen-Space-Overlay Canvas banata hai jis par koi
-//      GraphicRaycaster nahi — is liye ye KABHI bhi button/tile touch
-//      block nahi karta.
-//    • Particles UI Images hain (sprites code se generate hoti hain —
-//      koi asset import karne ki zaroorat nahi). Aap chahein to
-//      ThemeData.ambientCustomSprite mein apni sprite de sakti hain.
-//    • Theme change par fade-out → naya effect → fade-in.
-//    • Unscaled time use karta hai, is liye Pause popup mein bhi
-//      barf girti rehti hai (achha lagta hai).
-//    • Scene-specific control: kisi scene mein ThemeAmbientSceneSettings
-//      component daal kar density kam/zyada ya band kar sakti hain
-//      (e.g. GameBoard mein 50% taake gameplay distract na ho).
-//
-//  SETUP: kuch nahi — ThemeManager.Awake() isko khud add kar deta hai.
-// ============================================================
-
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -49,7 +22,6 @@ namespace Match3.Theme
         [Tooltip("Seconds for the fade when the theme changes.")]
         [SerializeField] private float fadeDuration = 0.8f;
 
-        // ── internals ─────────────────────────────────────────
         private Canvas        _canvas;
         private CanvasGroup   _group;
         private RectTransform _root;
@@ -61,7 +33,7 @@ namespace Match3.Theme
             public Vector2       pos, vel;
             public float         size, rot, rotSpeed, phase, phaseSpeed, alpha, life, maxLife;
             public Color         color;
-            public bool          special;   // shooting star / dust puff
+            public bool          special;
         }
 
         private readonly List<Particle> _particles = new();
@@ -74,8 +46,6 @@ namespace Match3.Theme
         private float _shootingStarTimer;
 
         private static readonly Dictionary<string, Sprite> SpriteCache = new();
-
-        // ─────────────────────────────────────────────────────
 
         private void Awake()
         {
@@ -106,9 +76,6 @@ namespace Match3.Theme
                 ThemeManager.Instance.OnThemeChanged -= HandleThemeChanged;
         }
 
-        // ── Public API ────────────────────────────────────────
-
-        /// <summary>Turn all ambient effects on/off (e.g. a "Low graphics" toggle in Settings).</summary>
         public void SetEffectsEnabled(bool on)
         {
             effectsEnabled = on;
@@ -118,23 +85,18 @@ namespace Match3.Theme
 
         public bool EffectsEnabled => effectsEnabled;
 
-        // ── Events ────────────────────────────────────────────
-
         private void HandleThemeChanged(ThemeData theme)
         {
             if (theme == null) return;
             if (_activeTheme == null || _particles.Count == 0) { Rebuild(theme); return; }
-            _pendingTheme = theme;      // fade out current, then Update() swaps
+            _pendingTheme = theme;
             _switching    = true;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // re-read per-scene settings (density / sorting / on-off)
             if (_activeTheme != null) Rebuild(_activeTheme);
         }
-
-        // ── Build ─────────────────────────────────────────────
 
         private void BuildCanvas()
         {
@@ -153,7 +115,6 @@ namespace Match3.Theme
             _group = go.AddComponent<CanvasGroup>();
             _group.blocksRaycasts = false;
             _group.interactable   = false;
-            // NOTE: no GraphicRaycaster on purpose → can never block touches.
 
             _root = (RectTransform)go.transform;
         }
@@ -165,7 +126,6 @@ namespace Match3.Theme
             _activeTheme = theme;
             ClearParticles();
 
-            // per-scene overrides
             var sceneSettings = FindFirstObjectByType<ThemeAmbientSceneSettings>();
             _densityMul = sceneSettings != null ? sceneSettings.densityMultiplier : 1f;
             _canvas.sortingOrder = sceneSettings != null && sceneSettings.overrideSortingOrder
@@ -198,7 +158,6 @@ namespace Match3.Theme
                 _particles.Add(p);
             }
 
-            // Space theme: one extra slot reserved for shooting stars
             if (_type == ThemeAmbientType.Stars && count > 0)
             {
                 var go = new GameObject("shootingStar", typeof(RectTransform), typeof(Image));
@@ -219,14 +178,12 @@ namespace Match3.Theme
             _particles.Clear();
         }
 
-        // ── Spawn rules per type ──────────────────────────────
-
         private Vector2 Half
         {
             get
             {
                 Vector2 size = _root.rect.size;
-                if (size.x < 10f || size.y < 10f)   // canvas not laid out yet (first frame)
+                if (size.x < 10f || size.y < 10f)
                 {
                     float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : 0.5625f;
                     size = new Vector2(referenceResolution.y * aspect, referenceResolution.y);
@@ -287,9 +244,9 @@ namespace Match3.Theme
 
                 case ThemeAmbientType.Stars:
                     p.size = Random.Range(6f, 22f);
-                    p.vel  = new Vector2(0f, -Random.Range(3f, 10f));   // very slow drift
+                    p.vel  = new Vector2(0f, -Random.Range(3f, 10f));
                     p.rotSpeed = Random.Range(-15f, 15f);
-                    p.phaseSpeed = Random.Range(1f, 3.5f);            // twinkle speed
+                    p.phaseSpeed = Random.Range(1f, 3.5f);
                     p.alpha = Random.Range(0.5f, 1f);
                     p.pos = new Vector2(xRand, prewarm ? yRand : h.y + p.size);
                     break;
@@ -307,7 +264,7 @@ namespace Match3.Theme
                     p.size = Random.Range(6f, 16f);
                     p.vel  = new Vector2(Random.Range(-20f, 20f), Random.Range(90f, 220f));
                     p.rotSpeed = 0f;
-                    p.phaseSpeed = Random.Range(6f, 12f);             // flicker
+                    p.phaseSpeed = Random.Range(6f, 12f);
                     p.alpha = Random.Range(0.6f, 1f);
                     p.maxLife = Random.Range(2.5f, 5f);
                     p.pos = new Vector2(xRand, prewarm ? yRand : -h.y - p.size);
@@ -342,13 +299,10 @@ namespace Match3.Theme
                 p.img.sprite = GetSprite("soft");
         }
 
-        // ── Update ────────────────────────────────────────────
-
         private void Update()
         {
             float dt = Time.unscaledDeltaTime;
 
-            // Theme-change cross-fade
             if (_switching)
             {
                 _group.alpha = Mathf.MoveTowards(_group.alpha, 0f, dt / Mathf.Max(0.01f, fadeDuration * 0.5f));
@@ -408,7 +362,7 @@ namespace Match3.Theme
                         break;
                     case ThemeAmbientType.Fireflies:
                         a = 0.25f + 0.75f * (0.5f + 0.5f * Mathf.Sin(p.phase * 2f));
-                        if (Random.value < dt * 0.6f)   // change direction now and then
+                        if (Random.value < dt * 0.6f)
                             p.vel = Random.insideUnitCircle.normalized * Random.Range(15f, 45f);
                         break;
                 }
@@ -416,14 +370,12 @@ namespace Match3.Theme
                 p.pos += p.vel * sp * dt;
                 p.rot += p.rotSpeed * sp * dt;
 
-                // wrap / respawn
                 float m = p.size + 40f;
                 bool outside = p.pos.y < -h.y - m || p.pos.y > h.y + m || p.pos.x < -h.x - m || p.pos.x > h.x + m;
                 if (outside)
                 {
                     if (_type == ThemeAmbientType.Fireflies || _type == ThemeAmbientType.Stars)
                     {
-                        // wrap around instead of respawning at an edge
                         if (p.pos.x < -h.x - m) p.pos.x = h.x + m; else if (p.pos.x > h.x + m) p.pos.x = -h.x - m;
                         if (p.pos.y < -h.y - m) p.pos.y = h.y + m; else if (p.pos.y > h.y + m) p.pos.y = -h.y - m;
                     }
@@ -444,7 +396,6 @@ namespace Match3.Theme
                 _shootingStarTimer -= dt;
                 if (_shootingStarTimer > 0f) return;
 
-                // launch from the top area, diagonally down
                 p.pos   = new Vector2(Random.Range(-h.x, h.x * 0.6f), Random.Range(h.y * 0.2f, h.y));
                 float dir = Random.value < 0.5f ? 1f : -1f;
                 p.vel   = new Vector2(dir * Random.Range(900f, 1300f), -Random.Range(450f, 650f));
@@ -462,8 +413,6 @@ namespace Match3.Theme
             if (a <= 0f) p.alpha = 0f;
         }
 
-        // ── Procedural sprites (no art assets needed) ─────────
-
         private static Sprite DefaultSpriteFor(ThemeAmbientType type)
         {
             switch (type)
@@ -474,7 +423,7 @@ namespace Match3.Theme
                 case ThemeAmbientType.Stars:     return GetSprite("sparkle");
                 case ThemeAmbientType.Bubbles:   return GetSprite("bubble");
                 case ThemeAmbientType.Rain:      return GetSprite("streak");
-                default:                         return GetSprite("soft");   // sand, embers, fireflies
+                default:                         return GetSprite("soft");
             }
         }
 
@@ -489,7 +438,7 @@ namespace Match3.Theme
             for (int y = 0; y < N; y++)
             for (int x = 0; x < N; x++)
             {
-                float u = (x + 0.5f) / N * 2f - 1f;   // -1..1
+                float u = (x + 0.5f) / N * 2f - 1f;
                 float v = (y + 0.5f) / N * 2f - 1f;
                 float r = Mathf.Sqrt(u * u + v * v);
                 float a = 0f;
@@ -504,7 +453,7 @@ namespace Match3.Theme
                     case "flake":
                     {
                         float ang = Mathf.Atan2(v, u);
-                        float arms = Mathf.Abs(Mathf.Cos(ang * 3f));              // 6 arms
+                        float arms = Mathf.Abs(Mathf.Cos(ang * 3f));
                         float armMask = Mathf.Clamp01((arms - 0.86f) * 8f) * Mathf.Clamp01(1f - r);
                         float core = Mathf.Clamp01(1f - r * 3.2f);
                         float glow = Mathf.Clamp01(1f - r) * 0.25f;
@@ -515,14 +464,13 @@ namespace Match3.Theme
                     case "leaf":
                     case "petal":
                     {
-                        // almond shape = intersection of two circles, pointing up
                         float w = key == "leaf" ? 0.55f : 0.75f;
                         float d1 = Vector2.Distance(new Vector2(u, v), new Vector2(-w, 0f));
                         float d2 = Vector2.Distance(new Vector2(u, v), new Vector2( w, 0f));
                         float rad = 1f + w * 0.05f;
                         float inside = Mathf.Min(rad - d1, rad - d2);
                         a = Mathf.Clamp01(inside * 12f);
-                        if (key == "leaf" && Mathf.Abs(u) < 0.04f && Mathf.Abs(v) < 0.85f) shade = 0.7f;  // mid-rib
+                        if (key == "leaf" && Mathf.Abs(u) < 0.04f && Mathf.Abs(v) < 0.85f) shade = 0.7f;
                         else shade = 0.85f + 0.15f * (1f - Mathf.Abs(u));
                         break;
                     }
@@ -547,7 +495,7 @@ namespace Match3.Theme
                     case "streak":
                     {
                         float across = Mathf.Clamp01(1f - Mathf.Abs(u) * 2.2f);
-                        float along  = Mathf.Clamp01((v + 1f) * 0.5f);        // fades toward the tail
+                        float along  = Mathf.Clamp01((v + 1f) * 0.5f);
                         a = across * along;
                         break;
                     }
