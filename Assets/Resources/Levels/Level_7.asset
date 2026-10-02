@@ -12,19 +12,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
   m_Name: Level_7
   m_EditorClassIdentifier: 
-  width: 8
-  height: 8
+  width: 10
+  height: 10
+  blankPositions:
+  - {x: 1, y: 9}
+  - {x: 2, y: 8}
+  - {x: 2, y: 9}
+  - {x: 3, y: 9}
+  - {x: 8, y: 9}
+  - {x: 7, y: 8}
+  - {x: 7, y: 9}
+  - {x: 6, y: 9}
+  - {x: 1, y: 0}
+  - {x: 2, y: 0}
+  - {x: 3, y: 0}
+  - {x: 2, y: 1}
+  - {x: 6, y: 0}
+  - {x: 7, y: 0}
+  - {x: 8, y: 0}
+  - {x: 7, y: 1}
+  - {x: 0, y: 4}
+  - {x: 0, y: 5}
+  - {x: 9, y: 5}
+  - {x: 9, y: 4}
   moveLimit: 15
+  useTimer: 0
+  timeLimitSeconds: 90
+  timerWarningSeconds: 10
   goals:
-  - {fileID: 11400000, guid: afd77efefe2a1f74ba25f4c65d60959c, type: 2}
+  - {fileID: 11400000, guid: 304ee0c2866017f44a1a1f557d95f566, type: 2}
   allowedTiles: []
   jellyPositions: []
   jellyLayers: 1
   hardTileData: {fileID: 11400000, guid: f906a60d82a019f48aaee3254a6842b4, type: 2}
   hardTilePositions:
-  - {x: 5, y: 4}
-  - {x: 3, y: 2}
-  - {x: 1, y: 5}
+  - {x: 3, y: 3}
+  - {x: 6, y: 3}
+  - {x: 8, y: 6}
+  - {x: 1, y: 6}
   dropStoneData: {fileID: 0}
   stonePositions: []
   scoreTar1: 500

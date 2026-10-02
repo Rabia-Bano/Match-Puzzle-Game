@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
   m_Name: Level_1
   m_EditorClassIdentifier: 
-  width: 9
+  width: 10
   height: 12
   blankPositions: []
   moveLimit: 18
-  useTimer: 1
+  useTimer: 0
   timeLimitSeconds: 120
   timerWarningSeconds: 10
   goals:

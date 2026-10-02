@@ -14,20 +14,40 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   width: 8
   height: 8
+  blankPositions:
+  - {x: 0, y: 3}
+  - {x: 0, y: 4}
+  - {x: 1, y: 4}
+  - {x: 1, y: 3}
+  - {x: 2, y: 4}
+  - {x: 3, y: 4}
+  - {x: 4, y: 4}
+  - {x: 5, y: 4}
+  - {x: 6, y: 4}
+  - {x: 7, y: 4}
+  - {x: 7, y: 3}
+  - {x: 6, y: 3}
+  - {x: 5, y: 3}
+  - {x: 4, y: 3}
+  - {x: 3, y: 3}
+  - {x: 2, y: 3}
   moveLimit: 12
+  useTimer: 1
+  timeLimitSeconds: 90
+  timerWarningSeconds: 10
   goals:
   - {fileID: 11400000, guid: e54d9f00e671b804b97b78f2cc6642ea, type: 2}
   - {fileID: 11400000, guid: 789880180a16e6747a8e306f240402fd, type: 2}
   allowedTiles: []
   jellyPositions:
-  - {x: 2, y: 4}
-  - {x: 3, y: 2}
-  - {x: 6, y: 3}
-  - {x: 1, y: 6}
+  - {x: 1, y: 7}
+  - {x: 6, y: 7}
+  - {x: 3, y: 6}
+  - {x: 4, y: 6}
+  - {x: 3, y: 1}
   - {x: 4, y: 1}
-  - {x: 2, y: 5}
-  - {x: 5, y: 2}
-  - {x: 1, y: 1}
+  - {x: 1, y: 0}
+  - {x: 6, y: 0}
   jellyLayers: 1
   hardTileData: {fileID: 0}
   hardTilePositions: []

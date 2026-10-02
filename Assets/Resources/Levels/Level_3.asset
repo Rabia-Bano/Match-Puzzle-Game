@@ -12,19 +12,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
   m_Name: Level_3
   m_EditorClassIdentifier: 
-  width: 8
-  height: 8
+  width: 7
+  height: 10
+  blankPositions: []
   moveLimit: 16
+  useTimer: 1
+  timeLimitSeconds: 120
+  timerWarningSeconds: 10
   goals:
   - {fileID: 11400000, guid: beb4434c4c1762b4abc93faa6fa037b4, type: 2}
   allowedTiles: []
   jellyPositions:
-  - {x: 2, y: 4}
-  - {x: 5, y: 5}
-  - {x: 6, y: 3}
-  - {x: 3, y: 2}
-  - {x: 1, y: 6}
-  - {x: 4, y: 1}
+  - {x: 1, y: 8}
+  - {x: 1, y: 1}
+  - {x: 5, y: 8}
+  - {x: 5, y: 1}
+  - {x: 3, y: 6}
+  - {x: 3, y: 3}
   jellyLayers: 1
   hardTileData: {fileID: 0}
   hardTilePositions: []

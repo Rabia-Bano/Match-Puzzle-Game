@@ -12,9 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de6a1cd346e71134ca4d00f9c252aae6, type: 3}
   m_Name: Level_2
   m_EditorClassIdentifier: 
-  width: 8
-  height: 7
-  blankPositions: []
+  width: 9
+  height: 9
+  blankPositions:
+  - {x: 0, y: 0}
+  - {x: 0, y: 11}
+  - {x: 0, y: 8}
+  - {x: 8, y: 8}
+  - {x: 8, y: 0}
+  - {x: 4, y: 3}
+  - {x: 4, y: 4}
+  - {x: 4, y: 5}
   moveLimit: 16
   useTimer: 0
   timeLimitSeconds: 90
