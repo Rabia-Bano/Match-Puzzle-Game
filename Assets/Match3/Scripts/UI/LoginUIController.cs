@@ -61,6 +61,20 @@ namespace Game.Firebase
         [Tooltip("'Back' button on the verification panel — logs out and returns to the Login panel.")]
         public Button verificationBackButton;
 
+        [Header("Forgot Password Panel")]
+        [Tooltip("'Forgot Password?' button/link on the LOGIN panel — opens the Forgot Password panel.")]
+        public Button forgotPasswordOpenButton;
+        [Tooltip("The Forgot Password panel GameObject.")]
+        public GameObject forgotPasswordPanel;
+        [Tooltip("Email input field inside the Forgot Password panel.")]
+        public TMP_InputField forgotEmailInput;
+        [Tooltip("'Send Reset Link' button — calls AuthManager.SendPasswordResetEmail().")]
+        public Button forgotSendButton;
+        [Tooltip("'Back' button — returns to the Login panel.")]
+        public Button forgotBackButton;
+        [Tooltip("Optional — message text inside the Forgot Password panel (success / error).")]
+        public TMP_Text forgotMessageText;
+
         [Header("Shared UI")]
         public TMP_Text errorMessageText;       // Shows validation/auth errors
         public GameObject loadingIndicator;     // Optional spinner shown during auth calls
@@ -177,6 +191,36 @@ namespace Game.Firebase
                 verificationResendButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
             }
 
+            // FORGOT PASSWORD buttons
+            if (forgotPasswordOpenButton != null)
+            {
+                forgotPasswordOpenButton.onClick.RemoveAllListeners();
+                forgotPasswordOpenButton.onClick.AddListener(ShowForgotPasswordPanel);
+                forgotPasswordOpenButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            }
+
+            if (forgotSendButton != null)
+            {
+                forgotSendButton.onClick.RemoveAllListeners();
+                forgotSendButton.onClick.AddListener(OnForgotSendClicked);
+                forgotSendButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            }
+
+            if (forgotBackButton != null)
+            {
+                forgotBackButton.onClick.RemoveAllListeners();
+                forgotBackButton.onClick.AddListener(ShowLoginPanel);
+                forgotBackButton.onClick.AddListener(() => AudioManager.Instance?.PlaySFX("button_click"));
+            }
+
+            if (forgotPasswordPanel != null)
+                forgotPasswordPanel.SetActive(false);
+
+            // Email keyboard on mobile for every email field
+            EmailFieldUtility.ConfigureAsEmailField(loginEmailInput);
+            EmailFieldUtility.ConfigureAsEmailField(registerEmailInput);
+            EmailFieldUtility.ConfigureAsEmailField(forgotEmailInput);
+
             if (verificationBackButton != null)
             {
                 verificationBackButton.onClick.RemoveAllListeners();
@@ -202,6 +246,7 @@ namespace Game.Firebase
                 AuthManager.Instance.OnVerificationRequired.AddListener(OnVerificationRequired);
                 AuthManager.Instance.OnVerificationEmailResent.AddListener(OnVerificationEmailResent);
                 AuthManager.Instance.OnSessionResumeFailed.AddListener(OnSessionResumeFailed);
+                AuthManager.Instance.OnPasswordResetEmailSent.AddListener(OnPasswordResetEmailSent);
             }
 
             // NEW — "stay logged in across app restarts": Firebase already
@@ -229,6 +274,7 @@ namespace Game.Firebase
                 AuthManager.Instance.OnVerificationRequired.RemoveListener(OnVerificationRequired);
                 AuthManager.Instance.OnVerificationEmailResent.RemoveListener(OnVerificationEmailResent);
                 AuthManager.Instance.OnSessionResumeFailed.RemoveListener(OnSessionResumeFailed);
+                AuthManager.Instance.OnPasswordResetEmailSent.RemoveListener(OnPasswordResetEmailSent);
             }
 
             StopWatchdog();
@@ -243,6 +289,7 @@ namespace Game.Firebase
             if (loginPanel != null) loginPanel.SetActive(true);
             if (registerPanel != null) registerPanel.SetActive(false);
             if (verificationPanel != null) verificationPanel.SetActive(false);
+            if (forgotPasswordPanel != null) forgotPasswordPanel.SetActive(false);
             ClearError();
         }
 
@@ -251,6 +298,7 @@ namespace Game.Firebase
             if (loginPanel != null) loginPanel.SetActive(false);
             if (registerPanel != null) registerPanel.SetActive(true);
             if (verificationPanel != null) verificationPanel.SetActive(false);
+            if (forgotPasswordPanel != null) forgotPasswordPanel.SetActive(false);
             ClearError();
         }
 
@@ -259,6 +307,7 @@ namespace Game.Firebase
             if (loginPanel != null) loginPanel.SetActive(false);
             if (registerPanel != null) registerPanel.SetActive(false);
             if (verificationPanel != null) verificationPanel.SetActive(true);
+            if (forgotPasswordPanel != null) forgotPasswordPanel.SetActive(false);
 
             if (verificationEmailText != null)
                 verificationEmailText.text = string.IsNullOrEmpty(email)
@@ -268,6 +317,23 @@ namespace Game.Firebase
             if (verificationResendConfirmText != null)
                 verificationResendConfirmText.gameObject.SetActive(false);
 
+            ClearError();
+        }
+
+        /// <summary>FORGOT PASSWORD — opens the panel and pre-fills the email
+        /// from the Login field if the player already typed it.</summary>
+        public void ShowForgotPasswordPanel()
+        {
+            if (loginPanel != null) loginPanel.SetActive(false);
+            if (registerPanel != null) registerPanel.SetActive(false);
+            if (verificationPanel != null) verificationPanel.SetActive(false);
+            if (forgotPasswordPanel != null) forgotPasswordPanel.SetActive(true);
+
+            if (forgotEmailInput != null && loginEmailInput != null &&
+                string.IsNullOrWhiteSpace(forgotEmailInput.text))
+                forgotEmailInput.text = loginEmailInput.text.Trim();
+
+            if (forgotMessageText != null) forgotMessageText.text = "";
             ClearError();
         }
 
@@ -306,6 +372,21 @@ namespace Game.Firebase
             string confirmPassword = registerConfirmPasswordInput != null ? registerConfirmPasswordInput.text : password;
 
             AuthManager.Instance.Register(username, email, password, confirmPassword);
+        }
+
+        public void OnForgotSendClicked()
+        {
+            if (forgotEmailInput == null)
+            {
+                Debug.LogError("[LoginUIController] forgotEmailInput is not assigned in the Inspector.");
+                return;
+            }
+
+            SetLoading(true);
+            ClearError();
+            if (forgotMessageText != null) forgotMessageText.text = "";
+
+            AuthManager.Instance.SendPasswordResetEmail(forgotEmailInput.text.Trim());
         }
 
         public void OnVerificationContinueClicked()
@@ -374,6 +455,16 @@ namespace Game.Firebase
         /// launch). Quietly stop loading and show the normal Login form — no
         /// error message, since nothing is actually broken, the player just
         /// needs to log in manually this time.</summary>
+        private void OnPasswordResetEmailSent(string email)
+        {
+            StopWatchdog();
+            SetLoading(false);
+
+            string msg = $"If an account exists for {email}, a password reset link has been sent.\nPlease check your inbox (and Spam folder).";
+            if (forgotMessageText != null) forgotMessageText.text = msg;
+            else if (errorMessageText != null) errorMessageText.text = msg;
+        }
+
         private void OnSessionResumeFailed()
         {
             StopWatchdog();
@@ -390,6 +481,11 @@ namespace Game.Firebase
 
             if (errorMessageText != null)
                 errorMessageText.text = message;
+
+            // If the Forgot Password panel is open, show the error there too
+            // (errorMessageText usually sits on the Login panel, which is hidden).
+            if (forgotPasswordPanel != null && forgotPasswordPanel.activeSelf && forgotMessageText != null)
+                forgotMessageText.text = message;
 
             Debug.LogWarning($"[LoginUIController] Auth error: {message}");
         }
@@ -420,6 +516,9 @@ namespace Game.Firebase
 
             if (verificationContinueButton != null)
                 verificationContinueButton.interactable = !isLoading;
+
+            if (forgotSendButton != null)
+                forgotSendButton.interactable = !isLoading;
 
             // NEW — watchdog: if isLoading turns on, start a timer that force-clears
             // it if AuthManager never calls back. This is the safety net for issue #2 —

@@ -78,7 +78,9 @@ namespace Game.Firebase
             public bool IsEmpty => counters.Count == 0 && strings.Count == 0 && numbers.Count == 0;
         }
 
-        private bool _flushing;
+        private bool  _flushing;
+        private float _flushStartedAt;
+        private const float FLUSH_TIMEOUT = 20f;   // a write stuck longer than this no longer blocks new ones
 
         // FIX — unique id for THIS app launch. The in-progress flag stores it, so a
         // flag written during the current run is never mistaken for an app-kill
@@ -98,11 +100,36 @@ namespace Game.Firebase
         }
 
         private void OnEnable()  => GameEvents.OnPlayerLoggedIn += HandleLoggedIn;
-        private void OnDisable() => GameEvents.OnPlayerLoggedIn -= HandleLoggedIn;
+
+        private void OnDisable()
+        {
+            GameEvents.OnPlayerLoggedIn -= HandleLoggedIn;
+            if (NetworkChecker.Instance != null)
+                NetworkChecker.Instance.OnConnectivityChanged -= HandleConnectivityChanged;
+        }
+
+        // NEW — internet came back → upload everything recorded while offline,
+        // without waiting for the player to finish another level.
+        private void HandleConnectivityChanged(bool online)
+        {
+            if (online) Flush();
+        }
+
+        // NEW — player returns to the app (e.g. after turning Wi-Fi/data on from
+        // the phone's settings) → re-check the network right away and upload.
+        private async void OnApplicationFocus(bool hasFocus)
+        {
+            if (!hasFocus || NetworkChecker.Instance == null) return;
+            bool online = await NetworkChecker.Instance.CheckConnectivityAsync(forceRefresh: true);
+            if (online) Flush();
+        }
         private void OnApplicationQuit() => _quitting = true;
 
         private void Start()
         {
+            if (NetworkChecker.Instance != null)
+                NetworkChecker.Instance.OnConnectivityChanged += HandleConnectivityChanged;
+
             // If a session was resumed before this object existed, still catch up.
             if (AuthManager.IsLoggedIn) HandleLoggedIn();
         }
@@ -221,7 +248,17 @@ namespace Game.Firebase
         public void Flush()
         {
             string uid = AuthManager.CurrentUid;
-            if (_flushing || string.IsNullOrEmpty(uid) || !FirebaseInitializer.IsReady) return;
+            if (string.IsNullOrEmpty(uid) || !FirebaseInitializer.IsReady) return;
+
+            // FIX — while offline, a Firestore write never "finishes" (it just waits
+            // for the network), which used to keep _flushing = true and BLOCK every
+            // later upload until the player played online again. Now:
+            //   • don't even start a write while we know we're offline
+            //   • a write stuck for > FLUSH_TIMEOUT seconds no longer blocks new ones
+            //     (safe: each write only carries its own counters, so nothing is
+            //     counted twice)
+            if (NetworkChecker.Instance != null && !NetworkChecker.Instance.IsOnline) return;
+            if (_flushing && Time.realtimeSinceStartup - _flushStartedAt < FLUSH_TIMEOUT) return;
 
             Pending snapshot = LoadPending(uid);
             if (snapshot.IsEmpty) return;
@@ -229,6 +266,7 @@ namespace Game.Firebase
             // Take everything out of the queue now; put it back if the write fails.
             SavePending(uid, new Pending());
             _flushing = true;
+            _flushStartedAt = Time.realtimeSinceStartup;
 
             Dictionary<string, object> doc = BuildDoc(uid, snapshot);
 
@@ -246,6 +284,9 @@ namespace Game.Firebase
                         return;
                     }
                     Debug.Log("[PlayerActivityTracker] Activity stats synced to Firestore.");
+
+                    // NEW — anything recorded while this write was in flight goes up now
+                    if (!LoadPending(uid).IsEmpty) Flush();
                 });
         }
 

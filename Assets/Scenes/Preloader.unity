@@ -761,7 +761,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   pingUrl: https://www.gstatic.com/generate_204
-  cacheDurationSeconds: 30
+  cacheDurationSeconds: 10
   timeoutSeconds: 5
 --- !u!114 &622968622
 MonoBehaviour:
@@ -790,6 +790,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   logVerbose: 1
   databaseUrlOverride: https://match-puzzle-game-2c3c1-default-rtdb.firebaseio.com/
+  syncDebounceSeconds: 1.5
 --- !u!114 &622968624
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1694,6 +1695,10 @@ MonoBehaviour:
   OnSessionResumeFailed:
     m_PersistentCalls:
       m_Calls: []
+  OnPasswordResetEmailSent:
+    m_PersistentCalls:
+      m_Calls: []
+  verificationPollSeconds: 4
 --- !u!4 &1960924681
 Transform:
   m_ObjectHideFlags: 0

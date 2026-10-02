@@ -62,6 +62,9 @@ namespace Game.Firebase
         // Prevents double-click on Login button while a request is in flight
         private bool _isLoginBusy = false;
 
+        // Prevents double-click on "Send Reset Link" while a request is in flight
+        private bool _isResetBusy = false;
+
         [Header("Auth Result Events")]
         [Tooltip("Fired after a new account + profile are created AND the email has been verified (final step — see OnVerificationRequired for the intermediate step).")]
         public UnityEvent OnRegisterSuccess;
@@ -83,6 +86,9 @@ namespace Game.Firebase
 
         [Tooltip("NEW — fired when TryResumeSession() cannot finish the check (e.g. no internet on a cold launch). UI should just quietly stop loading and show the normal Login form — no scary error, since nothing is actually wrong.")]
         public UnityEvent OnSessionResumeFailed;
+
+        [Tooltip("FORGOT PASSWORD — fired after SendPasswordResetEmail() succeeds. Passes the email address the reset link was sent to.")]
+        public StringUnityEvent OnPasswordResetEmailSent;
 
         private FirebaseAuth _auth;
         private FirebaseFirestore _firestore;
@@ -430,7 +436,7 @@ namespace Game.Firebase
                 VerificationRequestTracker.RecordSend(user.UserId, email, _pendingUsername, isFirstSend, previousResendCount);
 
                 if (isFirstSend)
-                    OnVerificationRequired?.Invoke(email);
+                    RaiseVerificationRequired(email);
                 else
                     OnVerificationEmailResent?.Invoke();
             });
@@ -452,7 +458,7 @@ namespace Game.Firebase
                     SignOutInternal();
                     return;
                 }
-                OnVerificationRequired?.Invoke(email);
+                RaiseVerificationRequired(email);
             });
         }
 
@@ -538,46 +544,145 @@ namespace Game.Firebase
         /// (verification status is not pushed live — it must be re-checked)
         /// and only then lets the player into the game.
         /// </summary>
-        public void CheckEmailVerifiedAndContinue()
+        public void CheckEmailVerifiedAndContinue() => CheckVerifiedInternal(silent: false);
+
+        // -----------------------------------------------------------
+        // NEW — AUTO-DETECT VERIFICATION (no app restart needed)
+        //
+        // Problem: after the player clicked the link in their email, the
+        // game still said "not verified" until it was restarted. Reason:
+        // the Firebase Unity SDK keeps a cached FirebaseUser whose
+        // IsEmailVerified doesn't refresh reliably after ReloadAsync().
+        //
+        // Fix:
+        //   1. After ReloadAsync() we re-read _auth.CurrentUser (fresh
+        //      object) AND force-refresh the ID token, then check again.
+        //   2. While the verification panel is showing, the game checks
+        //      silently every few seconds + the moment the player comes
+        //      back to the app from their email app (OnApplicationFocus).
+        //      As soon as the email is verified → straight into the game,
+        //      no button tap and no error message.
+        // -----------------------------------------------------------
+
+        [Header("Verification auto-check (NEW)")]
+        [Tooltip("While the 'verify your email' panel is open, check every N seconds.")]
+        [SerializeField] private float verificationPollSeconds = 4f;
+
+        private bool      _awaitingVerification;
+        private bool      _verifyCheckBusy;
+        private Coroutine _verifyPollRoutine;
+
+        /// <summary>True while the player is on the "verify your email" step.</summary>
+        public bool IsAwaitingVerification => _awaitingVerification;
+
+        private void RaiseVerificationRequired(string email)
+        {
+            OnVerificationRequired?.Invoke(email);
+            _awaitingVerification = true;
+            if (_verifyPollRoutine != null) StopCoroutine(_verifyPollRoutine);
+            _verifyPollRoutine = StartCoroutine(VerificationPollLoop());
+        }
+
+        private void StopVerificationPolling()
+        {
+            _awaitingVerification = false;
+            if (_verifyPollRoutine != null) StopCoroutine(_verifyPollRoutine);
+            _verifyPollRoutine = null;
+        }
+
+        private System.Collections.IEnumerator VerificationPollLoop()
+        {
+            var wait = new WaitForSecondsRealtime(Mathf.Max(2f, verificationPollSeconds));
+            while (_awaitingVerification && _currentUser != null)
+            {
+                yield return wait;
+                if (_awaitingVerification && !_verifyCheckBusy) CheckVerifiedInternal(silent: true);
+            }
+            _verifyPollRoutine = null;
+        }
+
+        // Player switches back from Gmail → check right away.
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus && _awaitingVerification && !_verifyCheckBusy && _currentUser != null)
+                CheckVerifiedInternal(silent: true);
+        }
+
+        /// <summary>silent = true → no "not verified yet" error (used by the auto-check).</summary>
+        private void CheckVerifiedInternal(bool silent)
         {
             if (_currentUser == null)
             {
-                OnAuthError?.Invoke("Your session was lost. Please login or register again.");
+                if (!silent) OnAuthError?.Invoke("Your session was lost. Please login or register again.");
+                StopVerificationPolling();
                 return;
             }
+            if (_verifyCheckBusy) return;
+            _verifyCheckBusy = true;
 
-            _currentUser.ReloadAsync().ContinueWithOnMainThread(task =>
+            FirebaseUser user = _currentUser;
+            user.ReloadAsync().ContinueWithOnMainThread(task =>
             {
                 if (task.IsCanceled || task.IsFaulted)
                 {
-                    Debug.LogError($"[AuthManager] ReloadAsync failed: {task.Exception}");
-                    OnAuthError?.Invoke("Could not check your verification status. Check your internet connection and try again.");
+                    _verifyCheckBusy = false;
+                    Debug.LogWarning($"[AuthManager] ReloadAsync failed: {task.Exception?.GetBaseException()?.Message}");
+                    if (!silent) OnAuthError?.Invoke("Could not check your verification status. Check your internet connection and try again.");
                     return;
                 }
 
-                if (!_currentUser.IsEmailVerified)
+                // Always use the FRESH user object after a reload.
+                if (_auth?.CurrentUser != null) _currentUser = _auth.CurrentUser;
+
+                if (_currentUser.IsEmailVerified)
                 {
-                    OnAuthError?.Invoke("Your email is not verified yet. Please check your inbox (and Spam folder).");
+                    OnVerifiedDetected();
                     return;
                 }
 
-                Debug.Log("[AuthManager] Email verified — checking admin ban list before continuing.");
-
-                // NEW — an admin may have banned this uid while it was still unverified.
-                VerificationRequestTracker.CheckBanned(_currentUser.UserId, (banned, reason) =>
+                // Still says "not verified" → force a new ID token and reload once more
+                // (this is what picks up the change without restarting the app).
+                _currentUser.TokenAsync(true).ContinueWithOnMainThread(_ =>
                 {
-                    if (banned)
+                    FirebaseUser u2 = _auth?.CurrentUser ?? _currentUser;
+                    u2.ReloadAsync().ContinueWithOnMainThread(t2 =>
                     {
-                        OnAuthError?.Invoke(string.IsNullOrEmpty(reason)
-                            ? "Your account has been banned."
-                            : $"Your account has been banned. Reason: {reason}");
-                        SignOutInternal();
-                        return;
-                    }
+                        if (_auth?.CurrentUser != null) _currentUser = _auth.CurrentUser;
 
-                    VerificationRequestTracker.MarkVerified(_currentUser.UserId);
-                    ContinueAfterVerified();
+                        if (_currentUser != null && _currentUser.IsEmailVerified)
+                        {
+                            OnVerifiedDetected();
+                            return;
+                        }
+
+                        _verifyCheckBusy = false;
+                        if (!silent)
+                            OnAuthError?.Invoke("Your email is not verified yet. Please check your inbox (and Spam folder).");
+                    });
                 });
+            });
+        }
+
+        private void OnVerifiedDetected()
+        {
+            StopVerificationPolling();
+            Debug.Log("[AuthManager] Email verified — checking admin ban list before continuing.");
+
+            // an admin may have banned this uid while it was still unverified
+            VerificationRequestTracker.CheckBanned(_currentUser.UserId, (banned, reason) =>
+            {
+                _verifyCheckBusy = false;
+                if (banned)
+                {
+                    OnAuthError?.Invoke(string.IsNullOrEmpty(reason)
+                        ? "Your account has been banned."
+                        : $"Your account has been banned. Reason: {reason}");
+                    SignOutInternal();
+                    return;
+                }
+
+                VerificationRequestTracker.MarkVerified(_currentUser.UserId);
+                ContinueAfterVerified();
             });
         }
 
@@ -641,6 +746,61 @@ namespace Game.Firebase
         // -----------------------------------------------------------
         // LOGIN
         // -----------------------------------------------------------
+
+        /// <summary>
+        /// FORGOT PASSWORD — sends Firebase's password-reset email to the
+        /// given address. The player opens the link in the email, sets a new
+        /// password on Firebase's page, then logs in normally with it.
+        ///
+        /// NOTE: newer Firebase projects have "Email enumeration protection"
+        /// ON by default, so Firebase does NOT say whether the email is
+        /// registered — the call succeeds either way. That is why the UI
+        /// message says "If an account exists...".
+        /// </summary>
+        public void SendPasswordResetEmail(string email)
+        {
+            if (_isResetBusy) { OnAuthError?.Invoke("Please wait..."); return; }
+
+            if (_auth == null)
+            {
+                OnAuthError?.Invoke("Firebase is not ready. Check internet.");
+                return;
+            }
+
+            email = email?.Trim();
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                OnAuthError?.Invoke("Please enter your email.");
+                return;
+            }
+
+            _isResetBusy = true;
+
+            try
+            {
+                _auth.SendPasswordResetEmailAsync(email).ContinueWithOnMainThread(task =>
+                {
+                    _isResetBusy = false;
+
+                    if (task.IsCanceled || task.IsFaulted)
+                    {
+                        string message = GetFirebaseErrorMessage(task.Exception);
+                        Debug.LogError($"[AuthManager] Password reset failed: {message}");
+                        OnAuthError?.Invoke(message);
+                        return;
+                    }
+
+                    Debug.Log($"[AuthManager] Password reset email sent to {email}");
+                    OnPasswordResetEmailSent?.Invoke(email);
+                });
+            }
+            catch (Exception ex)
+            {
+                _isResetBusy = false;
+                Debug.LogError($"[AuthManager] Password reset exception: {ex}");
+                OnAuthError?.Invoke("Something happened wrong. Try again.");
+            }
+        }
 
         /// <summary>
         /// Signs in an existing player with email and password,
@@ -753,6 +913,11 @@ namespace Game.Firebase
                     SignOutInternal();
                     return;
                 }
+                // NEW — the player may have verified and then simply restarted /
+                // logged in again; make sure the admin panel sees "Verified".
+                if (_currentUser != null && _currentUser.IsEmailVerified && !_currentUser.IsAnonymous)
+                    VerificationRequestTracker.MarkVerifiedIfPending(uid);
+
                 CheckProfileBanAndProceed(uid);
             });
         }
@@ -846,6 +1011,7 @@ namespace Game.Firebase
         /// <summary>Internal sign-out used for failed/banned login attempts (no event fired).</summary>
         private void SignOutInternal()
         {
+            StopVerificationPolling();   // NEW
             _auth?.SignOut();
             _currentUser = null;
         }

@@ -134,6 +134,22 @@ namespace Game.Firebase
         }
 
         /// <summary>
+        /// NEW — used on every normal login: if a verificationRequests doc exists and
+        /// still says verified:false, flip it to true. Never creates a doc for players
+        /// that never had one.
+        /// </summary>
+        public static void MarkVerifiedIfPending(string uid)
+        {
+            if (string.IsNullOrEmpty(uid)) return;
+            Db.Collection(COLLECTION).Document(uid).GetSnapshotAsync().ContinueWithOnMainThread(t =>
+            {
+                if (t.IsFaulted || t.IsCanceled || !t.Result.Exists) return;
+                bool verified = t.Result.ContainsField("verified") && t.Result.GetValue<bool>("verified");
+                if (!verified) MarkVerified(uid);
+            });
+        }
+
+        /// <summary>
         /// True if the admin banned this uid from the Verification Alerts page.
         /// On a read error it answers false (never locks a real player out because of
         /// a network hiccup) — the players/{uid}.isBanned check still applies.

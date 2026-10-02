@@ -246,6 +246,9 @@ namespace Match3
         public void UseSkill()
         {
             if (!IsCharged || IsBusy || _skillInstance == null || EquippedPet == null) return;
+
+            // FIX — no pet power while a booster is selected (waiting for its target).
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsTargeting) return;
             _skillCoroutine = StartCoroutine(UseSkillRoutine());
         }
 

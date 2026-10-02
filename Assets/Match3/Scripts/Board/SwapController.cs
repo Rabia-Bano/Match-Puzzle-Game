@@ -70,6 +70,12 @@ namespace Match3
         private void HandleSwipe(Vector2Int from, Vector2Int to)
         {
             if (IsBusy || boardController.IsBusy) return;
+
+            // FIX — while a booster (Hammer / Row / Column / Shuffle 2) is selected
+            // and waiting for its target tile, normal swaps are NOT allowed. The
+            // player must either tap a target tile or press Cancel on the
+            // BoosterTargetingBanner first.
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsTargeting) return;
             if (!IsValidSwap(from, to)) return;
             StartCoroutine(SwapRoutine(from, to));
         }

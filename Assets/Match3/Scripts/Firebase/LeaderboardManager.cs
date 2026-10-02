@@ -84,6 +84,173 @@ namespace Game.Firebase
             _leaderboardRootRef = db.RootReference.Child(LEADERBOARD_ROOT);
             _initialized = true;
             if (logVerbose) Debug.Log("[LeaderboardManager] Ready.");
+
+            RequestSync();   // NEW — catch up anything earned while offline
+        }
+
+        // ============================================================
+        //  NEW — LEADERBOARD = MIRROR OF THE PLAYER'S PROFILE SCORE
+        //
+        //  OLD design (bugs Rabia found):
+        //   1. Every level win ADDED its score to /leaderboard/{uid} separately
+        //      from the profile. Offline wins, failed writes or the anti-cheat
+        //      check made the two numbers drift apart, so the leaderboard never
+        //      matched the score shown on the Players page / in-game profile.
+        //   2. When no profile was loaded yet, the name fell back to "Player"
+        //      and OVERWROTE the real name on the leaderboard.
+        //
+        //  NEW design:
+        //   • The player profile (players/{uid}.totalScore — already offline-
+        //     safe via LocalSaveManager + CloudSyncManager) is the ONE source
+        //     of truth. The leaderboard simply COPIES that number.
+        //   • Synced automatically whenever the profile changes, internet
+        //     comes back, the player logs in, or a level/boss is won.
+        //     Nothing is queued separately, so nothing can be lost or
+        //     counted twice.
+        //   • The name/avatar are written ONLY from a loaded profile that
+        //     belongs to the logged-in uid — never "Player". If no profile is
+        //     loaded yet, the sync simply waits.
+        //   • totalScore never goes DOWN (same as the RTDB rule), so a
+        //     half-loaded profile can't wipe a good leaderboard score.
+        // ============================================================
+
+        [Header("Profile → Leaderboard sync (NEW)")]
+        [Tooltip("Waits this long after the last profile change before writing (batches rapid saves).")]
+        [SerializeField] private float syncDebounceSeconds = 1.5f;
+
+        private bool      _syncInFlight;
+        private bool      _syncAgainAfter;
+        private Coroutine _debounceRoutine;
+
+        private void OnEnable()
+        {
+            GameEvents.OnPlayerLoggedIn       += RequestSync;
+            LocalSaveManager.OnProfileChanged += HandleProfileChanged;
+        }
+
+        private void Start()
+        {
+            if (NetworkChecker.Instance != null)
+                NetworkChecker.Instance.OnConnectivityChanged += HandleConnectivityChanged;
+            if (CloudSyncManager.Instance != null)
+                CloudSyncManager.Instance.OnProfileSynced += HandleProfileChanged;
+        }
+
+        private void OnDisable()
+        {
+            GameEvents.OnPlayerLoggedIn       -= RequestSync;
+            LocalSaveManager.OnProfileChanged -= HandleProfileChanged;
+            if (NetworkChecker.Instance != null)
+                NetworkChecker.Instance.OnConnectivityChanged -= HandleConnectivityChanged;
+            if (CloudSyncManager.Instance != null)
+                CloudSyncManager.Instance.OnProfileSynced -= HandleProfileChanged;
+        }
+
+        private void HandleProfileChanged(PlayerProfile _) => RequestSync();
+
+        private void HandleConnectivityChanged(bool online)
+        {
+            if (online) RequestSync();
+        }
+
+        /// <summary>Schedules a (debounced) profile → leaderboard sync.</summary>
+        public void RequestSync()
+        {
+            if (!isActiveAndEnabled) return;
+            if (_debounceRoutine != null) StopCoroutine(_debounceRoutine);
+            _debounceRoutine = StartCoroutine(DebouncedSync());
+        }
+
+        private System.Collections.IEnumerator DebouncedSync()
+        {
+            yield return new WaitForSecondsRealtime(syncDebounceSeconds);
+            _debounceRoutine = null;
+            _ = SyncFromProfileAsync();
+        }
+
+        /// <summary>The profile that belongs to the CURRENTLY logged-in uid, or null.</summary>
+        private static PlayerProfile CurrentPlayersProfile(string uid)
+        {
+            PlayerProfile p = ProfileManager.Instance?.Profile;
+            if (p == null || p.uid != uid) p = LocalSaveManager.GetOrLoadProfile();
+            return (p != null && p.uid == uid) ? p : null;
+        }
+
+        /// <summary>Copies profile.totalScore + name + avatar to /leaderboard/{uid}.</summary>
+        public async Task<bool> SyncFromProfileAsync()
+        {
+            if (!_initialized || _leaderboardRootRef == null) return false;
+
+            FirebaseUser user = AuthManager.CurrentUser;
+            if (user == null) return false;
+
+            if (_syncInFlight) { _syncAgainAfter = true; return false; }
+            _syncInFlight = true;
+
+            try
+            {
+                PlayerProfile profile = CurrentPlayersProfile(user.UserId);
+                if (profile == null)
+                {
+                    if (logVerbose) Debug.Log("[LeaderboardManager] Sync skipped — this player's profile isn't loaded yet.");
+                    return false;
+                }
+
+                if (NetworkChecker.Instance != null && !await NetworkChecker.Instance.CheckConnectivityAsync())
+                {
+                    if (logVerbose) Debug.Log("[LeaderboardManager] Offline — leaderboard will sync when internet returns.");
+                    return false;
+                }
+
+                long   profileScore = Math.Max(0, profile.totalScore);
+                string name         = profile.displayName;
+                string avatarId     = profile.avatarId  ?? "";
+                string avatarUrl    = profile.avatarUrl ?? "";
+                string uid          = user.UserId;
+                bool   wrote        = false;
+
+                await _leaderboardRootRef.Child(uid).RunTransaction(mutableData =>
+                {
+                    var dict = mutableData.Value as Dictionary<string, object> ?? new Dictionary<string, object>();
+
+                    long existing = dict.TryGetValue("totalScore", out object v) && long.TryParse(v?.ToString(), out long ex) ? ex : 0;
+                    string existingName = dict.TryGetValue("displayName", out object n) ? n?.ToString() : null;
+
+                    // Never write a placeholder name; keep the stored one instead.
+                    string finalName = !string.IsNullOrWhiteSpace(name) ? name : existingName;
+                    if (string.IsNullOrWhiteSpace(finalName)) return TransactionResult.Abort();
+
+                    long finalScore = Math.Max(existing, profileScore);   // never goes down
+                    bool same = existing == finalScore && existingName == finalName
+                                && (dict.TryGetValue("avatarId", out object a) ? a?.ToString() : "") == avatarId;
+                    if (same) return TransactionResult.Abort();           // nothing to change
+
+                    dict["uid"]         = uid;
+                    dict["displayName"] = finalName;
+                    dict["avatarId"]    = avatarId;
+                    dict["avatarUrl"]   = avatarUrl;
+                    dict["totalScore"]  = finalScore;
+
+                    mutableData.Value = dict;
+                    wrote = true;
+                    return TransactionResult.Success(mutableData);
+                });
+
+                if (wrote && logVerbose)
+                    Debug.Log($"[LeaderboardManager] Leaderboard synced from profile: {name} = {profileScore:N0}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // An aborted transaction (nothing to change) can also land here on some SDK versions.
+                if (logVerbose) Debug.Log($"[LeaderboardManager] Leaderboard sync not written: {ex.GetBaseException().Message}");
+                return false;
+            }
+            finally
+            {
+                _syncInFlight = false;
+                if (_syncAgainAfter) { _syncAgainAfter = false; RequestSync(); }
+            }
         }
 
         // ============================================================
@@ -227,71 +394,29 @@ namespace Game.Firebase
         /// </summary>
         public async Task<bool> SubmitScore(int score, string levelId)
         {
-            if (!_initialized)
-            {
-                Debug.LogWarning("[LeaderboardManager] SubmitScore called before Initialize().");
-                return false;
-            }
+            // UPDATED — the level's score has ALREADY been added to the player's
+            // profile (ProfileManager.OnLevelCompleted). The leaderboard now just
+            // mirrors that profile total, so here we only (1) run the anti-cheat
+            // check when online and (2) trigger the sync. Offline? The sync
+            // happens automatically as soon as the internet is back.
+            if (!_initialized) return false;
 
             FirebaseUser user = AuthManager.CurrentUser;
-            if (user == null)
+            if (user == null) return false;
+
+            bool online = NetworkChecker.Instance == null || await NetworkChecker.Instance.CheckConnectivityAsync();
+            if (online && score > 0)
             {
-                Debug.LogWarning("[LeaderboardManager] SubmitScore: no logged-in user.");
-                return false;
-            }
-
-            if (NetworkChecker.Instance != null && !await NetworkChecker.Instance.CheckConnectivityAsync())
-            {
-                if (logVerbose) Debug.Log("[LeaderboardManager] Offline — skipping score submit, will not retry automatically.");
-                return false;
-            }
-
-            // ── 1) Client-side plausibility check ──────────────────
-            int maxPossibleScore = await FetchMaxPossibleScoreAsync(levelId);
-            if (maxPossibleScore > 0 && score > maxPossibleScore)
-            {
-                Debug.LogWarning($"[LeaderboardManager] Score {score} exceeds max {maxPossibleScore} for level '{levelId}' — not submitting.");
-                _ = LogAnomalyAsync(user.UserId, levelId, score, maxPossibleScore);
-                return false;
-            }
-
-            // ── 2) Atomic accumulate into /leaderboard/{uid} ──
-            DatabaseReference entryRef = _leaderboardRootRef.Child(user.UserId);
-
-            string displayName = ProfileManager.Instance?.Profile?.displayName ?? "Player";
-            string avatarUrl   = ProfileManager.Instance?.Profile?.avatarUrl   ?? "";
-            string avatarId    = ProfileManager.Instance?.Profile?.avatarId    ?? "";
-
-            try
-            {
-                await entryRef.RunTransaction(mutableData =>
+                int maxPossibleScore = await FetchMaxPossibleScoreAsync(levelId);
+                if (maxPossibleScore > 0 && score > maxPossibleScore)
                 {
-                    var dict = mutableData.Value as Dictionary<string, object> ?? new Dictionary<string, object>();
-                    long existing = dict.TryGetValue("totalScore", out object v) && long.TryParse(v.ToString(), out long ex) ? ex : 0;
-
-                    dict["uid"]         = user.UserId;
-                    dict["displayName"] = displayName;
-                    dict["avatarUrl"]   = avatarUrl;
-                    dict["avatarId"]    = avatarId;
-                    dict["totalScore"]  = existing + score;
-
-                    mutableData.Value = dict;
-                    return TransactionResult.Success(mutableData);
-                });
-
-                if (logVerbose) Debug.Log($"[LeaderboardManager] Score submitted: +{score} (all-time total).");
-                return true;
+                    Debug.LogWarning($"[LeaderboardManager] Score {score} exceeds max {maxPossibleScore} for level '{levelId}' — logged as anomaly.");
+                    _ = LogAnomalyAsync(user.UserId, levelId, score, maxPossibleScore);
+                }
             }
-            catch (DatabaseException dex)
-            {
-                Debug.LogError($"[LeaderboardManager] SubmitScore DatabaseException: {dex.Message}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[LeaderboardManager] SubmitScore failed: {ex.Message}");
-                return false;
-            }
+
+            RequestSync();
+            return online;
         }
 
         /// <summary>Reads levels/{levelId}.maxPossibleScore from Firestore. Returns 0

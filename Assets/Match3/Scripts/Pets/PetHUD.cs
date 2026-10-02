@@ -179,6 +179,15 @@ namespace Match3
 
         private void HandleSkillButtonTapped()
         {
+            // FIX — a booster is selected and waiting for its target tile: the pet
+            // can't be used until the player taps a tile or presses Cancel on the
+            // BoosterTargetingBanner. Charge is NOT lost.
+            if (BoosterManager.Instance != null && BoosterManager.Instance.IsTargeting)
+            {
+                skillButton?.transform.DOShakePosition(0.3f, 5f, 10);
+                return;
+            }
+
             if (petManager == null || !petManager.IsCharged)
             {
                 skillButton?.transform.DOShakePosition(0.3f, 5f, 10);
